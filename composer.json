@@ -1,32 +1,40 @@
 {
-  "name": "fitnessclub/fitnessclub",
+  "name": "wpbones/wpkirk",
   "type": "wordpress-plugin",
-  "description": "FitnessClub — workout, nutrition and health tracking with trainer coaching.",
-  "keywords": ["wordpress", "fitness", "wpbones"],
-  "license": "GPL-2.0-or-later",
+  "description": "A WP Bones Boilerplate WordPress plugin",
+  "keywords": [
+    "wordpress"
+  ],
+  "homepage": "https://wpbones.com/",
+  "license": "GPL-3.0",
+  "authors": [
+    {
+      "name": "Giovambattista Fazioli",
+      "email": "wpbones.info@gmail.com",
+      "homepage": "https://wpbones.com/"
+    }
+  ],
+  "support": {
+    "issues": "https://github.com/wpbones/WPKirk/issues",
+    "source": "https://github.com/wpbones/WPKirk/"
+  },
   "require": {
     "php": ">=8.1",
-    "wpbones/wpbones": "^2.0"
+    "wpbones/wpbones": "^2.0.0",
+    "wpbones/wpkirk-helpers": "~2.0"
   },
   "autoload": {
     "psr-4": {
-      "FitnessClub\\": "plugin/"
+      "WPKirk\\": "plugin/"
     },
     "files": [
       "functions.php"
     ]
   },
-  "config": {
-    "allow-plugins": {
-      "composer/installers": true
-    },
-    "sort-packages": true
-  },
   "scripts": {
     "post-autoload-dump": [
-      "@php -r \"if (file_exists('vendor/wpbones/wpbones/src/Console/bin/bones')) { copy('vendor/wpbones/wpbones/src/Console/bin/bones', 'bones'); }\"",
-      "@php bin/patch-vendor-namespace.php"
-    ],
-    "lint": "@php -l fitnessclub.php"
+      "php -r \"copy('vendor/wpbones/wpbones/src/Console/bin/bones', 'bones');\"",
+      "php bones rename --update"
+    ]
   }
 }

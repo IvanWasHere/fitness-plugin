@@ -1,9 +1,9 @@
 <?php
 
-use FitnessClub\WPBones\Foundation\Plugin;
+use WPKirk\WPBones\Foundation\Plugin;
 
 if (!defined('ABSPATH')) {
-    exit();
+    exit;
 }
 
 /*
@@ -11,21 +11,30 @@ if (!defined('ABSPATH')) {
 | Create The Plugin
 |--------------------------------------------------------------------------
 |
-| The Plugin instance is the "glue" for all components: it reads config/,
-| registers providers, menus, shortcodes and schedules, and runs the
-| activation/deactivation hooks (which is where migrations execute).
+| The first thing we will do is create a new Bones plugin instance
+| which serves as the "glue" for all the components.
 |
 */
+if (class_exists('\WPKirk\WPBones\Foundation\Plugin')) {
+    $plugin = new Plugin(
+        realpath(__DIR__ . '/../')
+    );
 
-if (class_exists(Plugin::class)) {
-    $plugin = new Plugin(realpath(__DIR__ . '/../'));
+    /*
+      |--------------------------------------------------------------------------
+      | Return The Plugin
+      |--------------------------------------------------------------------------
+      |
+      | This script returns the plugin instance. The instance is given to
+      | the calling script, so we can separate the building of the instances
+      | from the actual running of the application and sending responses.
+      |
+      */
 
     /**
-     * Fires once the plugin instance exists and config has been read.
+     * Fire when the plugin is loaded
      */
-    do_action('fitnessclub_loaded', $plugin);
+    do_action('wp-kirk_loaded');
 
     return $plugin;
 }
-
-return null;

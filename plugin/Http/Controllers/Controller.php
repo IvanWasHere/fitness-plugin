@@ -1,8 +1,8 @@
 <?php
 
-namespace FitnessClub\Http\Controllers;
+namespace WPKirk\Http\Controllers;
 
-use FitnessClub\WPBones\Routing\Controller as BaseController;
+use WPKirk\WPBones\Routing\Controller as BaseController;
 
 if (!defined('ABSPATH')) {
     exit();

@@ -1,28 +1,20 @@
 <?php
 
 if (!defined('ABSPATH')) {
-    exit();
+    exit;
 }
 
 /*
 |--------------------------------------------------------------------------
 | Register The Composer Auto Loader
 |--------------------------------------------------------------------------
+|
+| Composer provides a convenient, automatically generated class loader
+| for our application. We just need to utilize it! We'll require it
+| into the script here so that we do not have to worry about the
+| loading of any our classes "manually". Feels great to relax.
+|
 */
-
-if (!file_exists(__DIR__ . '/../vendor/autoload.php')) {
-    add_action('admin_notices', function () {
-        printf(
-            '<div class="notice notice-error"><p>%s</p></div>',
-            esc_html__(
-                'FitnessClub: dependencies are missing. Run "composer install" in the plugin directory.',
-                'fitnessclub'
-            )
-        );
-    });
-
-    return;
-}
 
 require_once __DIR__ . '/../vendor/autoload.php';
 
@@ -31,36 +23,28 @@ require_once __DIR__ . '/../vendor/autoload.php';
 | Plugin Static class
 |--------------------------------------------------------------------------
 |
-| Holds the running Plugin instance globally. The framework's helper functions
-| (wpbones_logger(), wpbones_provider(), wpbones_modules(), …) resolve it by
-| calling FitnessClub() — so this accessor is required, not decorative.
+| We will use this static class to keep global the plugin information
 |
 */
 
-final class FitnessClub
+final class WPKirk
 {
-    public const TEXTDOMAIN = 'fitnessclub';
-
-    /** @var \FitnessClub\WPBones\Foundation\Plugin|null */
+    public const TEXTDOMAIN = 'wp-kirk';
     public static $plugin;
-
-    /** @var float Boot timestamp, for profiling. */
     public static $start;
 }
 
-FitnessClub::$plugin = require_once __DIR__ . '/plugin.php';
-FitnessClub::$start  = microtime(true);
+WPKirk::$plugin = require_once __DIR__ . '/plugin.php';
+WPKirk::$start = microtime(true);
 
-if (!function_exists('FitnessClub')) {
+// Commodity function to get the plugin instance
+if (!function_exists('WPKirk')) {
     /**
-     * The running plugin instance.
+     * Return the instance of plugin.
      *
-     * @return \FitnessClub\WPBones\Foundation\Plugin|null
      */
-    function FitnessClub()
+    function WPKirk()
     {
-        return FitnessClub::$plugin;
+        return WPKirk::$plugin;
     }
 }
-
-return FitnessClub::$plugin;

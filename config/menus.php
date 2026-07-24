@@ -1,34 +1,34 @@
 <?php
 
 if (!defined('ABSPATH')) {
-    exit();
+  exit();
 }
 
 /*
 |--------------------------------------------------------------------------
-| Admin menu
+| Plugin Menus routes
 |--------------------------------------------------------------------------
 |
-| One WordPress menu entry. The admin SPA owns navigation below that point
-| (?page=fitnessclub#/users), so adding a resource does not add a WP menu item.
+| Here is where you can register all the menu routes for a plugin.
+| In this context, the route are the menu link.
 |
 */
 
 return [
-    'fitnessclub' => [
-        'page_title' => __('FitnessClub', 'fitnessclub'),
-        'menu_title' => __('FitnessClub', 'fitnessclub'),
-        'capability' => 'manage_options',
-        'position'   => 58,
-        'items'      => [
-            [
-                'page_title' => __('Dashboard', 'fitnessclub'),
-                'menu_title' => __('Dashboard', 'fitnessclub'),
-                'capability' => 'manage_options',
-                'route'      => [
-                    'get' => 'Admin\AdminAppController@index',
-                ],
-            ],
+  'wp_kirk_slug_menu' => [
+    "page_title" => "WP Kirk Page",
+    "menu_title" => "WP Kirk Menu",
+    'capability' => 'read',
+    'icon' => 'wpbones-logo-menu.png',
+    'items' => [
+      [
+        "page_title" => "Main View",
+        "menu_title" => "Main View",
+        'capability' => 'read',
+        'route' => [
+          'get' => 'Dashboard\DashboardController@index'
         ],
-    ],
+      ],
+    ]
+  ]
 ];

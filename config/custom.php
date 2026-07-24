@@ -6,11 +6,13 @@ if (!defined('ABSPATH')) {
 
 /*
 |--------------------------------------------------------------------------
-| Plugin activation
+| Custom configuration
 |--------------------------------------------------------------------------
 |
-| This file is included when the plugin is activated the first time.
-| Usually you will use this file to register your custom post types or
-| to perform some db delta process.
+| This is an example of a custom configuration. You may get this configuration
+| by plugin instance.
+| For example, in a view you can use `$this->config( 'custom.sample' )`.
 |
 */
+
+return [];

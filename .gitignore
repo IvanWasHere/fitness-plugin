@@ -1,11 +1,6 @@
-/vendor/
-/node_modules/
-/bones
-.DS_Store
-*.log
-.phpunit.result.cache
+node_modules/
+resources/assets/vendor/
+vendor/
+.cache/
 .php-cs-fixer.cache
-
-# Built assets are committed by convention in WP Bones plugins so the plugin
-# works from a clean checkout without a build step. Sources live in resources/.
-!/public/
+release.sh

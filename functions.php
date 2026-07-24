@@ -1,26 +1,21 @@
 <?php
-/**
- * Global helpers for the FitnessClub plugin.
- *
- * Autoloaded by composer (see composer.json "autoload.files").
- */
 
 if (!defined('ABSPATH')) {
-    exit();
+  exit();
 }
 
-if (!function_exists('fitnessclub_table')) {
-    /**
-     * Fully-qualified name for one of the plugin's tables.
-     *
-     * All domain tables are prefixed `{$wpdb->prefix}fc_` — see plans/01-database.md.
-     *
-     * @param string $name Table name without the `fc_` prefix, e.g. "users".
-     */
-    function fitnessclub_table(string $name): string
-    {
-        global $wpdb;
+/*
+|--------------------------------------------------------------------------
+| Global functions
+|--------------------------------------------------------------------------
+|
+| Here you can insert your global function loaded by composer settings.
+|
+*/
 
-        return $wpdb->prefix . 'fc_' . ltrim($name, '_');
-    }
+if (!function_exists('myGlobalFunction')) {
+  function myGlobalFunction(): void
+  {
+    //
+  }
 }
