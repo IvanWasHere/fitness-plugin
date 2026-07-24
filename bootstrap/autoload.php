@@ -27,24 +27,24 @@ require_once __DIR__ . '/../vendor/autoload.php';
 |
 */
 
-final class WPKirk
+final class FitnessClub
 {
-    public const TEXTDOMAIN = 'wp-kirk';
+    public const TEXTDOMAIN = 'fitnessclub';
     public static $plugin;
     public static $start;
 }
 
-WPKirk::$plugin = require_once __DIR__ . '/plugin.php';
-WPKirk::$start = microtime(true);
+FitnessClub::$plugin = require_once __DIR__ . '/plugin.php';
+FitnessClub::$start = microtime(true);
 
 // Commodity function to get the plugin instance
-if (!function_exists('WPKirk')) {
+if (!function_exists('FitnessClub')) {
     /**
      * Return the instance of plugin.
      *
      */
-    function WPKirk()
+    function FitnessClub()
     {
-        return WPKirk::$plugin;
+        return FitnessClub::$plugin;
     }
 }

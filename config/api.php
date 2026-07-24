@@ -29,6 +29,6 @@ return [
     // authentication
     'auth' => [
         // embed basic authentication handler
-        'basic' => true
+        'basic' => false
     ]
 ];

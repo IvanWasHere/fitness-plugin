@@ -1,13 +1,13 @@
 <?php
 
-namespace WPKirk\Console;
+namespace FitnessClub\Console;
 
-use WPKirk\WPBones\Foundation\Console\Kernel as ConsoleKernel;
+use FitnessClub\WPBones\Foundation\Console\Kernel as ConsoleKernel;
 
 class Kernel extends ConsoleKernel
 {
   protected $commands = [
-    'WPKirk\Console\Commands\SimpleCommand',
-    'WPKirk\Console\Commands\WordPressCommand',
+    'FitnessClub\Console\Commands\SimpleCommand',
+    'FitnessClub\Console\Commands\WordPressCommand',
   ];
 }

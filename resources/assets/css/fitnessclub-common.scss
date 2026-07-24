@@ -6,7 +6,7 @@
  *
  */
 
-.wp-kirk {
+.fitnessclub {
 
   code {
     padding: 0;
@@ -52,7 +52,7 @@
     padding: 2px 6px;
   }
 
-	&.wp-kirk-sample {
+	&.fitnessclub-sample {
 		p {
 			font-size: 16px;
 		}
@@ -74,16 +74,16 @@
 	}
 }
 
-.wp-kirk-align {
+.fitnessclub-align {
 	display: block;
 	clear: both;
 }
 
-.wp-kirk-align-left {
+.fitnessclub-align-left {
 	text-align: left;
 }
 
-.wp-kirk-toc {
+.fitnessclub-toc {
 	float: left;
 	position: fixed;
 	background-color: #fff;
@@ -94,13 +94,13 @@
 	width: 180px;
 }
 
-.wp-kirk-toc-content {
+.fitnessclub-toc-content {
 	float: right;
 	width: calc(100% - 220px);
 }
 
 @media (max-width: 1000px) {
-	.wp-kirk-toc {
+	.fitnessclub-toc {
 		float: none;
 		position: relative;
 		width: auto;
@@ -111,7 +111,7 @@
 		}
 	}
 
-	.wp-kirk-toc-content {
+	.fitnessclub-toc-content {
 		float: none;
 		width: auto;
 	}

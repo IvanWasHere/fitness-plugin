@@ -1,8 +1,8 @@
 <?php
 
-namespace WPKirk\Http\Controllers\Dashboard;
+namespace FitnessClub\Http\Controllers\Dashboard;
 
-use WPKirk\Http\Controllers\Controller;
+use FitnessClub\Http\Controllers\Controller;
 
 if (!defined('ABSPATH')) {
   exit();
@@ -12,11 +12,11 @@ class DashboardController extends Controller
 {
   public function index()
   {
-    return WPKirk()
+    return FitnessClub()
       ->view('dashboard.index')
       ->withAdminStyle('prism')
       ->withAdminScript('prism')
-      ->withAdminStyle('wp-kirk-common')
+      ->withAdminStyle('fitnessclub-common')
       ->withAdminAppsScript('app');
   }
 }

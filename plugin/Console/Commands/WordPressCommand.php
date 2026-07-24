@@ -1,9 +1,9 @@
 <?php
 
-namespace WPKirk\Console\Commands;
+namespace FitnessClub\Console\Commands;
 
 use VARIANT;
-use WPKirk\WPBones\Console\Command;
+use FitnessClub\WPBones\Console\Command;
 
 class WordPressCommand extends Command
 {

@@ -1,4 +1,4 @@
-=== WP Kirk Boilerplate ===
+=== FitnessClub Boilerplate ===
 Contributors: gfazioli
 Donate link: https://wpbones.com/
 Tags: template, wpbones

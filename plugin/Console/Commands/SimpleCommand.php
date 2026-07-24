@@ -1,8 +1,8 @@
 <?php
 
-namespace WPKirk\Console\Commands;
+namespace FitnessClub\Console\Commands;
 
-use WPKirk\WPBones\Console\Command;
+use FitnessClub\WPBones\Console\Command;
 
 class SimpleCommand extends Command
 {

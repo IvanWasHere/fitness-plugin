@@ -4,7 +4,7 @@ import { __ } from '@wordpress/i18n';
 import { formatGreeting } from '../js/greet';
 
 const App = () => {
-  const greeting = formatGreeting(__('WP Bones', 'wp-kirk'));
+  const greeting = formatGreeting(__('WP Bones', 'fitnessclub'));
 
   return (
     <section>
@@ -12,7 +12,7 @@ const App = () => {
       <p>
         {__(
           'This React bundle ships with TypeScript and WordPress i18n, auto-discovered by webpack.',
-          'wp-kirk'
+          'fitnessclub'
         )}
       </p>
     </section>

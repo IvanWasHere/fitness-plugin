@@ -3,7 +3,7 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: WP Kirk Boilerplate 1.6.0\n"
-"Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/wp-kirk\n"
+"Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/fitnessclub\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
 "MIME-Version: 1.0\n"
@@ -12,30 +12,30 @@ msgstr ""
 "POT-Creation-Date: 2024-11-12T12:11:09+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "X-Generator: WP-CLI 2.11.0\n"
-"X-Domain: wp-kirk\n"
+"X-Domain: fitnessclub\n"
 
 #. Plugin Name of the plugin
-#: wp-kirk.php
+#: fitnessclub.php
 msgid "WP Kirk Boilerplate"
 msgstr ""
 
 #. Plugin URI of the plugin
-#: wp-kirk.php
-msgid "https://github.com/wpbones/WPKirk-Boilerplate"
+#: fitnessclub.php
+msgid "https://github.com/wpbones/FitnessClub-Boilerplate"
 msgstr ""
 
 #. Description of the plugin
-#: wp-kirk.php
+#: fitnessclub.php
 msgid "WP Bones Boilerplate WordPress plugin"
 msgstr ""
 
 #. Author of the plugin
-#: wp-kirk.php
+#: fitnessclub.php
 msgid "Giovambattista Fazioli"
 msgstr ""
 
 #. Author URI of the plugin
-#: wp-kirk.php
+#: fitnessclub.php
 msgid "https://wpbones.com/"
 msgstr ""
 

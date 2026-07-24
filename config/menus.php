@@ -15,7 +15,7 @@ if (!defined('ABSPATH')) {
 */
 
 return [
-  'wp_kirk_slug_menu' => [
+  'fitnessclub_slug_menu' => [
     "page_title" => "WP Kirk Page",
     "menu_title" => "WP Kirk Menu",
     'capability' => 'read',

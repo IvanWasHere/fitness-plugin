@@ -1,24 +1,26 @@
 <?php
 
 /**
- * Plugin Name: WP Kirk Boilerplate
- * Plugin URI: https://github.com/wpbones/WPKirk-Boilerplate
- * Description: WP Bones Boilerplate WordPress plugin
- * Version: 2.0.0
+ * Plugin Name: FitnessClub
+ * Plugin URI: https://example.com/fitnessclub
+ * Description: Workout, nutrition and health tracking with trainer coaching. Built on WP Bones.
+ * Version: 0.1.0
  * Requires at least: 6.2
- * Requires PHP: 7.4
- * Author: Giovambattista Fazioli
- * Author URI: https://wpbones.com/
+ * Requires PHP: 8.1
+ * Author: FitnessClub
  * License: GPLv2 or later
  * License URI: http://www.gnu.org/licenses/gpl-2.0.html
- * Text Domain: wp-kirk
+ * Text Domain: fitnessclub
  * Domain Path: languages
  *
+ * @package FitnessClub
  */
 
 if (!defined('ABSPATH')) {
   exit();
 }
+
+define('FITNESSCLUB_VERSION', '0.1.0');
 
 /*
 |--------------------------------------------------------------------------
