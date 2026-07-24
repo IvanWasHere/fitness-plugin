@@ -4,15 +4,21 @@
 no screens, no flows, no data shapes. This is one third of the product being
 specified in 40 lines, and it is the largest single estimation risk in the plan.
 
-Mounted by shortcode `[fitnessclub_trainer]`, capability `fc_access_trainer_app`.
+The **trainer SPA** (`ui/src/trainer/`, capability `fc_access_trainer_app`) — one
+of the three Vite React apps ([D10](00-architecture.md#d10--front-end-three-vite-compiled-react-spas)).
+The backend serves it at the configured URL (`example.com/{base}`) to logged-in
+trainers — same URL as the user and admin apps, role-selected server-side
+([D9](00-architecture.md#d9--front-end-routing-configurable-app-url)). Shares
+`ui/src/shared/` (API client, design system, chart/modal components) with the
+other two.
 
 ## Why front-end and not wp-admin
 
 Trainers are not WordPress operators. Putting them in wp-admin means they see the
 Posts menu, the plugin updates nag, and a UI built for site administration. A
-front-end app on a `/trainer` page with `show_admin_bar_front` disabled for the
-role gives a product surface instead of a CMS surface. Same shell, same design
-system, same API client as the user app — reuse is high.
+standalone front-end SPA gives a product surface instead of a CMS surface. Sharing
+`ui/src/shared/` with the user and admin apps keeps reuse high (charts, the API
+client, the design system).
 
 ## Screens
 

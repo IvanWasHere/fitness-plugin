@@ -160,11 +160,14 @@ before Phase 1 ends; the rest before Phase 3.
 | Q13 | May trainer A see what trainer B assigned? | **Yes** | Full shared read of the client record, including other trainers' assignments. Writes stay private. See [§4.5](#45-q13--trainers-see-each-others-assignments) |
 | Q14 | Does requesting a trainer require an active plan? | **Yes — and the plan caps how many trainers** | New `max_trainers` entitlement. Trainers may also reject. See [§4.6](#46-q14--an-active-plan-gates-trainer-access) |
 | Q15 | Are trainer notes still private? | **Yes** | `fc_client_notes` stays scoped per trainer. Closed — no change to the plan |
+| Q17a | How is the front-end built and shaped? | **Two sections: wpBones backend + three Vite React SPAs** (user/trainer/admin) | Vite, not wpBones' webpack; SPAs decoupled from the framework asset pipeline. [D10](00-architecture.md#d10--front-end-three-vite-compiled-react-spas) |
+| Q17b | Where does the UI live? | **One configurable URL** (`example.com/{base}`, default `/fitness`), **role selects the SPA** at that URL | wpBones has no front-end routing → native WP rewrite in `RewriteServiceProvider`. Admin leaves wp-admin. [D9](00-architecture.md#d9--front-end-routing-configurable-app-url) |
 
 ### Still open
 
 | # | Question | Blocks | Why it matters |
 |---|----------|--------|----------------|
+| Q17c | **New —** if one account holds several roles (e.g. an admin who is also a trainer), which SPA loads, and do we offer a switcher? | W1.3 | Planned default: precedence **admin > trainer > user**; no switcher at launch. Rare in practice. Confirm |
 | Q5 | Which payment gateway first, and which regions/currencies? | W3.2 | Stripe assumed. Affects tax handling and SCA. Simplified by Q2 — standard Stripe, not Connect |
 | Q6 | Free tier: is there one, and what does it include? | Entitlements | The admin prototype has a `Free` plan; the spec has no free tier. **Sharpened by Q14**: modelling free as an active subscription to a `Free` plan with `max_trainers: 0` makes the "active plan required" rule uniform with no special case. Recommended — confirm |
 | Q7 | Video hosting: uploaded, or YouTube/Vimeo links? | W3.4 | Uploads mean storage, transcoding, and bandwidth — a different cost model |

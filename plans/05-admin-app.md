@@ -1,53 +1,32 @@
 # 05 — Admin App
 
-Port of `admin-app/index.html` (405 lines, Mithril + Dexie). Mounted on a wp-admin
-page registered through `config/menus.php`.
+Port of `admin-app/index.html` (405 lines, Mithril + Dexie) to the **admin SPA** —
+one of the three Vite React apps ([D10](00-architecture.md#d10--front-end-three-vite-compiled-react-spas)),
+`ui/src/admin/`. It is a **front-end app, not a wp-admin page** — the backend
+serves it at the configured URL (`example.com/{base}`) to logged-in administrators,
+the same URL that serves the user/trainer SPAs to those roles
+([D9](00-architecture.md#d9--front-end-routing-configurable-app-url)).
 
 The admin prototype is **structurally better than the user prototype** — one
 generic `CrudTable(config)` factory drives all eight resources with a declarative
 column spec. That factory is the design to keep; it just needs a server behind it.
 
-## Mounting
+## Mounting — front-end SPA, not wp-admin
 
-```php
-// config/menus.php
-return [
-  'fitnessclub' => [
-    'page_title' => 'FitnessClub',
-    'menu_title' => 'FitnessClub',
-    'capability' => 'manage_options',
-    'icon'       => 'fc-menu-icon.png',
-    'items' => [
-      ['page_title'=>'Dashboard','menu_title'=>'Dashboard','capability'=>'manage_options',
-       'route'=>['get'=>'Admin\\AdminAppController@index']],
-      ['page_title'=>'Settings','menu_title'=>'Settings','capability'=>'manage_options',
-       'route'=>['get'=>'Admin\\SettingsController@index']],
-    ],
-  ],
-];
-```
+The admin UI moved off wp-admin (D9/D10). Consequences, all simplifications:
 
-The controller renders a Blade view containing only `<div id="fc-admin-app">` and
-enqueues the bundle with `->withAdminAppsScript('admin')`. The SPA owns
-navigation below that point (`?page=fitnessclub#/users`), so there is one WP menu
-entry rather than nine.
-
-### Style conflict — decide early
-
-The prototype is a **dark, full-bleed panel** that looks nothing like wp-admin.
-Rendered inside `#wpcontent`, WordPress's admin CSS and the prototype's CSS will
-fight (WP styles `input`, `select`, `table`, `.button` globally).
-
-Three options, pick one before writing CSS:
-
-| Option | Cost | Result |
-|--------|------|--------|
-| **A. Scope + reset (recommended)** | ~1 d | All rules under `#fc-admin-app`, explicit resets for WP's input/table styles. Keeps the prototype look, stays inside wp-admin chrome |
-| B. Adopt wp-admin styling | ~3 d rework | Native feel, uses `@wordpress/components`. Throws away the prototype's design |
-| C. Shadow DOM | ~1 d + friction | Perfect isolation; breaks portals, third-party pickers, and WP's media modal |
-
-Option A. Note that the prototype's own dark palette differs from the user app's
-(`--bg:#090C10` vs `#0B0E13`) — unify both on the theme token set ([07](07-theming.md)).
+- **No `config/menus.php` React mount, no `#wpcontent` embedding.** wp-admin keeps
+  only a **thin launcher**: one menu entry that links out to `/{base}` and hosts a
+  minimal **break-glass** settings form (just the routing slug + a "flush rewrites"
+  button), so a mistyped App URL can never lock an admin out of the real UI. That
+  form is plain WP admin HTML, not React.
+- **The wp-admin style conflict is gone.** The old A/B/C decision (scope+reset vs
+  `@wordpress/components` vs Shadow DOM) is moot — the admin SPA renders standalone,
+  full-page, with the prototype's own dark design intact and no host CSS to fight.
+- The prototype's palette (`--bg:#090C10`) differs from the user app's (`#0B0E13`);
+  unify both on the theme token set via `ui/src/shared/` ([07](07-theming.md)).
+- Navigation is the SPA's own react-router (`/{base}/users`, `/{base}/settings`, …),
+  `basename=/{base}`.
 
 ## The CrudTable contract
 
@@ -96,12 +75,30 @@ admin can share a filtered view), and optimistic row updates.
 | **Subscriptions** | `/admin/subscriptions` | ✗ missing | status, cancel, extend, change plan |
 | **Tickets** | `/admin/tickets` | ✗ missing | queue, assign, reply, internal notes (spec §13) |
 | **Themes** | `/admin/themes` | ✗ missing | list/preview/activate/upload/edit ([07](07-theming.md)) |
-| **Settings** | `/admin/settings` | ✗ missing | general, email, payments, features, API (spec §13.4) |
+| **Settings** | `/admin/settings` | ✗ missing | **App URL** (below), general, email, payments, features, API (spec §13.4) |
 | **Admins** | — | ✓ exists | **removed** — becomes a read-only view of WP users with `manage_options` |
 
 Five of the spec's required admin areas do not exist in the prototype and three of
 those (Plans, Settings, Themes) are prerequisites for the rest of the product
 working at all. Budget accordingly — this is roughly half the admin app's work.
+
+### Settings → App URL (the configurable front-end slug)
+
+The Settings screen owns the option that decides where the whole front-end lives
+([D9](00-architecture.md#d9--front-end-routing-configurable-app-url)):
+
+- **Field:** a slug input rendered as `example.com/` `[ fitness ]`, live-previewing
+  the resulting URL. Sanitised with `sanitize_title()`; rejects reserved paths
+  (`wp-admin`, `wp-json`, `wp-login`, existing page slugs) with an inline error.
+- **On save:** `PUT /admin/settings` writes the options-model key `routing.app_base`,
+  then the backend **flushes rewrite rules** (the `update_option` hook). The UI
+  warns that existing links to the old URL will break and shows the new URL.
+- **Break-glass:** the same slug is editable from the thin wp-admin launcher form,
+  so an admin who mistypes it and loses the front-end can still fix it from
+  wp-admin. This is the one setting duplicated outside the SPA, by design.
+- The change is reflected in every SPA's boot payload (`base` / router `basename`)
+  on next load — no rebuild needed, the slug is runtime config, not baked into the
+  Vite bundle.
 
 ## Meal/Health logs: full CRUD, audit-backed
 
@@ -145,9 +142,9 @@ were already budgeted.
 ## Structure
 
 ```
-resources/assets/apps/admin/
-├── main.tsx  App.tsx
-├── api/{client,queries}.ts
+ui/src/admin/                   # Vite entry; shares ui/src/shared/
+├── main.tsx  App.tsx           # router basename=/{base}
+├── api/{client,queries}.ts     # (mostly from ui/src/shared/)
 ├── components/
 │   ├── CrudTable/            # Table, Toolbar, Filters, Pagination, BulkActions, ColumnPicker
 │   ├── Modal, ConfirmDialog, Toast, StatCard, EmptyState, ErrorBoundary

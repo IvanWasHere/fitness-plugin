@@ -8,7 +8,7 @@ Route (api/fitnessclub/v1/*.php)
   └─ args schema          → validation + sanitisation (WP does the work)
        └─ RestController  → thin: unpack request, call service, present
             └─ Service    → business rules, transactions, events  ← all logic here
-                 └─ Repository → SQL via DB::table()
+                 └─ Repository → DB::table() (simple)  |  $wpdb->prepare() (joins)
                       └─ Model  → table name, casts, column list
             └─ Presenter  → row/DTO → API shape
 ```
@@ -17,6 +17,24 @@ Route (api/fitnessclub/v1/*.php)
 longer than ~15 lines it is doing a service's job. This is the rule that keeps the
 same logic usable from the REST API, WP-CLI commands, and cron jobs — the
 subscription-expiry cron and the checkout webhook must run *identical* code.
+
+### Data access: two tools ([D5](00-architecture.md#d5--data-access-wpbones-dbtable-for-the-simple-path-raw-wpdb-for-joins))
+
+wpBones' `DB::table()` builder is a **light version with no `join()`** (confirmed
+in the query-builder docs). So Repositories use:
+
+- **`DB::table('fc_x')->where(...)->get()/first()/insert()/update()`** for simple
+  single-table reads and writes (prefix applied automatically).
+- **Raw `$wpdb->prepare()`** for joins, `GROUP BY` and date-range rollups —
+  interpolating only `{$wpdb->prefix}`-style table names, never request values.
+  The `Guard` and `ProgressService` are join-heavy and use this path.
+
+The no-raw-SQL lint gate (below) is written to permit exactly this: placeholdered
+`$wpdb` with prefix-interpolated table names, and to reject any value interpolated
+into SQL.
+
+**Options** are read through the wpBones model, not `get_option()`:
+`FitnessClub()->options->get('routing.app_base', 'fitness')`.
 
 ## Roles & capabilities
 
@@ -65,14 +83,18 @@ final class Guard
 {
     // Passes for ANY active assignment — a client may have several trainers (Q3),
     // and every one of them may read that client's progress.
-    public static function trainerOwnsClient(int $trainerWpUserId, int $userId): bool
+    // A JOIN, so raw $wpdb — the wpBones builder has no join() (D5).
+    public static function trainerCoachesClient(int $trainerWpUserId, int $userId): bool
     {
-        return (bool) DB::table('fc_user_trainers as ut')
-            ->join('fc_trainers as t', 't.id', '=', 'ut.trainer_id')
-            ->where('t.wp_user_id', $trainerWpUserId)
-            ->where('ut.user_id', $userId)
-            ->where('ut.status', 'active')
-            ->count();
+        global $wpdb;
+        return (bool) $wpdb->get_var($wpdb->prepare(
+            "SELECT ut.id
+               FROM {$wpdb->prefix}fc_user_trainers ut
+               JOIN {$wpdb->prefix}fc_trainers t ON t.id = ut.trainer_id
+              WHERE t.wp_user_id = %d AND ut.user_id = %d AND ut.status = 'active'
+              LIMIT 1",
+            $trainerWpUserId, $userId
+        ));
     }
 
     // Stricter: only the trainer who created/assigned the resource may modify it.
@@ -90,7 +112,7 @@ them:
 
 | Operation | Guard | Scope |
 |---|---|---|
-| Read anything about an assigned client — progress, sessions, health, nutrition, **and other trainers' assignments and plans** | `trainerOwnsClient` | any active assignment |
+| Read anything about an assigned client — progress, sessions, health, nutrition, **and other trainers' assignments and plans** | `trainerCoachesClient` | any active assignment |
 | Write plans, workout assignments, food plans | `trainerAssignedResource` | the assigning trainer only |
 | Read or write client notes | neither — owner check on `fc_client_notes.trainer_id` | that trainer only (Q15) |
 
@@ -155,6 +177,23 @@ Corrections to `plan.md` §14.1:
 - Disabled by default; enabled per-site in Settings → API.
 
 Use `firebase/php-jwt` via Composer — do not hand-roll signing.
+
+## Service providers
+
+Registered in `config/plugin.php → providers`, booted on `init`:
+
+| Provider | Owns |
+|----------|------|
+| `RewriteServiceProvider` | The front-end URL ([D9](00-architecture.md#d9--front-end-routing-configurable-app-url)). On `init`: reads `routing.app_base` from the options model, registers `add_rewrite_rule('^{base}(/(.*))?/?$', …)` + the `fc_app`/`fc_app_path` query vars. On `template_redirect`: when `fc_app` is set, resolve the user's role → pick the SPA → render the standalone Blade shell (boot payload + that SPA's Vite manifest tags) → `exit`. Hooks `update_option_fitnessclub` + activation to `flush_rewrite_rules()` |
+| `RoleProvider` | Roles + capabilities (below); install on activation, remove on uninstall |
+| `UpgradeProvider` | Runs the schema-version dispatcher on `init` (migrations having applied on activation) |
+| `ShortcodeProvider` | The optional `[fitnessclub_app]` embed |
+| `ScheduleProvider` | Registers the cron jobs (below) |
+
+The **role → SPA** resolution lives in `RewriteServiceProvider` (or a small
+`AppRouter` support class it calls): `administrator` → admin SPA, `fc_trainer` →
+trainer SPA, else user SPA; unauthenticated → user SPA (login screen). Precedence
+admin > trainer > user for multi-role accounts (Q17c).
 
 ## Services
 

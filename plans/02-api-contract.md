@@ -81,8 +81,14 @@ entitlements are the merged result across all of them
                     "max_trainers": 2, "trainers_used": 2,
                     "message_quota_by_trainer": { "1": 10, "2": 5 } },
   "theme": { "colors": {…}, "typography": {…}, "layout": {…}, "components": {…} },
+  "app": { "base": "/fitness", "basename": "/fitness", "spa": "user" },
   "counts": { "unread_messages": 2, "unread_notifications": 3 } }
 ```
+
+`app.base` is the configured front-end slug ([D9](00-architecture.md#d9--front-end-routing-configurable-app-url));
+the SPA uses `app.basename` for its react-router and `app.spa` (`user`|`trainer`|`admin`)
+is which app the backend resolved for this role. The same object is also injected
+into the render shell's `data-boot` so the app has it before the first fetch.
 
 Note login/registration screens **do not exist in either prototype**. They are net
 new UI (gap register §3.1).
@@ -460,7 +466,8 @@ Plus non-CRUD admin operations:
 | PUT | `/admin/themes/{slug}` | Edit theme JSON |
 | POST | `/admin/themes/{slug}/activate` | Set active |
 | DELETE | `/admin/themes/{slug}` | Delete (never the bundled default) |
-| GET/PUT | `/admin/settings` | §13.4 general/email/payment/feature toggles |
+| GET/PUT | `/admin/settings` | §13.4 general/email/payment/feature toggles, **+ `routing.app_base`** (the front-end slug) |
+| POST | `/admin/settings/flush-rewrites` | Re-flush rewrite rules after an `app_base` change (also fired automatically on save) |
 | GET | `/admin/export/{resource}` | CSV export (§ Phase 4) |
 | POST | `/admin/import/foods` | Bulk food CSV import |
 

@@ -1,9 +1,20 @@
 # 04 — User App
 
 Port of `user-app/index.html` (1 509 lines, Mithril + Dexie + Chart.js) to a
-**React 18 + TypeScript** SPA ([D1](00-architecture.md#d1--view-framework-react-18--typescript--confirmed-2026-07-24),
-confirmed) served from the plugin. Scaffold with `php bones make:app user`.
-Mounted by shortcode `[fitnessclub_app]` on a front-end page.
+**React 18 + TypeScript** SPA ([D1](00-architecture.md#d1--view-framework-react-18--typescript--confirmed-2026-07-24)),
+**built with Vite** as one of three role-specific apps in the `ui/` workspace
+([D10](00-architecture.md#d10--front-end-three-vite-compiled-react-spas)) —
+`ui/src/user/`, sharing `ui/src/shared/` with the trainer and admin apps.
+
+**Mounting.** No shortcode. The backend serves this SPA at the configured URL
+(`example.com/{base}`, default `/fitness`) whenever the logged-in user is an
+`fc_user` — the same URL serves the trainer/admin SPA to those roles
+([D9](00-architecture.md#d9--front-end-routing-configurable-app-url)). The rewrite
+render emits a standalone Blade shell with `<div id="fc-app" data-boot="…">` + this
+app's Vite manifest tags; the app reads `data-boot` (REST root, nonce, user, role,
+theme tokens, entitlements, locale) and sets its react-router `basename` to
+`/{base}`. An **unauthenticated** visitor to `/{base}` gets *this* app's
+login/register screen (§3.1); on success the backend re-resolves the role.
 
 **Read [09-gap-register.md §2](09-gap-register.md#2-prototype-defects-do-not-port-these)
 first.** Several prototype screens do not run — porting them literally
@@ -73,9 +84,9 @@ Flow detail: [09 §4.4](09-gap-register.md#44-q4--users-request-trainers).
 ## Structure
 
 ```
-resources/assets/apps/user/
-├── main.tsx                    # reads window.FC_BOOT, mounts, installs theme vars
-├── App.tsx                     # router + chrome + overlay outlets
+ui/src/user/                    # Vite entry; shares ui/src/shared/ with trainer+admin
+├── main.tsx                    # reads #fc-app data-boot, mounts, installs theme vars
+├── App.tsx                     # router (basename=/{base}) + chrome + overlay outlets
 ├── api/
 │   ├── client.ts               # fetch wrapper: nonce, error envelope, nonce-refresh retry
 │   ├── queries.ts              # TanStack Query hooks, one per endpoint
@@ -205,8 +216,10 @@ The prototype stylesheet (~195 lines, lines 14–207) ports **as-is** — it is 
 CSS driven by `:root` custom properties, which is exactly the shape the theming
 system needs. Two required changes:
 
-1. Rename all custom properties to a `--fc-` prefix so they cannot collide with
-   the WordPress theme the shortcode is embedded in.
+1. Rename all custom properties to a `--fc-` prefix. (The standalone full-page
+   render — [D9](00-architecture.md#d9--front-end-routing-configurable-app-url) —
+   means no host-theme CSS is present, but the prefix is cheap insurance and is
+   required for the optional shortcode-embed path.)
 2. **Add the ~15 utility classes the prototype references but never defines**:
    `.text-center`, `.flex-column`, `.font-bold`, `.text-lg`, `.text-accent2`,
    `.text-info`, `.text-purple`, `.tag-accent`, `.mt-4`, `.mt-8`, `.mt-12`,
@@ -263,8 +276,9 @@ The prototype has `aria-label` on nav buttons and honours
 
 ## Performance budget (§19.2: <2 s page load)
 
-- Route-level code splitting; the player and charts load on demand
-- Initial JS ≤ 180 KB gzipped (React 18 + Query + router ≈ 60 KB; Chart.js lazy)
+- Route-level code splitting (Vite dynamic `import()`); the player and charts load on demand
+- Initial JS ≤ 180 KB gzipped (React + Query + router ≈ 60 KB — Vite bundles React
+  itself, D10; Chart.js lazy). Vite's manifest + hashed chunks give long-cache immutability
 - Dashboard TTI ≤ 1.5 s on 4G — the single aggregate call is what makes this reachable
 - Skeletons (the prototype has a `.skeleton` shimmer class, unused) instead of spinners
 - `<img loading="lazy">` on workout cards; prototype loads six 600×400 images eagerly

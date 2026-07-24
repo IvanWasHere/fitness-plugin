@@ -31,10 +31,12 @@ build tooling, no wpBones install. The prototypes are *design references* — th
 run against seeded IndexedDB, not a server, and several screens crash (see
 [gap register §2](09-gap-register.md#2-prototype-defects-do-not-port-these)).
 
-**What we build:** a wpBones v2 plugin exposing a versioned REST API over 29
-custom tables, driving three SPAs — user (front-end, shortcode-mounted), admin
-(wp-admin page), trainer (front-end, shortcode-mounted). No custom post types,
-per spec.
+**What we build — two sections** ([00 §two-sections](00-architecture.md#the-plugin-is-two-sections)):
+a **wpBones backend** exposing a versioned REST API over 29 custom tables, and a
+**Vite front-end of three React SPAs** — user, trainer, admin. All three live at
+one configurable URL (`example.com/{base}`, default `/fitness`); the backend serves
+whichever SPA matches the logged-in role ([D9](00-architecture.md#d9--front-end-routing-configurable-app-url)/[D10](00-architecture.md#d10--front-end-three-vite-compiled-react-spas)).
+No custom post types, per spec.
 
 **The critical path** is not the UI. It is: schema → roles/capabilities → auth →
 workout-session state machine. Everything else is CRUD hung off that spine. The
@@ -48,20 +50,22 @@ cannot be built. Fixed in [01-database.md](01-database.md).
 no prototype, and `plan.md` §7.2 gives only a component tree. Budgeted in
 [06-trainer-app.md](06-trainer-app.md) as its own phase.
 
-## The 8 binding decisions
+## The 10 binding decisions
 
 Full rationale in [00-architecture.md](00-architecture.md#decisions).
 
 | # | Decision | Chosen | Because |
 |---|----------|--------|---------|
-| D1 | View framework | **React 18 + TypeScript** — ✅ confirmed 2026-07-24 | Spec mandates it; wpBones `make:app` scaffolds it. Prototypes are Mithril — ~2 000 lines of mechanical view porting, budgeted in phases 1–2. |
+| D1 | View framework | **React 18 + TypeScript**, built with **Vite** — ✅ | Spec mandates React; Vite for HMR + self-contained bundles (D10). Prototypes are Mithril — mechanical view porting |
 | D2 | Naming / prefix | `fitnessclub` slug, `FitnessClub\` namespace, `{$wpdb->prefix}fc_` tables | Folder is `fitnessclub`; spec's `wn_`/"WorkoutNow"/prototypes' "FitForge" all conflict |
-| D3 | Routing | wpBones `Route::` in `api/fitnessclub/v1/routes.php` → `/wp-json/fitnessclub/v1/*` | Native WP REST: nonces, `permission_callback`, arg schemas for free |
-| D4 | Auth | Cookie + `X-WP-Nonce` for embedded apps; JWT only for mobile/external | Spec's JWT-everywhere adds token handling to browsers that already have a session |
-| D5 | Data access | wpBones `DB::table()` query builder, no Eloquent | Eloquent needs `illuminate/database` (~4 MB) for queries `$wpdb` does fine |
+| D3 | Routing (API) | wpBones `Route::` in `api/fitnessclub/v1/*.php` → `/wp-json/fitnessclub/v1/*` | Native WP REST: nonces, `permission_callback`, arg schemas for free |
+| D4 | Auth | Cookie + `X-WP-Nonce` for the SPAs; JWT only for mobile/external | Spec's JWT-everywhere adds a credential to browsers that already have a session |
+| D5 | Data access | `DB::table()` builder for simple; **raw `$wpdb` for joins** (light builder has no `join`) | Eloquent avoided; the builder's scope is confirmed in the docs |
 | D6 | Payments | Adapter interface, Stripe first, manual-entry fallback | Spec says "PayPal, Stripe, or similar" — build the seam, not both gateways |
 | D7 | Theme storage | Bundled defaults in plugin + user themes in `uploads/fitnessclub-themes/` | Spec contradicts itself (`wn_themes/` in-plugin vs `WP_CONTENT_DIR` in the loader); `wp-content/` is often unwritable |
 | D8 | Money | `DECIMAL(10,2)` + minor-unit ints at the gateway boundary, currency column | Spec has no currency field anywhere |
+| D9 | **Front-end URL** | One **configurable** slug (`example.com/{base}`, default `/fitness`), role-selected SPA, via a `RewriteServiceProvider` | wpBones has no front-end routing — native WP rewrite. ✅ confirmed |
+| D10 | **Front-end build** | **Three Vite React SPAs** (user/trainer/admin), one shared workspace, decoupled from wpBones' webpack | Hard bundle isolation per role; the one part of wpBones we replace. ✅ confirmed |
 
 ## Assumptions in force
 

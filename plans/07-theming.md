@@ -75,17 +75,19 @@ final class ThemeService
 }
 ```
 
-Emitted once per page as an inline `<style>` (it is <2 KB, so a request would cost
-more than it saves), cached in a transient keyed by theme slug + override hash:
+Emitted into the front-end shell (D9) as an inline `<style>` (it is <2 KB, so a
+request would cost more than it saves), cached in a transient keyed by theme slug +
+override hash. All three SPAs mount on `#fc-app`:
 
 ```html
 <style id="fc-theme-vars">
-#fc-app, #fc-admin-app { --fc-color-primary:#00E676; --fc-color-bg:#0B0E13; … }
+#fc-app { --fc-color-primary:#00E676; --fc-color-bg:#0B0E13; … }
 </style>
 ```
 
-Scoped to the app roots, **not `:root`** — the app is embedded in someone else's
-WordPress theme and must not repaint their site.
+Scoped to the app root, **not `:root`** — even though the render is standalone
+(D9), scoping keeps the tokens contained and lets the optional shortcode-embed
+path coexist with a host theme.
 
 `components.*` are not CSS; they go into the boot payload as feature flags and the
 React apps branch on them. This is what makes `show_charts: false` or

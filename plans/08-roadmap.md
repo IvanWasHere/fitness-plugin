@@ -7,25 +7,45 @@ settings unscheduled entirely. Corrected below.
 Estimates are one full-stack developer, in dev-days, excluding design, QA cycles,
 and payment compliance review.
 
+> ## ⟳ Reset — read this first (2026-07-24)
+>
+> The earlier hand-rolled implementation (migrations, base classes, `RoleProvider`,
+> `Guard`, seeders, PHPCS/PHPUnit/CI) was **deleted**, and the plugin folder now
+> holds a **fresh `WPKirk-Boilerplate`**. What survives: **`plans/`**, the two
+> **prototypes**, and the **29 `wp_fc_*` tables** still in the dev database.
+>
+> So the "✅ done" marks in Phase 0 / W1.1 / W1.2 below describe work that no longer
+> exists on disk — treat them as **"proven once, to be redone on the boilerplate."**
+> The schema is validated and the migration/Guard/seeder designs are known-good, so
+> redoing them is transcription, not rediscovery. The build notes at the end of this
+> doc are kept as a record of what was learned (the `functions.php` CLI-exit trap,
+> the dbDelta rules, the activation-ordering fix), all of which still apply.
+>
+> Two architectural shifts landed with the reset (see [00](00-architecture.md)):
+> the plugin is now explicitly **two sections** — a wpBones backend + **three Vite
+> React SPAs** ([D10](00-architecture.md#d10--front-end-three-vite-compiled-react-spas)) —
+> and the front-end lives at a **configurable URL** served by role
+> ([D9](00-architecture.md#d9--front-end-routing-configurable-app-url)), not a
+> shortcode.
+
 ---
 
 ## Phase 0 — Foundation (3–4 d)
 
-> **Phase 0 is done** (2026-07-24) for items 0.1–0.3; see the build notes at the
-> end of this document. 0.4–0.7 remain.
+Starting from the **fresh boilerplate** now in place.
 
 | # | Work | Done when |
 |---|------|-----------|
-| 0.1 | ~~`composer create-project wpbones/wpkirk`~~ — **that package is not on Packagist** (the boilerplate is a GitHub template). Skeleton authored directly + `composer require wpbones/wpbones:^2.0` | ✅ Plugin boots on WP 7.0.2 / PHP 8.4.23 |
-| 0.2 | `.gitignore` (vendor, node_modules — but **commit `public/`**, wpBones expects built assets present) | ✅ written; `git init` still pending |
-| 0.3 | `config/{plugin,menus,api,options,fitnessclub}.php` | ✅ `GET /wp-json/fitnessclub/v1/health` returns 200 |
-| 0.4 | Webpack/TS/Jest config for three entry points | `npm run dev` watches all three apps |
-| 0.5 | PHPCS (WP standard + a no-raw-SQL sniff), ESLint, Prettier, pre-commit hook | CI red on violation |
-| 0.6 | GitHub Actions: PHP lint/test matrix (8.1–8.4), JS lint/test, migration-upgrade job | Green on an empty PR |
-| 0.7 | Local WP env (`wp-env` or Docker) + a seeded DB | `npm run env:start` gives a working site |
+| 0.1 | **Rename** WPKirk→FitnessClub the native way: stash `plans/`+prototypes, set `namespace` file, `composer install` (runs `bones rename`), restore; flip `config/api.php` basic-auth **off** | Plugin boots as FitnessClub; `GET /wp-json/fitnessclub/v1/health` → 200 |
+| 0.2 | `config/{plugin,menus,api,options,fitnessclub}.php` — providers, options model (incl. `routing.app_base`), domain constants | Config reads back via `$plugin->options`/`$plugin->config` |
+| 0.3 | **Vite `ui/` workspace** — three entries (`user`/`trainer`/`admin`) + `src/shared/`, `vite.config.ts` with WordPress manifest integration, dev-server detection | `npm run dev` in `ui/` serves all three with HMR; `npm run build` emits `public/ui/{app}/` + manifest |
+| 0.4 | `RewriteServiceProvider` + Blade shell — `/{base}` renders the role's SPA from the manifest | Visiting `/fitness` while logged in loads the right SPA shell |
+| 0.5 | PHPCS (no-raw-SQL gate), PHPUnit harness (integration vs real WP+MySQL), ESLint/Prettier for `ui/` | `composer check` + `npm run lint` green |
+| 0.6 | GitHub Actions: PHP lint/test matrix (8.1–8.4), migration-idempotency job, `ui/` build+lint job | Green on an empty PR |
+| 0.7 | `git init`; local WP env note (`wp-env` or the existing dev site) | reviewable diffs |
 
-**Exit:** an empty plugin that activates, exposes a versioned REST namespace,
-builds three empty SPAs, and has CI.
+**Exit:** a renamed plugin that activates, exposes the versioned REST namespace,
+serves an (empty) role-selected SPA at the configured URL, and has CI.
 
 ---
 
@@ -65,12 +85,13 @@ but cannot edit the first trainer's assignments (Q3).
 
 ### W1.3 Auth + boot (3 d)
 Cookie/nonce plumbing, **nonce-expiry refresh-and-retry in the API client**,
-`GET /auth/me`, login/register/forgot/reset endpoints, the shortcode provider,
-asset enqueueing, boot payload. Rate limiter (with the object-cache detection from
-[03](03-backend.md#rate-limiting)).
+`GET /auth/me`, login/register/forgot/reset endpoints, the **role→SPA resolution**
+in `RewriteServiceProvider`, the Blade shell + Vite-manifest enqueue, boot payload.
+Rate limiter (with the object-cache detection from [03](03-backend.md#rate-limiting)).
 
-*Done when:* an unauthenticated visitor sees a login panel; a logged-in `fc_user`
-sees an empty app shell with their name and theme applied.
+*Done when:* an unauthenticated visitor to `/{base}` sees the login panel; a
+logged-in `fc_user` gets the user SPA, a trainer the trainer SPA, an admin the
+admin SPA — each an empty shell with their name and theme applied.
 
 ### W1.4 Workout domain (6 d)
 `fc_workouts`/`fc_exercises`/`fc_user_workouts` read endpoints;
@@ -82,13 +103,14 @@ simulated 20-minute gap → log 24 sets → complete — and the resulting rows,
 duration, volume and PRs are all correct. **This test is the phase's real exit
 criterion.**
 
-### W1.5 User app shell + workout screens (8 d)
-React 18 + TS ([D1](00-architecture.md#d1--view-framework-react-18--typescript--confirmed-2026-07-24),
-settled — no decision pending). `php bones make:app user`. Router, chrome, theme provider,
-API client, design system components, ported CSS **with the missing utility
-classes and the contrast fix**. Screens: auth, dashboard, workouts, workout
-detail. The player with timestamp-derived timers, wake lock, offline set queue,
-and the celebration screen.
+### W1.5 User SPA shell + workout screens (8 d)
+React 18 + TS in the **Vite `ui/` workspace** — the `ui/src/user/` entry plus the
+shared `ui/src/shared/` (API client, design system, chart/modal components)
+([D10](00-architecture.md#d10--front-end-three-vite-compiled-react-spas)). Router
+(basename `/{base}`), chrome, theme provider, ported CSS **with the missing utility
+classes and the contrast fix**. Screens: auth, dashboard, workouts, workout detail.
+The player with timestamp-derived timers, wake lock, offline set queue, and the
+celebration screen.
 
 *Done when:* a seeded user can log in, open a workout, complete it on a phone with
 the screen off between sets, and see correct numbers on the celebration screen.
@@ -270,37 +292,30 @@ which are the only path from signup to being coached.
 
 ---
 
-## Build notes — Phase 0 / W1.1, 2026-07-24
+## Build notes — historical (from the deleted first implementation), 2026-07-24
 
-What actually happened when the plan met the toolchain.
+> ⚠️ These record what was learned during the **first, now-deleted** hand-rolled
+> implementation (see the reset banner at the top). The *approach* here — building
+> directly on `wpbones/wpbones` and patching the namespace by hand — has been
+> **superseded**: we now start from the actual `WPKirk-Boilerplate` and rename it
+> the native way (Phase 0.1). The *technical facts* below (the CLI-exit trap, dbDelta
+> rules, activation ordering, dbDelta idempotency) still hold and are the reason the
+> redo is transcription, not rediscovery.
 
-### `composer create-project wpbones/wpkirk` does not work
+### `bones rename` and the plans-corruption risk — now handled by stashing
 
-`wpbones/wpkirk` is not published on Packagist — only `wpbones/wpbones` (the
-framework) is. The boilerplate is a **GitHub template repository**
-(`wpbones/WPKirk-Boilerplate`), not a Composer package. The skeleton was
-therefore authored directly against `composer require wpbones/wpbones:^2.0`,
-which also avoids importing the boilerplate's demo content (Prism, greeting
-scripts, Italian translations, sample views) that would all have been deleted.
+`bones rename` performs a global `str_replace` across **every file in the project**
+(only `node_modules` and the bones binary excluded — Markdown included), so it would
+rewrite `plans/00-architecture.md`'s legitimate "WPKirk-Boilerplate" citations.
 
-### `php bones rename` is destructive here — deliberately not used
+The first implementation avoided the command entirely and hand-patched the vendor
+namespace. **Superseded.** With the boilerplate as the base we *do* use native
+`bones rename` — but stash `plans/`, `user-app/`, `admin-app/` out of the tree for
+the one rename pass, then restore them (Phase 0.1). That keeps us on the framework's
+blessed path without corrupting the planning artifacts. `php bones make:*` reads the
+`namespace` file and works normally.
 
-WP Bones ships the framework hardcoded in the `WPKirk\WPBones\` namespace and
-expects `php bones rename` to rewrite it. That command performs a global
-`str_replace` across **every file in the project**, excluding only
-`node_modules` and the bones binary itself — Markdown and HTML included. It
-would have rewritten `plans/00-architecture.md`, which legitimately cites
-"wpbones/WPKirk-Boilerplate", into "wpbones/FitnessClub-Boilerplate".
-
-Replaced with `bin/patch-vendor-namespace.php`: same job, scoped strictly to
-`vendor/wpbones/wpbones/`, idempotent, wired into `post-autoload-dump` so it
-survives every `composer install|update`. It rewrites the namespace, the
-`FitnessClub()` accessor, the package's PSR-4 declaration and the generated
-autoload maps. Verified: 58/58 framework files rewritten, all classes resolve.
-
-**Consequence for `php bones make:*`:** those commands read the plugin name and
-namespace from the `namespace` file (`FitnessClub,FitnessClub`), which is
-present, so scaffolding commands work normally. Do **not** run `php bones rename`.
+### The accessor function is not in the framework
 
 ### The accessor function is not in the framework
 
