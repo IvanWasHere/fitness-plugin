@@ -38,8 +38,8 @@ Starting from the **fresh boilerplate** now in place.
 |---|------|-----------|
 | 0.1 | **Rename** WPKirk→FitnessClub the native way: stash `plans/`+prototypes, set `namespace` file, `composer install` (runs `bones rename`), restore; flip `config/api.php` basic-auth **off** | Plugin boots as FitnessClub; `GET /wp-json/fitnessclub/v1/health` → 200 |
 | 0.2 | `config/{plugin,menus,api,options,fitnessclub}.php` — providers, options model (incl. `routing.app_base`), domain constants | Config reads back via `$plugin->options`/`$plugin->config` |
-| 0.3 | **Vite `ui/` workspace** — three entries (`user`/`trainer`/`admin`) + `src/shared/`, `vite.config.ts` with WordPress manifest integration, dev-server detection | `npm run dev` in `ui/` serves all three with HMR; `npm run build` emits `public/ui/{app}/` + manifest |
-| 0.4 | `RewriteServiceProvider` + Blade shell — `/{base}` renders the role's SPA from the manifest | Visiting `/fitness` while logged in loads the right SPA shell |
+| 0.3 ✅ | **Vite `ui/` workspace** — three entries (`user`/`trainer`/`admin`) + `src/shared/`, `vite.config.ts` manifest mode, dev-server config | **Done 2026-07-25** (Vite 8 + React 18, 0 npm vulns): `npm run build` → `public/ui/` + `.vite/manifest.json`, 3 isolated entries + 1 shared React chunk; `npm run dev` HMR verified at :5173 |
+| 0.4 ✅ | `RewriteServiceProvider` + Blade shell — `/{base}` renders the role's SPA from the manifest | **Done 2026-07-25**: `GET /fitness/` → 200 standalone shell; unauth → user SPA, admin → admin SPA; `ViteAssets` reads the manifest (prod) or dev server; boot payload carries base/nonce/role/spa. `AppRouter` precedence admin>trainer>user |
 | 0.5 | PHPCS (no-raw-SQL gate), PHPUnit harness (integration vs real WP+MySQL), ESLint/Prettier for `ui/` | `composer check` + `npm run lint` green |
 | 0.6 | GitHub Actions: PHP lint/test matrix (8.1–8.4), migration-idempotency job, `ui/` build+lint job | Green on an empty PR |
 | 0.7 | `git init`; local WP env note (`wp-env` or the existing dev site) | reviewable diffs |

@@ -1,0 +1,33 @@
+{
+  "_boot-ByU3IRAo.js": {
+    "file": "assets/boot-ByU3IRAo.js",
+    "name": "boot"
+  },
+  "src/admin/main.tsx": {
+    "file": "assets/admin-Mat0jhfU.js",
+    "name": "admin",
+    "src": "src/admin/main.tsx",
+    "isEntry": true,
+    "imports": [
+      "_boot-ByU3IRAo.js"
+    ]
+  },
+  "src/trainer/main.tsx": {
+    "file": "assets/trainer-DPyFAXqb.js",
+    "name": "trainer",
+    "src": "src/trainer/main.tsx",
+    "isEntry": true,
+    "imports": [
+      "_boot-ByU3IRAo.js"
+    ]
+  },
+  "src/user/main.tsx": {
+    "file": "assets/user-B15fdswV.js",
+    "name": "user",
+    "src": "src/user/main.tsx",
+    "isEntry": true,
+    "imports": [
+      "_boot-ByU3IRAo.js"
+    ]
+  }
+}

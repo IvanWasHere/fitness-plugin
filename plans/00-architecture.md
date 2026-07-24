@@ -287,22 +287,30 @@ the front-end**.
 **Shape:**
 
 - `ui/` — one Vite workspace, **three entry points** with shared code, **not**
-  `resources/assets/`:
+  `resources/assets/` (built 2026-07-25 on Vite 8 + React 18):
   ```
   ui/
   ├── package.json  vite.config.ts  tsconfig.json
-  ├── src/shared/         # API client, auth, design system, charts, modals, hooks
-  ├── src/user/    main.tsx index.html
-  ├── src/trainer/ main.tsx index.html
-  └── src/admin/   main.tsx index.html
+  ├── src/shared/         # boot reader, API client, auth, design system, charts, modals
+  ├── src/user/    main.tsx
+  ├── src/trainer/ main.tsx
+  └── src/admin/   main.tsx
   ```
   (Shared `src/shared/` keeps the API client, design tokens and common components
-  in one place; three entries emit three independent bundles.)
-- Build → `public/ui/{user,trainer,admin}/` each with a Vite **manifest**; the PHP
-  shell reads the matching manifest and emits the hashed `<script type="module">`
-  + `<link>` tags for **only** that role's app.
-- **Dev**: Vite dev server (HMR); the shell detects dev mode and loads from it (the
-  standard Vite-for-WordPress pattern). **Prod**: hashed assets from `public/ui/`.
+  in one place. No per-entry `index.html` — WordPress serves the shell (D9), so the
+  entries are `main.tsx` files given to `rollupOptions.input`.)
+- Build → `public/ui/` with **one** Vite manifest (`public/ui/.vite/manifest.json`)
+  and `public/ui/assets/{role}-{hash}.js`. Each entry is its own chunk; code both
+  entries import (React, `src/shared/`) is a **single shared chunk**, so a member
+  never downloads admin-specific code *and* React ships once (~46 KB gzip, not ×3).
+  The PHP shell reads the manifest, looks up `src/{role}/main.tsx`, and emits the
+  hashed `<script type="module">` for that entry + a modulepreload for its imported
+  shared chunk. *(Refined from the earlier "three separate manifests" sketch —
+  one manifest with per-entry chunking gives the same isolation without triplicating
+  React.)*
+- **Dev**: Vite dev server (HMR) at `:5173` (verified); the shell detects dev mode
+  and loads `@vite/client` + `src/{role}/main.tsx` from it. **Prod**: hashed assets
+  from `public/ui/`.
 - Role → SPA resolution is server-side in the render step
   ([D9](#d9--front-end-routing-configurable-app-url)); auth/caps are enforced by
   the REST API, never by the client.

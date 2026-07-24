@@ -1,0 +1,26 @@
+{
+  "name": "fitnessclub-ui",
+  "private": true,
+  "type": "module",
+  "description": "FitnessClub front-end — three Vite React SPAs (user, trainer, admin).",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit",
+    "preview": "vite preview",
+    "lint": "eslint src --ext .ts,.tsx",
+    "format": "prettier --write src"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^6.0.4",
+    "typescript": "^5.6.3",
+    "vite": "^8.1.5"
+  }
+}

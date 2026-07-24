@@ -150,6 +150,8 @@ return [
   |
   */
 
-  'providers' => []
+  'providers' => [
+    \FitnessClub\Providers\RewriteServiceProvider::class,
+  ]
 
 ];
