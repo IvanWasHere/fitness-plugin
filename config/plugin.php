@@ -151,7 +151,9 @@ return [
   */
 
   'providers' => [
+    \FitnessClub\Providers\UpgradeProvider::class,
     \FitnessClub\Providers\RewriteServiceProvider::class,
+    \FitnessClub\Providers\CliServiceProvider::class,
   ]
 
 ];

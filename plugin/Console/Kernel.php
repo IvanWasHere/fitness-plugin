@@ -6,7 +6,8 @@ use FitnessClub\WPBones\Foundation\Console\Kernel as ConsoleKernel;
 
 class Kernel extends ConsoleKernel
 {
-  // Console commands (`php bones <command>`) are registered per work package —
-  // seeding, PR rebuild, cleanup. See plans/03-backend.md.
+    // `php bones` commands run WITHOUT WordPress bootstrapped (bones only loads WP
+    // for tinker/deploy), so WP-runtime work — seeding, PR rebuild, cleanup — lives
+    // in WP-CLI commands under plugin/Cli/ instead, registered by CliServiceProvider.
     protected $commands = [];
 }

@@ -53,21 +53,32 @@ serves an (empty) role-selected SPA at the configured URL, and has CI.
 
 The spine. Nothing after this phase is architecturally interesting.
 
-### W1.1 Database (4 d) — ✅ **complete**
+### W1.1 Database (4 d) — ✅ **complete (rebuilt on the boilerplate 2026-07-25)**
 All 29 migrations, named `YYYYMMDD_HHMMSS_*`, idempotent. Includes
 `fc_user_trainers.is_primary` and the Q10 provenance columns (`source='admin'`,
 `last_edited_by_wp_user_id`) on health and nutrition. The `fitnessclub_db_version`
-upgrade dispatcher — **build it now**, before the first install exists to upgrade
-(it runs from `UpgradeProvider` on `init`, *not* `activation.php`; see the build
-notes). `DemoSeeder` reproducing the prototype seed data exactly. `--volume`
-seeder (1 000 users × 180 days).
+upgrade dispatcher runs from `UpgradeProvider` on `init` (*not* `activation.php`,
+which executes before any table exists). Demo seeder reproducing the prototype
+data exactly; volume seeder for perf profiling.
 
-**Done 2026-07-24:** 29 migrations + `FitnessClub\Database\Migration` base
-(guarded FKs, InnoDB enforcement, idempotency helpers) +
-`Database\Upgrade\Manager` + `PlatformPlansSeeder` + `DemoSeeder` +
-`VolumeSeeder` + `bin/seed.php`. Plugin activated on the dev site: 29 tables,
-35 FKs, 94 indexes, both roles, demo dataset loaded. Index strategy validated
-against 62 k synthetic rows — every hot query hits an index, none exceed 0.7 ms.
+**Done 2026-07-25 (on the fresh boilerplate):**
+- `FitnessClub\Database\Migration` base (guarded FKs, InnoDB enforcement,
+  idempotency helpers) + 29 migrations → **29 tables, 35 FKs, 94 indexes, all
+  InnoDB**; idempotent on reactivate (verified).
+- `Database\Upgrade\Manager` + `UpgradeProvider` (schema version option = 1).
+- **Essential platform tiers** via wpBones' *native* `Seeder`
+  (`database/seeders/0100_platform_plans.php`), idempotent, on activation.
+- **Demo + volume seeders** (`plugin/Database/Seeders/`), invoked by a **WP-CLI**
+  command `wp fitnessclub seed --demo|--volume=N:D|--purge-volume`.
+- **Why WP-CLI, not a `php bones` command:** bones does *not* bootstrap WordPress
+  for custom kernel commands (only for `tinker`/`deploy`), so a `$wpdb`-dependent
+  seeder can't run under it. WP-CLI loads the full runtime; `CliServiceProvider`
+  registers the command. The bones Console/Kernel stays for scaffolding-type
+  commands.
+- Verified: demo seed idempotent; Alex coached by Sarah (primary) + Mike (Q3);
+  all trainer links within plan `max_trainers` (Q14); volume 10 k sessions hit
+  `idx_weekly`; purge removes only synthetic rows. Gate: phpcs 0 errors,
+  phpunit 24/24 (incl. `SchemaTest`).
 
 *Done when:* activate → 29 tables; deactivate/reactivate → no errors, no data loss;
 seeder produces the prototype's exact dataset — including Alex Morgan assigned to
