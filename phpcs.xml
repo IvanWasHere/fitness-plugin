@@ -21,6 +21,7 @@
     <file>bootstrap</file>
     <file>fitnessclub.php</file>
     <file>functions.php</file>
+    <file>uninstall.php</file>
 
     <exclude-pattern>*/vendor/*</exclude-pattern>
     <exclude-pattern>*/node_modules/*</exclude-pattern>

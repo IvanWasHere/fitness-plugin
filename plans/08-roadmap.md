@@ -85,7 +85,7 @@ seeder produces the prototype's exact dataset — including Alex Morgan assigned
 **both** Sarah Chen and Mike Torres, so multi-trainer paths are exercised from
 day one rather than discovered in Phase 3.
 
-### W1.2 Roles, capabilities, Guard (2 d)
+### W1.2 Roles, capabilities, Guard (2 d) — ✅ done
 `RoleProvider`, capability constants (including `fc_edit_user_health` for admins —
 Q10), `Guard` with `trainerOwnsClient` / **`trainerAssignedResource`** /
 `ownsSession` / `ownsThread` / `ownsResource`. Uninstall cleanup.
@@ -93,6 +93,23 @@ Q10), `Guard` with `trainerOwnsClient` / **`trainerAssignedResource`** /
 *Done when:* a test asserts every ownership rule returns false for a foreign id,
 **and** that a second trainer assigned to the same client can read their progress
 but cannot edit the first trainer's assignments (Q3).
+
+**Build notes.** `RoleProvider` installs `fc_user` (9 caps) and `fc_trainer` (10
+caps), and grants admins 12 `fc_*` caps including `fc_edit_user_health` (Q10);
+verified on the live install. `Guard` implements the two-guard split — the read
+guard `trainerCoachesClient()` (any active assignment) and the strict write guard
+`trainerAssignedResource()` (assigning trainer only), each resolving the internal
+id from a WP user id, joining via raw `$wpdb` (D5) with `{$wpdb->prefix}` table
+names and placeholder-prepared values (phpcs: **0 errors** on the request path).
+`activation.php` runs `RoleProvider::install()`; `uninstall.php` tears roles down
+and preserves user data unless `FITNESSCLUB_REMOVE_ALL_DATA` is set.
+
+*Exit criterion met* by `tests/Integration/GuardTest.php` (18 tests, 81
+assertions) against the seeded multi-trainer fixture: Mike Torres (Alex's second
+trainer, Q3) **can read** the shared client but **cannot write** Sarah's
+`upper-body-power` workout (Q13 boundary); declined/pending links grant nothing; a
+trainer is not a session owner; and every guard returns false for id 0 / negative
+/ nonexistent. Full gate: **42 tests, 116 assertions green.**
 
 ### W1.3 Auth + boot (3 d)
 Cookie/nonce plumbing, **nonce-expiry refresh-and-retry in the API client**,
