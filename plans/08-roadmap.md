@@ -40,7 +40,7 @@ Starting from the **fresh boilerplate** now in place.
 | 0.2 | `config/{plugin,menus,api,options,fitnessclub}.php` — providers, options model (incl. `routing.app_base`), domain constants | Config reads back via `$plugin->options`/`$plugin->config` |
 | 0.3 ✅ | **Vite `ui/` workspace** — three entries (`user`/`trainer`/`admin`) + `src/shared/`, `vite.config.ts` manifest mode, dev-server config | **Done 2026-07-25** (Vite 8 + React 18, 0 npm vulns): `npm run build` → `public/ui/` + `.vite/manifest.json`, 3 isolated entries + 1 shared React chunk; `npm run dev` HMR verified at :5173 |
 | 0.4 ✅ | `RewriteServiceProvider` + Blade shell — `/{base}` renders the role's SPA from the manifest | **Done 2026-07-25**: `GET /fitness/` → 200 standalone shell; unauth → user SPA, admin → admin SPA; `ViteAssets` reads the manifest (prod) or dev server; boot payload carries base/nonce/role/spa. `AppRouter` precedence admin>trainer>user |
-| 0.5 | PHPCS (no-raw-SQL gate), PHPUnit harness (integration vs real WP+MySQL), ESLint/Prettier for `ui/` | `composer check` + `npm run lint` green |
+| 0.5 ✅ | PHPCS (no-raw-SQL gate), PHPUnit harness (integration vs real WP+MySQL), ESLint/Prettier for `ui/` | **Done 2026-07-25**: `composer check` = phpcs (0 err) + phpunit 15/15; `ui/` lint+format+typecheck+build green. See build note on the `functions.php` guard + the JS audit exception |
 | 0.6 | GitHub Actions: PHP lint/test matrix (8.1–8.4), migration-idempotency job, `ui/` build+lint job | Green on an empty PR |
 | 0.7 | `git init`; local WP env note (`wp-env` or the existing dev site) | reviewable diffs |
 
@@ -448,3 +448,60 @@ demo dataset loaded; volume data purged.
 Migrations, base migration class, upgrade dispatcher, demo seeder, volume seeder.
 Remaining Phase 0: 0.4 webpack/TS/Jest · 0.5 PHPCS/ESLint · 0.6 CI · 0.7 wp-env,
 plus `git init`.
+
+---
+
+## Build notes — Phase 0.5 (gates), 2026-07-25
+
+### `functions.php` — the one justified edit
+
+Running the PHP tools empirically confirmed the CLI-exit trap: launching phpcs or
+phpunit loads Composer's autoloader, which loads `functions.php`, whose bare
+`exit()` silently kills the process (`php -r 'require "vendor/autoload.php"'`
+produced no output, exit 0). There is **no wpBones-native alternative** — the
+boilerplate ships no PHP test harness — so the direct-access guard was scoped to
+non-CLI SAPIs:
+
+```php
+if (!defined('ABSPATH') && PHP_SAPI !== 'cli') { exit(); }
+```
+
+This is the standard WP+Composer fix, minimal, and the documented last-resort
+`functions.php` edit. Nothing else in `functions.php` changed.
+
+### The gate
+
+- **PHP** — `phpcs.xml`: PSR-12 + `WordPress.DB.*` (no-raw-SQL, ERROR on the request
+  path, WARNING on future migration/seeder tooling) + `WordPress.Security.*` +
+  PHPCompatibilityWP; `ignore_warnings_on_exit` so CI gates on errors. Two
+  documented `phpcs:ignore`s: the intentional global `FitnessClub` accessor class,
+  and the shell's raw-HTML echo (values escaped inside the Blade template).
+- **PHPUnit** — integration only, against the real running site (`tests/bootstrap.php`
+  loads `wp-load.php`). 15 tests: `AppRouter` role→SPA precedence, `ViteAssets`
+  manifest resolution per role, the REST health route, and the rewrite rule/query
+  vars. `IntegrationTestCase` creates throwaway users and deletes them in
+  `tearDown` — verified zero leftover after a clean run.
+- **JS (`ui/`)** — ESLint 9 flat config (typescript-eslint + react-hooks +
+  react-refresh, Prettier owns formatting) + Prettier + `tsc --noEmit`. All green.
+- `composer check` and the four `npm` scripts are the CI gate for 0.6.
+
+### Accepted dev-only advisory (JS)
+
+`npm audit` reports 5 high `brace-expansion` advisories (GHSA-mh99-v99m-4gvg,
+DoS/OOM, range `<=5.0.7`) reached transitively through ESLint's config-file glob
+matcher (`minimatch`). Not accepted lightly:
+
+- **Not exploitable here** — it is ESLint expanding its own config globs at
+  lint time, never untrusted input, and never shipped to production.
+- The forced fixes both regress the toolchain: overriding `brace-expansion` to the
+  patched `5.0.8` **breaks ESLint's own path-matching** (incompatible with the
+  `minimatch` it uses), and ESLint 10 (npm's suggested fix) is **rejected by
+  `eslint-plugin-react-hooks`** (peer caps at ESLint 9) — and react-hooks catches
+  real bugs, so dropping it is a net loss.
+- **Clears itself** once `eslint-plugin-react-hooks` supports ESLint 10; revisit
+  then. Tracked here rather than papered over.
+
+### Phase 0 remaining
+
+0.6 GitHub Actions CI (run both gates + migration idempotency), 0.7 `git init` /
+local env note. Then Phase 1 proper.

@@ -8,5 +8,5 @@ import { readBoot, mountNode } from '@shared/boot';
 createRoot(mountNode()).render(
   <StrictMode>
     <AppShell role="admin" boot={readBoot()} />
-  </StrictMode>
+  </StrictMode>,
 );

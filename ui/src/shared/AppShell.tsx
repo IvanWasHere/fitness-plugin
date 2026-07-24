@@ -7,7 +7,13 @@ import type { BootPayload } from './boot';
  * shared code is deduplicated across the user/trainer/admin bundles. Real screens
  * replace it per work package.
  */
-export function AppShell({ role, boot }: { role: 'user' | 'trainer' | 'admin'; boot: BootPayload | null }) {
+export function AppShell({
+  role,
+  boot,
+}: {
+  role: 'user' | 'trainer' | 'admin';
+  boot: BootPayload | null;
+}) {
   const brand = boot?.brand ?? 'FitForge';
   return (
     <main
@@ -22,11 +28,11 @@ export function AppShell({ role, boot }: { role: 'user' | 'trainer' | 'admin'; b
     >
       <div style={{ textAlign: 'center' }}>
         <h1 style={{ margin: 0, fontSize: 28 }}>{brand}</h1>
-        <p style={{ opacity: 0.7 }}>
-          {role} SPA — scaffold ready
-        </p>
+        <p style={{ opacity: 0.7 }}>{role} SPA — scaffold ready</p>
         <code style={{ fontSize: 12, opacity: 0.5 }}>
-          {boot ? `booted as ${boot.user?.display_name ?? 'guest'} · base ${boot.app.base}` : 'no boot payload (dev)'}
+          {boot
+            ? `booted as ${boot.user?.display_name ?? 'guest'} · base ${boot.app.base}`
+            : 'no boot payload (dev)'}
         </code>
       </div>
     </main>

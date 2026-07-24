@@ -17,7 +17,7 @@
  */
 
 if (!defined('ABSPATH')) {
-  exit();
+    exit();
 }
 
 define('FITNESSCLUB_VERSION', '0.1.0');

@@ -27,6 +27,7 @@ require_once __DIR__ . '/../vendor/autoload.php';
 |
 */
 
+// phpcs:ignore PSR1.Classes.ClassDeclaration.MissingNamespace -- boilerplate global accessor class; the framework calls FitnessClub() from the root namespace.
 final class FitnessClub
 {
     public const TEXTDOMAIN = 'fitnessclub';

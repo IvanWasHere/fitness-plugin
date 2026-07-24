@@ -90,11 +90,16 @@ class RewriteServiceProvider extends ServiceProvider
         status_header(200);
         nocache_headers();
 
-        echo $this->plugin->view('app.shell', [
+        // The shell is our own Blade template that renders the full HTML document;
+        // dynamic values are escaped inside it (esc_attr on data-boot, {{ }} on the
+        // rest). The rendered markup is therefore output as-is.
+        $html = (string) $this->plugin->view('app.shell', [
             'boot' => $this->bootPayload($spa, $base),
             'tags' => ViteAssets::tags($spa),
             'lang' => get_bloginfo('language'),
         ]);
+
+        echo $html; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 
         exit;
     }

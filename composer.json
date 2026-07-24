@@ -21,9 +21,40 @@
       "functions.php"
     ]
   },
+  "autoload-dev": {
+    "psr-4": {
+      "FitnessClub\\Tests\\": "tests/"
+    }
+  },
   "scripts": {
     "post-autoload-dump": [
       "php -r \"copy('vendor/wpbones/wpbones/src/Console/bin/bones', 'bones');\""
+    ],
+    "phpcs": "phpcs --standard=phpcs.xml",
+    "phpcbf": "phpcbf --standard=phpcs.xml",
+    "test": "phpunit",
+    "check": [
+      "@phpcs",
+      "@test"
     ]
+  },
+  "scripts-descriptions": {
+    "phpcs": "Lint against phpcs.xml (no-raw-SQL + security + PSR-12).",
+    "phpcbf": "Auto-fix the fixable phpcs violations.",
+    "test": "Run the PHPUnit integration suite.",
+    "check": "Lint then test — the CI gate."
+  },
+  "config": {
+    "allow-plugins": {
+      "dealerdirect/phpcodesniffer-composer-installer": true
+    }
+  },
+  "require-dev": {
+    "squizlabs/php_codesniffer": "^3.9",
+    "wp-coding-standards/wpcs": "^3.1",
+    "phpcompatibility/phpcompatibility-wp": "^2.1",
+    "dealerdirect/phpcodesniffer-composer-installer": "^1.0",
+    "yoast/phpunit-polyfills": "^2.0",
+    "phpunit/phpunit": "^9.6"
   }
 }
