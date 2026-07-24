@@ -1,34 +1,20 @@
 <?php
 
 if (!defined('ABSPATH')) {
-  exit();
+    exit();
 }
 
 /*
 |--------------------------------------------------------------------------
-| Plugin Menus routes
+| Plugin Menus (wp-admin)
 |--------------------------------------------------------------------------
 |
-| Here is where you can register all the menu routes for a plugin.
-| In this context, the route are the menu link.
+| wpBones registers wp-admin menu pages from this array.
+|
+| FitnessClub's real UI is the front-end SPA at the configured URL (D9/D10), so
+| wp-admin will hold only a thin launcher + break-glass routing form — added with
+| the admin work package. Empty until then.
 |
 */
 
-return [
-  'fitnessclub_slug_menu' => [
-    "page_title" => "WP Kirk Page",
-    "menu_title" => "WP Kirk Menu",
-    'capability' => 'read',
-    'icon' => 'wpbones-logo-menu.png',
-    'items' => [
-      [
-        "page_title" => "Main View",
-        "menu_title" => "Main View",
-        'capability' => 'read',
-        'route' => [
-          'get' => 'Dashboard\DashboardController@index'
-        ],
-      ],
-    ]
-  ]
-];
+return [];

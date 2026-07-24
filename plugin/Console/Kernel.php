@@ -6,8 +6,7 @@ use FitnessClub\WPBones\Foundation\Console\Kernel as ConsoleKernel;
 
 class Kernel extends ConsoleKernel
 {
-  protected $commands = [
-    'FitnessClub\Console\Commands\SimpleCommand',
-    'FitnessClub\Console\Commands\WordPressCommand',
-  ];
+  // Console commands (`php bones <command>`) are registered per work package —
+  // seeding, PR rebuild, cleanup. See plans/03-backend.md.
+  protected $commands = [];
 }
