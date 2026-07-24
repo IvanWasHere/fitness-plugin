@@ -1,0 +1,1510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>FitForge — Workout & Nutrition Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<script src="https://cdn.jsdelivr.net/npm/mithril@2.2.2/mithril.min.js"></script>
+<script src="https://unpkg.com/dexie@3.2.7/dist/dexie.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+:root{
+  --bg:#0B0E13;--bg2:#111621;--card:#171D2A;--card-h:#1E2538;
+  --border:#252D3F;--text:#E8ECF1;--text2:#7A8BA7;--text3:#4A5568;
+  --accent:#00E676;--accent-d:rgba(0,230,118,.12);--accent2:#FF6D00;
+  --danger:#FF5252;--info:#40C4FF;--purple:#B388FF;
+  --r:14px;--rs:8px;--rl:20px;--sh:0 4px 24px rgba(0,0,0,.35);
+  --nav-h:68px;--font-d:'Outfit',sans-serif;--font-b:'DM Sans',sans-serif;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-tap-highlight-color:transparent;scroll-behavior:smooth}
+body{font-family:var(--font-b);background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;-webkit-font-smoothing:antialiased}
+::-webkit-scrollbar{width:6px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+h1,h2,h3,h4,h5,h6{font-family:var(--font-d);font-weight:700;line-height:1.2}
+a{color:inherit;text-decoration:none}
+button{font-family:var(--font-b);cursor:pointer;border:none;outline:none;background:none;color:inherit}
+input,textarea,select{font-family:var(--font-b);background:var(--bg2);border:1px solid var(--border);color:var(--text);border-radius:var(--rs);padding:10px 14px;width:100%;transition:border .2s}
+input:focus,textarea:focus,select:focus{outline:none;border-color:var(--accent)}
+.app-wrap{display:flex;min-height:100vh;max-width:1400px;margin:0 auto}
+.sidebar{width:72px;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;align-items:center;padding:16px 0;position:fixed;top:0;left:0;bottom:0;z-index:100;transition:transform .3s}
+.sidebar .logo{width:40px;height:40px;background:linear-gradient(135deg,var(--accent),#00B060);border-radius:12px;display:flex;align-items:center;justify-content:center;font-family:var(--font-d);font-weight:900;font-size:18px;color:#0B0E13;margin-bottom:28px;flex-shrink:0}
+.sidebar nav{flex:1;display:flex;flex-direction:column;gap:4px;width:100%;padding:0 10px}
+.nav-btn{width:52px;height:52px;border-radius:var(--r);display:flex;align-items:center;justify-content:center;font-size:19px;color:var(--text3);transition:all .2s;position:relative}
+.nav-btn:hover{color:var(--text2);background:var(--card)}
+.nav-btn.active{color:var(--accent);background:var(--accent-d)}
+.nav-btn .badge{position:absolute;top:6px;right:6px;width:8px;height:8px;background:var(--danger);border-radius:50%;border:2px solid var(--bg2)}
+.main{flex:1;margin-left:72px;padding:24px 28px 100px;min-height:100vh}
+.page-header{margin-bottom:24px}
+.page-header h1{font-size:28px;font-weight:800}
+.page-header p{color:var(--text2);margin-top:4px;font-size:14px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:20px;transition:all .25s}
+.card:hover{border-color:var(--accent);transform:translateY(-2px);box-shadow:var(--sh)}
+.card-flat{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:20px}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:10px 20px;border-radius:var(--rs);font-weight:600;font-size:14px;transition:all .2s;justify-content:center}
+.btn-primary{background:var(--accent);color:#0B0E13}.btn-primary:hover{background:#00F080;box-shadow:0 0 20px rgba(0,230,118,.3)}
+.btn-secondary{background:var(--bg2);border:1px solid var(--border);color:var(--text)}.btn-secondary:hover{border-color:var(--text2)}
+.btn-danger{background:rgba(255,82,82,.15);color:var(--danger);border:1px solid rgba(255,82,82,.2)}.btn-danger:hover{background:rgba(255,82,82,.25)}
+.btn-sm{padding:7px 14px;font-size:13px}
+.btn-lg{padding:14px 28px;font-size:16px}
+.btn-block{width:100%}
+.btn-icon{width:40px;height:40px;padding:0;display:flex;align-items:center;justify-content:center;border-radius:var(--rs);background:var(--bg2);border:1px solid var(--border)}
+.btn-icon:hover{border-color:var(--accent);color:var(--accent)}
+.tag{display:inline-flex;align-items:center;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:600;letter-spacing:.3px;text-transform:uppercase}
+.tag-green{background:var(--accent-d);color:var(--accent)}
+.tag-orange{background:rgba(255,109,0,.12);color:var(--accent2)}
+.tag-blue{background:rgba(64,196,255,.12);color:var(--info)}
+.tag-red{background:rgba(255,82,82,.12);color:var(--danger)}
+.tag-purple{background:rgba(179,136,255,.12);color:var(--purple)}
+.grid{display:grid;gap:16px}
+.grid-2{grid-template-columns:repeat(2,1fr)}
+.grid-3{grid-template-columns:repeat(3,1fr)}
+.grid-4{grid-template-columns:repeat(4,1fr)}
+.flex{display:flex}.flex-c{align-items:center}.flex-between{justify-content:space-between}.gap-8{gap:8px}.gap-12{gap:12px}.gap-16{gap:16px}
+.mt-16{margin-top:16px}.mt-24{margin-top:24px}.mb-16{margin-bottom:16px}.mb-24{margin-bottom:24px}
+.text-accent{color:var(--accent)}.text-muted{color:var(--text2)}.text-sm{font-size:13px}.text-xs{font-size:11px}
+.welcome-card{background:linear-gradient(135deg,#0D2818 0%,#132E1C 40%,#1A1D2A 100%);border:1px solid rgba(0,230,118,.15);border-radius:var(--rl);padding:28px;position:relative;overflow:hidden}
+.welcome-card::before{content:'';position:absolute;top:-40px;right:-40px;width:200px;height:200px;background:radial-gradient(circle,rgba(0,230,118,.08),transparent 70%);border-radius:50%}
+.welcome-card h2{font-size:24px;font-weight:800}.welcome-card p{color:var(--text2);margin-top:6px;font-size:14px}
+.stat-card{position:relative;overflow:hidden}
+.stat-card .stat-icon{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.stat-card .stat-val{font-family:var(--font-d);font-size:28px;font-weight:800;line-height:1}
+.stat-card .stat-label{font-size:12px;color:var(--text2);margin-top:2px;text-transform:uppercase;letter-spacing:.5px;font-weight:500}
+.progress-bar{height:8px;background:var(--bg);border-radius:4px;overflow:hidden}
+.progress-fill{height:100%;border-radius:4px;transition:width .8s cubic-bezier(.4,0,.2,1)}
+.progress-ring{transform:rotate(-90deg)}
+.water-dots{display:flex;gap:6px;flex-wrap:wrap}
+.water-dot{width:28px;height:28px;border-radius:6px;background:var(--bg);border:1px solid var(--border);transition:all .2s;cursor:pointer}
+.water-dot.filled{background:rgba(64,196,255,.2);border-color:var(--info);color:var(--info);display:flex;align-items:center;justify-content:center;font-size:12px}
+.water-dot:hover{border-color:var(--info)}
+.quick-actions{display:flex;gap:10px;overflow-x:auto;padding-bottom:8px;scroll-snap-type:x mandatory}
+.quick-actions::-webkit-scrollbar{display:none}
+.quick-action{flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:8px;padding:16px 20px;background:var(--card);border:1px solid var(--border);border-radius:var(--r);min-width:100px;scroll-snap-align:start;transition:all .2s;cursor:pointer}
+.quick-action:hover{border-color:var(--accent);transform:translateY(-2px)}
+.quick-action .qa-icon{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:18px}
+.quick-action span{font-size:12px;font-weight:600;white-space:nowrap}
+.workout-card{overflow:hidden;padding:0}
+.workout-card .wc-img{height:160px;background-size:cover;background-position:center;position:relative}
+.workout-card .wc-img .wc-diff{position:absolute;top:12px;right:12px}
+.workout-card .wc-body{padding:16px}
+.workout-card .wc-body h3{font-size:16px;font-weight:700;margin-bottom:8px}
+.workout-card .wc-meta{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.workout-card .wc-meta span{font-size:12px;color:var(--text2);display:flex;align-items:center;gap:4px}
+.workout-card .wc-muscles{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:12px}
+.workout-card .wc-progress{margin-bottom:12px}
+.workout-card .wc-actions{display:flex;gap:8px}
+.layout-toggle{display:flex;background:var(--bg2);border:1px solid var(--border);border-radius:var(--rs);overflow:hidden}
+.layout-toggle button{padding:8px 14px;font-size:14px;color:var(--text3);transition:all .2s}
+.layout-toggle button.active{background:var(--accent-d);color:var(--accent)}
+.exercise-card{display:flex;gap:14px;align-items:flex-start}
+.exercise-card .ex-thumb{width:64px;height:64px;border-radius:var(--rs);background:var(--bg2);background-size:cover;background-position:center;flex-shrink:0}
+.exercise-card .ex-info{flex:1;min-width:0}
+.exercise-card .ex-info h4{font-size:15px;font-weight:600;margin-bottom:4px}
+.exercise-card .ex-stats{display:flex;gap:12px;flex-wrap:wrap}
+.exercise-card .ex-stats span{font-size:12px;color:var(--text2);display:flex;align-items:center;gap:4px}
+.player-wrap{position:fixed;inset:0;background:var(--bg);z-index:200;display:flex;flex-direction:column}
+.player-img{height:45vh;min-height:300px;background-size:cover;background-position:center;position:relative}
+.player-img::after{content:'';position:absolute;bottom:0;left:0;right:0;height:120px;background:linear-gradient(transparent,var(--bg))}
+.player-body{flex:1;padding:20px 24px 100px;overflow-y:auto}
+.player-controls{position:fixed;bottom:0;left:0;right:0;background:var(--bg2);border-top:1px solid var(--border);padding:16px 24px 32px;z-index:201}
+.player-controls .ctrl-row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+.player-controls .ctrl-btn{min-width:64px;height:48px;border-radius:var(--rs);font-size:13px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:6px;transition:all .15s}
+.player-controls .ctrl-btn:active{transform:scale(.95)}
+.celebration{position:fixed;inset:0;z-index:300;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px}
+.celebration .confetti-canvas{position:absolute;inset:0;pointer-events:none}
+.summary-stat{text-align:center}
+.summary-stat .ss-val{font-family:var(--font-d);font-size:36px;font-weight:900}
+.summary-stat .ss-label{font-size:12px;color:var(--text2);margin-top:2px;text-transform:uppercase;letter-spacing:.5px}
+.chart-wrap{position:relative;height:220px}
+.meal-card{display:flex;gap:14px;align-items:center;padding:16px;background:var(--card);border:1px solid var(--border);border-radius:var(--r);transition:all .2s;cursor:pointer}
+.meal-card:hover{border-color:var(--accent)}
+.meal-card .meal-icon{width:48px;height:48px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
+.meal-card .meal-info{flex:1;min-width:0}
+.meal-card .meal-info h4{font-size:15px;font-weight:600}
+.meal-card .meal-info p{font-size:12px;color:var(--text2);margin-top:2px}
+.meal-card .meal-cal{font-family:var(--font-d);font-weight:700;font-size:18px;flex-shrink:0}
+.macro-ring{position:relative;display:flex;align-items:center;justify-content:center}
+.macro-ring canvas{position:absolute}
+.macro-ring .macro-val{font-family:var(--font-d);font-weight:800;font-size:20px;position:relative;z-index:1}
+.macro-ring .macro-unit{font-size:11px;color:var(--text2);font-weight:400}
+.health-card{display:flex;gap:14px;align-items:center;padding:18px;background:var(--card);border:1px solid var(--border);border-radius:var(--r);cursor:pointer;transition:all .2s}
+.health-card:hover{border-color:var(--accent);transform:translateY(-1px)}
+.health-card .hc-icon{width:48px;height:48px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
+.health-card .hc-info{flex:1}
+.health-card .hc-info h4{font-size:15px;font-weight:600}
+.health-card .hc-info p{font-size:13px;color:var(--text2);margin-top:2px}
+.chat-layout{display:flex;gap:0;height:calc(100vh - 140px);background:var(--card);border:1px solid var(--border);border-radius:var(--r);overflow:hidden}
+.chat-list{width:300px;border-right:1px solid var(--border);overflow-y:auto;flex-shrink:0}
+.chat-list .chat-item{display:flex;gap:12px;padding:14px 16px;cursor:pointer;transition:background .15s;border-bottom:1px solid var(--border)}
+.chat-item:hover,.chat-item.active{background:var(--card-h)}
+.chat-item .chat-avatar{width:44px;height:44px;border-radius:50%;background:var(--bg2);background-size:cover;background-position:center;flex-shrink:0;position:relative}
+.chat-item .chat-avatar .online-dot{position:absolute;bottom:1px;right:1px;width:10px;height:10px;background:var(--accent);border-radius:50%;border:2px solid var(--card)}
+.chat-item .chat-preview{flex:1;min-width:0}
+.chat-item .chat-preview h4{font-size:14px;font-weight:600}
+.chat-item .chat-preview p{font-size:12px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+.chat-item .chat-time{font-size:11px;color:var(--text3);flex-shrink:0}
+.chat-item .unread-badge{background:var(--accent);color:#0B0E13;font-size:10px;font-weight:700;width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.chat-main{flex:1;display:flex;flex-direction:column}
+.chat-messages{flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:12px}
+.msg{max-width:75%;padding:12px 16px;border-radius:16px;font-size:14px;line-height:1.5;word-break:break-word}
+.msg.sent{align-self:flex-end;background:var(--accent);color:#0B0E13;border-bottom-right-radius:4px}
+.msg.received{align-self:flex-start;background:var(--bg2);border:1px solid var(--border);border-bottom-left-radius:4px}
+.msg .msg-time{font-size:10px;opacity:.6;margin-top:4px}
+.msg-img{max-width:240px;border-radius:var(--rs);margin-top:6px}
+.chat-input-wrap{padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:10px;align-items:center}
+.chat-input-wrap input{flex:1}
+.notif-item{display:flex;gap:14px;padding:16px;border-bottom:1px solid var(--border);transition:background .15s;cursor:pointer}
+.notif-item:hover{background:var(--card-h)}
+.notif-item.unread{border-left:3px solid var(--accent)}
+.notif-item .ni-icon{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.notif-item .ni-body{flex:1}.notif-item .ni-body h4{font-size:14px;font-weight:600}.notif-item .ni-body p{font-size:13px;color:var(--text2);margin-top:2px}
+.notif-item .ni-time{font-size:11px;color:var(--text3);flex-shrink:0}
+.plan-card{background:linear-gradient(135deg,#1A1200,#221A08,#1A1D2A);border:1px solid rgba(255,109,0,.2);border-radius:var(--rl);padding:28px;position:relative;overflow:hidden}
+.plan-card::before{content:'';position:absolute;top:-60px;right:-60px;width:200px;height:200px;background:radial-gradient(circle,rgba(255,109,0,.08),transparent 70%);border-radius:50%}
+.form-group{margin-bottom:18px}
+.form-group label{display:block;font-size:13px;font-weight:600;color:var(--text2);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.toggle-switch{position:relative;width:48px;height:26px;background:var(--bg);border-radius:13px;cursor:pointer;transition:background .2s;border:1px solid var(--border);flex-shrink:0}
+.toggle-switch.on{background:var(--accent-d);border-color:var(--accent)}
+.toggle-switch::after{content:'';position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:var(--text2);transition:all .2s}
+.toggle-switch.on::after{left:25px;background:var(--accent)}
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:250;display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(4px)}
+.modal{background:var(--card);border:1px solid var(--border);border-radius:var(--rl);padding:28px;width:100%;max-width:480px;max-height:85vh;overflow-y:auto}
+.modal h3{font-size:20px;font-weight:800;margin-bottom:20px}
+.toast-container{position:fixed;top:20px;right:20px;z-index:400;display:flex;flex-direction:column;gap:8px}
+.toast{padding:14px 20px;border-radius:var(--rs);font-size:14px;font-weight:500;animation:slideIn .3s ease;box-shadow:var(--sh);display:flex;align-items:center;gap:10px;min-width:260px}
+.toast-success{background:#0D2818;border:1px solid rgba(0,230,118,.3);color:var(--accent)}
+.toast-info{background:#0D1F2D;border:1px solid rgba(64,196,255,.3);color:var(--info)}
+.toast-error{background:#2D0D0D;border:1px solid rgba(255,82,82,.3);color:var(--danger)}
+@keyframes slideIn{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}
+@keyframes fadeUp{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+@keyframes confettiFall{0%{transform:translateY(-100vh) rotate(0deg);opacity:1}100%{transform:translateY(100vh) rotate(720deg);opacity:0}}
+.fade-up{animation:fadeUp .5s ease both}
+.typing-dot{width:8px;height:8px;border-radius:50%;background:var(--text3);display:inline-block;animation:pulse 1.2s infinite}
+.typing-dot:nth-child(2){animation-delay:.2s}.typing-dot:nth-child(3){animation-delay:.4s}
+.bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;background:var(--bg2);border-top:1px solid var(--border);z-index:100;padding:6px 0 env(safe-area-inset-bottom)}
+.bottom-nav .bn-row{display:flex;justify-content:space-around}
+.bottom-nav .bn-btn{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 12px;font-size:10px;color:var(--text3);transition:color .2s;position:relative}
+.bottom-nav .bn-btn i{font-size:18px}
+.bottom-nav .bn-btn.active{color:var(--accent)}
+.bottom-nav .bn-btn .badge{position:absolute;top:2px;right:4px;width:7px;height:7px;background:var(--danger);border-radius:50%}
+.skeleton{background:linear-gradient(90deg,var(--card) 25%,var(--card-h) 50%,var(--card) 75%);background-size:200% 100%;animation:shimmer 1.5s infinite;border-radius:var(--rs)}
+@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+@media(max-width:1024px){.grid-4{grid-template-columns:repeat(2,1fr)}.grid-3{grid-template-columns:repeat(2,1fr)}.chat-list{width:240px}}
+@media(max-width:768px){
+  .sidebar{transform:translateX(-100%)}.sidebar.open{transform:translateX(0)}
+  .main{margin-left:0;padding:16px 16px 100px}
+  .bottom-nav{display:block}
+  .grid-2,.grid-3,.grid-4{grid-template-columns:1fr}
+  .chat-layout{flex-direction:column;height:auto}.chat-list{width:100%;max-height:240px;border-right:none;border-bottom:1px solid var(--border)}
+  .chat-main{min-height:400px}
+  .form-row{grid-template-columns:1fr}
+  .player-img{height:35vh;min-height:240px}
+}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+// ========== SEED DATA ==========
+const SEED_DATA = {
+  user: {
+    id: 1, name: "Alex Morgan", email: "alex@fitforge.com",
+    avatar: "https://picsum.photos/seed/alexmorgan/200/200",
+    joinDate: "2024-01-15", phone: "+1 (555) 234-5678",
+    fitnessGoal: "Build Muscle", activityLevel: "Moderate",
+    height: 175, weight: 78.5, targetWeight: 75,
+    bodyFat: 18.2, gender: "Male", age: 28,
+    measurements: { chest: 102, waist: 84, arms: 36, thighs: 58, shoulders: 48 },
+    notifications: { workoutReminders: true, trainerMessages: true, progressUpdates: true, subscriptionUpdates: false }
+  },
+  workouts: [
+    { id: 1, title: "Upper Body Power", difficulty: "Intermediate", duration: 45, exerciseCount: 8, muscleGroups: ["Chest","Shoulders","Triceps"], image: "https://picsum.photos/seed/upperpower/600/400", progress: 65, exercises: [
+      { id: 101, name: "Barbell Bench Press", thumbnail: "https://picsum.photos/seed/bench/200/200", sets: 4, reps: 8, weight: 80, restTime: 90, notes: "Keep feet flat on floor" },
+      { id: 102, name: "Incline Dumbbell Press", thumbnail: "https://picsum.photos/seed/incline/200/200", sets: 3, reps: 10, weight: 30, restTime: 75, notes: "30 degree incline" },
+      { id: 103, name: "Overhead Press", thumbnail: "https://picsum.photos/seed/ohp/200/200", sets: 4, reps: 8, weight: 50, restTime: 90, notes: "Brace core" },
+      { id: 104, name: "Lateral Raises", thumbnail: "https://picsum.photos/seed/lateral/200/200", sets: 3, reps: 15, weight: 12, restTime: 60, notes: "Slight forward lean" },
+      { id: 105, name: "Cable Flyes", thumbnail: "https://picsum.photos/seed/flyes/200/200", sets: 3, reps: 12, weight: 20, restTime: 60, notes: "Squeeze at peak" },
+      { id: 106, name: "Tricep Dips", thumbnail: "https://picsum.photos/seed/dips/200/200", sets: 3, reps: 12, weight: 0, restTime: 60, notes: "Body weight" },
+      { id: 107, name: "Skull Crushers", thumbnail: "https://picsum.photos/seed/skull/200/200", sets: 3, reps: 10, weight: 25, restTime: 60, notes: "Keep elbows fixed" },
+      { id: 108, name: "Face Pulls", thumbnail: "https://picsum.photos/seed/facepull/200/200", sets: 3, reps: 15, weight: 15, restTime: 45, notes: "Pull to nose level" }
+    ], equipment: ["Barbell","Dumbbells","Cables","Bench"], description: "A comprehensive upper body session focusing on chest, shoulders, and triceps with compound and isolation movements." },
+    { id: 2, title: "Leg Day Destroyer", difficulty: "Advanced", duration: 55, exerciseCount: 7, muscleGroups: ["Quads","Hamstrings","Glutes","Calves"], image: "https://picsum.photos/seed/legday/600/400", progress: 40, exercises: [
+      { id: 201, name: "Barbell Squats", thumbnail: "https://picsum.photos/seed/squat/200/200", sets: 5, reps: 5, weight: 100, restTime: 120, notes: "Below parallel" },
+      { id: 202, name: "Romanian Deadlifts", thumbnail: "https://picsum.photos/seed/rdl/200/200", sets: 4, reps: 8, weight: 80, restTime: 90, notes: "Feel hamstring stretch" },
+      { id: 203, name: "Leg Press", thumbnail: "https://picsum.photos/seed/legpress/200/200", sets: 4, reps: 12, weight: 180, restTime: 90, notes: "Full range of motion" },
+      { id: 204, name: "Walking Lunges", thumbnail: "https://picsum.photos/seed/lunge/200/200", sets: 3, reps: 12, weight: 20, restTime: 75, notes: "Each leg" },
+      { id: 205, name: "Leg Curls", thumbnail: "https://picsum.photos/seed/legcurl/200/200", sets: 3, reps: 12, weight: 40, restTime: 60, notes: "Control the negative" },
+      { id: 206, name: "Calf Raises", thumbnail: "https://picsum.photos/seed/calf/200/200", sets: 4, reps: 15, weight: 60, restTime: 45, notes: "Full stretch at bottom" },
+      { id: 207, name: "Hip Thrusts", thumbnail: "https://picsum.photos/seed/hipthrust/200/200", sets: 4, reps: 10, weight: 80, restTime: 75, notes: "Squeeze glutes at top" }
+    ], equipment: ["Barbell","Leg Press Machine","Curls Machine"], description: "An intense lower body workout designed to build strength and size in legs and glutes." },
+    { id: 3, title: "Core & Cardio Blast", difficulty: "Beginner", duration: 30, exerciseCount: 6, muscleGroups: ["Core","Cardio"], image: "https://picsum.photos/seed/corecardio/600/400", progress: 80, exercises: [
+      { id: 301, name: "Plank Hold", thumbnail: "https://picsum.photos/seed/plank/200/200", sets: 3, reps: 60, weight: 0, restTime: 30, notes: "Seconds, keep body straight" },
+      { id: 302, name: "Mountain Climbers", thumbnail: "https://picsum.photos/seed/mountain/200/200", sets: 3, reps: 30, weight: 0, restTime: 30, notes: "Each side, fast pace" },
+      { id: 303, name: "Bicycle Crunches", thumbnail: "https://picsum.photos/seed/bicycle/200/200", sets: 3, reps: 20, weight: 0, restTime: 30, notes: "Each side" },
+      { id: 304, name: "Burpees", thumbnail: "https://picsum.photos/seed/burpee/200/200", sets: 3, reps: 10, weight: 0, restTime: 45, notes: "Explosive movement" },
+      { id: 305, name: "Russian Twists", thumbnail: "https://picsum.photos/seed/russian/200/200", sets: 3, reps: 20, weight: 8, restTime: 30, notes: "Each side, with medicine ball" },
+      { id: 306, name: "Jump Rope", thumbnail: "https://picsum.photos/seed/jumprope/200/200", sets: 3, reps: 100, weight: 0, restTime: 30, notes: "Reps = jumps" }
+    ], equipment: ["Medicine Ball","Jump Rope"], description: "A high-energy core and cardio circuit to burn calories and build a strong midsection." },
+    { id: 4, title: "Pull Day Strength", difficulty: "Intermediate", duration: 50, exerciseCount: 7, muscleGroups: ["Back","Biceps","Rear Delts"], image: "https://picsum.photos/seed/pullday/600/400", progress: 20, exercises: [
+      { id: 401, name: "Deadlifts", thumbnail: "https://picsum.photos/seed/deadlift/200/200", sets: 5, reps: 5, weight: 120, restTime: 120, notes: "Conventional stance" },
+      { id: 402, name: "Pull-ups", thumbnail: "https://picsum.photos/seed/pullup/200/200", sets: 4, reps: 8, weight: 0, restTime: 90, notes: "Full dead hang" },
+      { id: 403, name: "Barbell Rows", thumbnail: "https://picsum.photos/seed/row/200/200", sets: 4, reps: 8, weight: 70, restTime: 90, notes: "Pull to lower chest" },
+      { id: 404, name: "Lat Pulldowns", thumbnail: "https://picsum.photos/seed/latpull/200/200", sets: 3, reps: 12, weight: 55, restTime: 75, notes: "Wide grip" },
+      { id: 405, name: "Barbell Curls", thumbnail: "https://picsum.photos/seed/curl/200/200", sets: 3, reps: 10, weight: 30, restTime: 60, notes: "Control the negative" },
+      { id: 406, name: "Hammer Curls", thumbnail: "https://picsum.photos/seed/hammer/200/200", sets: 3, reps: 12, weight: 14, restTime: 60, notes: "Neutral grip" },
+      { id: 407, name: "Rear Delt Flyes", thumbnail: "https://picsum.photos/seed/reardelt/200/200", sets: 3, reps: 15, weight: 8, restTime: 45, notes: "Face down on incline" }
+    ], equipment: ["Barbell","Pull-up Bar","Cable Machine","Dumbbells"], description: "Focused pull day targeting back, biceps, and rear delts for balanced upper body development." },
+    { id: 5, title: "HIIT Express", difficulty: "Advanced", duration: 25, exerciseCount: 8, muscleGroups: ["Full Body","Cardio"], image: "https://picsum.photos/seed/hiit/600/400", progress: 55, exercises: [
+      { id: 501, name: "Box Jumps", thumbnail: "https://picsum.photos/seed/boxjump/200/200", sets: 4, reps: 12, weight: 0, restTime: 20, notes: "24 inch box" },
+      { id: 502, name: "Kettlebell Swings", thumbnail: "https://picsum.photos/seed/kbswing/200/200", sets: 4, reps: 15, weight: 20, restTime: 20, notes: "Hip hinge pattern" },
+      { id: 503, name: "Battle Ropes", thumbnail: "https://picsum.photos/seed/battlerope/200/200", sets: 4, reps: 30, weight: 0, restTime: 20, notes: "Seconds, alternating" },
+      { id: 504, name: "Thrusters", thumbnail: "https://picsum.photos/seed/thruster/200/200", sets: 4, reps: 10, weight: 30, restTime: 20, notes: "Squat to press" },
+      { id: 505, name: "Sprint Intervals", thumbnail: "https://picsum.photos/seed/sprint/200/200", sets: 6, reps: 30, weight: 0, restTime: 30, notes: "Seconds, all out effort" },
+      { id: 506, name: "Push-up to Renegade Row", thumbnail: "https://picsum.photos/seed/renegade/200/200", sets: 3, reps: 8, weight: 16, restTime: 20, notes: "Each arm" },
+      { id: 507, name: "Box Step-ups", thumbnail: "https://picsum.photos/seed/stepup/200/200", sets: 3, reps: 12, weight: 16, restTime: 20, notes: "Each leg" },
+      { id: 508, name: "Plank to Push-up", thumbnail: "https://picsum.photos/seed/plankpush/200/200", sets: 3, reps: 10, weight: 0, restTime: 20, notes: "Alternate lead arm" }
+    ], equipment: ["Box","Kettlebell","Battle Ropes","Dumbbells"], description: "High intensity interval training for maximum calorie burn in minimum time." },
+    { id: 6, title: "Mobility & Recovery", difficulty: "Beginner", duration: 20, exerciseCount: 8, muscleGroups: ["Full Body","Flexibility"], image: "https://picsum.photos/seed/mobility/600/400", progress: 90, exercises: [
+      { id: 601, name: "Cat-Cow Stretch", thumbnail: "https://picsum.photos/seed/catcow/200/200", sets: 2, reps: 10, weight: 0, restTime: 0, notes: "Slow controlled movement" },
+      { id: 602, name: "World's Greatest Stretch", thumbnail: "https://picsum.photos/seed/wgstretch/200/200", sets: 2, reps: 8, weight: 0, restTime: 0, notes: "Each side" },
+      { id: 603, name: "Foam Roll Quads", thumbnail: "https://picsum.photos/seed/foamroll/200/200", sets: 1, reps: 60, weight: 0, restTime: 0, notes: "Seconds each leg" },
+      { id: 604, name: "90/90 Hip Stretch", thumbnail: "https://picsum.photos/seed/hip90/200/200", sets: 2, reps: 30, weight: 0, restTime: 0, notes: "Seconds each side" },
+      { id: 605, name: "Thoracic Rotation", thumbnail: "https://picsum.photos/seed/thoracic/200/200", sets: 2, reps: 10, weight: 0, restTime: 0, notes: "Each side" },
+      { id: 606, name: "Shoulder Dislocates", thumbnail: "https://picsum.photos/seed/dislocate/200/200", sets: 2, reps: 10, weight: 0, restTime: 0, notes: "Use broomstick" },
+      { id: 607, name: "Pigeon Pose", thumbnail: "https://picsum.photos/seed/pigeon/200/200", sets: 2, reps: 45, weight: 0, restTime: 0, notes: "Seconds each side" },
+      { id: 608, name: "Diaphragmatic Breathing", thumbnail: "https://picsum.photos/seed/breathing/200/200", sets: 3, reps: 10, weight: 0, restTime: 0, notes: "5 second inhale, 5 second exhale" }
+    ], equipment: ["Foam Roller","Broomstick"], description: "Active recovery session focusing on mobility, flexibility, and breathing techniques." }
+  ],
+  nutrition: {
+    dailyGoals: { calories: 2400, protein: 180, carbs: 240, fat: 80, water: 8 },
+    today: { calories: 1650, protein: 120, carbs: 180, fat: 45, water: 5 },
+    meals: [
+      { id: 1, type: "Breakfast", icon: "fa-sun", color: "#FFB300", items: ["Oatmeal with berries","2 boiled eggs","Green tea"], calories: 420, time: "7:30 AM" },
+      { id: 2, type: "Lunch", icon: "fa-cloud-sun", color: "#FF6D00", items: ["Grilled chicken breast","Brown rice","Mixed salad"], calories: 580, time: "12:30 PM" },
+      { id: 3, type: "Dinner", icon: "fa-moon", color: "#7C4DFF", items: ["Salmon fillet","Sweet potato","Steamed broccoli"], calories: 520, time: "7:00 PM" },
+      { id: 4, type: "Snacks", icon: "fa-cookie-bite", color: "#00E676", items: ["Protein shake","Apple","Almonds (20g)"], calories: 130, time: "4:00 PM" }
+    ]
+  },
+  health: {
+    weight: [{ date: "2024-12-01", value: 80.2 },{ date: "2024-12-08", value: 79.8 },{ date: "2024-12-15", value: 79.5 },{ date: "2024-12-22", value: 79.1 },{ date: "2024-12-29", value: 78.8 },{ date: "2025-01-05", value: 78.5 }],
+    bodyFat: [{ date: "2024-12-01", value: 19.5 },{ date: "2024-12-15", value: 19.0 },{ date: "2025-01-01", value: 18.5 },{ date: "2025-01-05", value: 18.2 }],
+    sleep: [{ date: "2025-01-04", value: 7.5 },{ date: "2025-01-05", value: 6.8 },{ date: "2025-01-06", value: 8.0 },{ date: "2025-01-07", value: 7.2 }],
+    heartRate: [{ date: "2025-01-05", value: 62 },{ date: "2025-01-06", value: 65 },{ date: "2025-01-07", value: 60 }],
+    bloodPressure: [{ date: "2025-01-05", systolic: 118, diastolic: 76 },{ date: "2025-01-06", systolic: 120, diastolic: 78 }],
+    mood: [{ date: "2025-01-05", value: 4 },{ date: "2025-01-06", value: 3 },{ date: "2025-01-07", value: 5 }],
+    energy: [{ date: "2025-01-05", value: 7 },{ date: "2025-01-06", value: 5 },{ date: "2025-01-07", value: 8 }]
+  },
+  progress: {
+    weeklyCalories: [320,450,280,510,390,0,0],
+    weeklyWorkouts: [1,1,1,1,1,0,0],
+    monthlyWorkouts: [18,20,22,19,21,17,20,22,18,20,21,19],
+    strength: [{ exercise: "Bench Press", data: [70,72.5,75,77.5,80] },{ exercise: "Squat", data: [90,92.5,95,97.5,100] },{ exercise: "Deadlift", data: [105,110,112.5,115,120] }],
+    bodyMeasurements: [{ date: "2024-11-01", chest: 100, waist: 86, arms: 35, thighs: 57 },{ date: "2024-12-01", chest: 101, waist: 85, arms: 35.5, thighs: 57.5 },{ date: "2025-01-01", chest: 102, waist: 84, arms: 36, thighs: 58 }]
+  },
+  messages: [
+    { id: 1, trainerId: 1, trainerName: "Sarah Chen", trainerAvatar: "https://picsum.photos/seed/sarah/200/200", online: true, unread: 2, messages: [
+      { id: 1, from: "trainer", text: "Great job on the upper body session today! Your bench press form looked much better.", time: "10:30 AM", date: "2025-01-07" },
+      { id: 2, from: "user", text: "Thanks! I felt much more stable. The cue about keeping my feet flat really helped.", time: "10:35 AM", date: "2025-01-07" },
+      { id: 3, from: "trainer", text: "That's what I like to hear. For next week, I'm increasing your squat volume. Ready to push it?", time: "10:38 AM", date: "2025-01-07" },
+      { id: 4, from: "trainer", text: "Also, make sure you're hitting your protein target. 180g is crucial for recovery at this level.", time: "10:40 AM", date: "2025-01-07" }
+    ]},
+    { id: 2, trainerId: 2, trainerName: "Mike Torres", trainerAvatar: "https://picsum.photos/seed/mike/200/200", online: false, unread: 0, messages: [
+      { id: 1, from: "trainer", text: "Your mobility session feedback was positive. Keep doing the hip stretches daily.", time: "3:00 PM", date: "2025-01-06" },
+      { id: 2, from: "user", text: "Will do! My hip flexibility has already improved noticeably.", time: "3:15 PM", date: "2025-01-06" }
+    ]}
+  ],
+  notifications: [
+    { id: 1, type: "workout", title: "Workout Reminder", text: "Time for your Upper Body Power session!", time: "2 hours ago", read: false, icon: "fa-dumbbell", color: "var(--accent)" },
+    { id: 2, type: "message", title: "New Message from Sarah", text: "Great job on the upper body session today!", time: "3 hours ago", read: false, icon: "fa-comment", color: "var(--info)" },
+    { id: 3, type: "achievement", title: "Streak Milestone", text: "You've completed a 5-day workout streak!", time: "Yesterday", read: false, icon: "fa-fire", color: "var(--accent2)" },
+    { id: 4, type: "subscription", title: "Subscription Renewal", text: "Your Pro plan renews in 7 days.", time: "2 days ago", read: true, icon: "fa-crown", color: "var(--purple)" },
+    { id: 5, type: "system", title: "App Update", text: "New features: barcode scanning and improved charts.", time: "3 days ago", read: true, icon: "fa-circle-info", color: "var(--text2)" },
+    { id: 6, type: "progress", title: "Weight Goal Progress", text: "You're 85% towards your target weight!", time: "4 days ago", read: true, icon: "fa-chart-line", color: "var(--accent)" }
+  ],
+  subscription: { plan: "Pro", price: 14.99, cycle: "Monthly", renewalDate: "2025-02-15", startDate: "2024-08-15",
+    benefits: ["Unlimited workout programs","Personal trainer messaging","Advanced progress analytics","Custom meal plans","Priority support","No advertisements"],
+    history: [{ date: "2025-01-15", amount: 14.99, status: "Paid" },{ date: "2024-12-15", amount: 14.99, status: "Paid" },{ date: "2024-11-15", amount: 14.99, status: "Paid" }]
+  },
+  recentActivity: [
+    { id: 1, type: "workout", title: "Upper Body Power", detail: "Completed all 8 exercises", time: "Today, 9:00 AM", icon: "fa-dumbbell", color: "var(--accent)" },
+    { id: 2, type: "nutrition", title: "Lunch Logged", detail: "580 calories", time: "Today, 12:30 PM", icon: "fa-utensils", color: "var(--accent2)" },
+    { id: 3, type: "health", title: "Weight Updated", detail: "78.5 kg", time: "Today, 7:00 AM", icon: "fa-weight-scale", color: "var(--info)" },
+    { id: 4, type: "workout", title: "Leg Day Destroyer", detail: "Completed 5 of 7 exercises", time: "Yesterday, 6:00 PM", icon: "fa-dumbbell", color: "var(--accent)" },
+    { id: 5, type: "health", title: "Water Intake", detail: "8 glasses completed", time: "Yesterday", icon: "fa-droplet", color: "var(--info)" }
+  ]
+};
+
+// ========== DEXIE DATABASE ==========
+const db = new Dexie('FitForgeDB');
+db.version(1).stores({
+  user: 'id',
+  workouts: 'id',
+  nutrition: 'id',
+  health: 'id',
+  progress: 'id',
+  messages: 'id',
+  notifications: 'id',
+  subscription: 'id',
+  activity: 'id',
+  initialized: 'key'
+});
+
+// ========== STATE ==========
+const state = {
+  route: m.route.param,
+  currentRoute: 'dashboard',
+  sidebarOpen: false,
+  workoutLayout: 'grid',
+  workoutPlayer: null, // { workout, exerciseIdx, setIdx, paused, restTimer, restTimeLeft, workoutTimer, workoutTime, finished }
+  celebration: null,
+  modal: null, // { type, data }
+  toasts: [],
+  profileEdit: null,
+  chartInstances: {},
+  messageInput: {},
+  selectedConversation: null,
+  progressFilter: 'week',
+  editingHealth: null
+};
+
+// ========== INITIALIZATION ==========
+async function initApp() {
+  const initialized = await db.initialized.get('done');
+  if (!initialized) {
+    await db.user.put(SEED_DATA.user);
+    await db.workouts.bulkPut(SEED_DATA.workouts);
+    await db.nutrition.put({ id: 1, ...SEED_DATA.nutrition });
+    await db.health.put({ id: 1, ...SEED_DATA.health });
+    await db.progress.put({ id: 1, ...SEED_DATA.progress });
+    for (const m of SEED_DATA.messages) await db.messages.put(m);
+    await db.notifications.bulkPut(SEED_DATA.notifications);
+    await db.subscription.put({ id: 1, ...SEED_DATA.subscription });
+    await db.activity.bulkPut(SEED_DATA.recentActivity);
+    await db.initialized.put({ key: 'done', value: true });
+  }
+}
+
+function showToast(msg, type = 'success') {
+  const id = Date.now();
+  state.toasts.push({ id, msg, type });
+  m.redraw();
+  setTimeout(() => { state.toasts = state.toasts.filter(t => t.id !== id); m.redraw(); }, 3000);
+}
+
+function diffTag(d) {
+  const m = { Beginner:'tag-green', Intermediate:'tag-orange', Advanced:'tag-red' };
+  return m[d] || 'tag-blue';
+}
+
+function formatTime(seconds) {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${s.toString().padStart(2,'0')}`;
+}
+
+// ========== NAVIGATION ==========
+const NAV_ITEMS = [
+  { id: 'dashboard', icon: 'fa-house', label: 'Dashboard' },
+  { id: 'workouts', icon: 'fa-dumbbell', label: 'Workouts' },
+  { id: 'progress', icon: 'fa-chart-line', label: 'Progress' },
+  { id: 'nutrition', icon: 'fa-apple-whole', label: 'Nutrition' },
+  { id: 'health', icon: 'fa-heart-pulse', label: 'Health' },
+  { id: 'messages', icon: 'fa-comment-dots', label: 'Messages', badge: true },
+  { id: 'subscription', icon: 'fa-crown', label: 'Plan' },
+  { id: 'profile', icon: 'fa-user', label: 'Profile' },
+  { id: 'notifications', icon: 'fa-bell', label: 'Alerts', badge: true },
+  { id: 'support', icon: 'fa-circle-question', label: 'Support' }
+];
+
+function navigate(route) {
+  state.currentRoute = route;
+  state.sidebarOpen = false;
+  state.selectedConversation = null;
+  destroyCharts();
+  m.redraw();
+  window.scrollTo(0, 0);
+}
+
+function destroyCharts() {
+  Object.values(state.chartInstances).forEach(c => { try { c.destroy(); } catch(e){} });
+  state.chartInstances = {};
+}
+
+// ========== SIDEBAR COMPONENT ==========
+const Sidebar = {
+  view: () => m('.sidebar' + (state.sidebarOpen ? '.open' : ''), [
+    m('.logo', 'FF'),
+    m('nav', NAV_ITEMS.map(n => m('button.nav-btn' + (state.currentRoute === n.id ? '.active' : ''), {
+      title: n.label,
+      onclick: () => navigate(n.id),
+      'aria-label': n.label
+    }, [
+      m('i.fa-solid.' + n.icon),
+      n.badge && m('.badge')
+    ]))),
+    m('button.nav-btn', { style: 'margin-top:auto', onclick: () => navigate('profile'), title: 'Profile', 'aria-label': 'Profile' },
+      m('img', { src: SEED_DATA.user.avatar, style: 'width:32px;height:32px;border-radius:50%;object-fit:cover' }))
+  ])
+};
+
+// ========== BOTTOM NAV ==========
+const BottomNav = {
+  view: () => m('.bottom-nav', m('.bn-row', [
+    ...NAV_ITEMS.slice(0,5).map(n => m('button.bn-btn' + (state.currentRoute === n.id ? '.active' : ''), {
+      onclick: () => navigate(n.id), 'aria-label': n.label
+    }, [ m('i.fa-solid.' + n.icon), m('span', n.label), n.badge && m('.badge') ])),
+    m('button.bn-btn' + (['messages','notifications','subscription','profile','support'].includes(state.currentRoute) ? '.active' : ''), {
+      onclick: () => navigate('messages'), 'aria-label': 'More'
+    }, [ m('i.fa-solid.fa-ellipsis'), m('span', 'More') ])
+  ]))
+};
+
+// ========== DASHBOARD ==========
+const Dashboard = {
+  oninit: async () => { this.user = await db.user.get(1); this.nutrition = await db.nutrition.get(1); this.activity = await db.activity.toArray(); this.workouts = await db.workouts.toArray(); },
+  oncreate: () => { setTimeout(() => this.renderChart(), 100); },
+  onremove: () => destroyCharts(),
+  renderChart() {
+    const el = document.getElementById('weeklyChart');
+    if (!el) return;
+    const days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+    if (state.chartInstances.weekly) state.chartInstances.weekly.destroy();
+    state.chartInstances.weekly = new Chart(el, {
+      type: 'bar',
+      data: { labels: days, datasets: [{ label: 'Calories Burned', data: SEED_DATA.progress.weeklyCalories, backgroundColor: 'rgba(0,230,118,0.3)', borderColor: '#00E676', borderWidth: 2, borderRadius: 6, borderSkipped: false }] },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: 'rgba(37,45,63,0.5)' }, ticks: { color: '#7A8BA7', font: { family: 'DM Sans' } } }, y: { grid: { color: 'rgba(37,45,63,0.5)' }, ticks: { color: '#7A8BA7', font: { family: 'DM Sans' } }, beginAtZero: true } } }
+    });
+  },
+  view: () => {
+    const u = this.user || SEED_DATA.user;
+    const n = this.nutrition || SEED_DATA.nutrition;
+    const wk = this.workouts || SEED_DATA.workouts;
+    const todayWk = wk[0];
+    const upcomingWk = wk[1];
+    const streak = 5;
+    const calsBurned = 390;
+    const calPct = Math.min(100, Math.round((n.today.calories / n.dailyGoals.calories) * 100));
+    const waterPct = Math.round((n.today.water / n.dailyGoals.water) * 100);
+    const goalPct = Math.round(((80.2 - u.weight) / (80.2 - u.targetWeight)) * 100);
+    return m('div', [
+      // Welcome
+      m('.welcome-card.mb-24.fade-up', [
+        m('.flex.flex-between.flex-c', [
+          m('div', [ m('h2', `Welcome back, ${u.name.split(' ')[0]}`), m('p', 'You\'re on a ' + streak + '-day streak. Keep it going!') ]),
+          m('img', { src: u.avatar, style: 'width:56px;height:56px;border-radius:50%;border:3px solid var(--accent);object-fit:cover' })
+        ]),
+        m('.flex.gap-12.mt-16', [
+          m('.btn.btn-primary.btn-sm', { onclick: () => navigate('workouts') }, [ m('i.fa-solid.fa-play'), ' Start Today\'s Workout' ]),
+          m('.btn.btn-secondary.btn-sm', { onclick: () => navigate('progress') }, [ m('i.fa-solid.fa-chart-line'), ' View Progress' ])
+        ])
+      ]),
+      // Quick Actions
+      m('.mb-24.fade-up', { style: 'animation-delay:.05s' }, [
+        m('h3.text-sm.text-muted.mb-16', { style: 'text-transform:uppercase;letter-spacing:1px;font-weight:600' }, 'Quick Actions'),
+        m('.quick-actions', [
+          { icon: 'fa-play', label: 'Start Workout', bg: 'var(--accent-d)', color: 'var(--accent)', action: () => navigate('workouts') },
+          { icon: 'fa-utensils', label: 'Log Meal', bg: 'rgba(255,109,0,.12)', color: 'var(--accent2)', action: () => state.modal = { type: 'addMeal' } },
+          { icon: 'fa-weight-scale', label: 'Add Weight', bg: 'rgba(64,196,255,.12)', color: 'var(--info)', action: () => state.modal = { type: 'addWeight' } },
+          { icon: 'fa-droplet', label: 'Drink Water', bg: 'rgba(64,196,255,.12)', color: 'var(--info)', action: () => { db.nutrition.get(1).then(r => { r.today.water = Math.min(r.dailyGoals.water, r.today.water + 1); db.nutrition.put(r); this.nutrition = r; showToast('Water logged!'); }); } },
+          { icon: 'fa-chart-line', label: 'Progress', bg: 'rgba(179,136,255,.12)', color: 'var(--purple)', action: () => navigate('progress') },
+          { icon: 'fa-dumbbell', label: 'My Workouts', bg: 'var(--accent-d)', color: 'var(--accent)', action: () => navigate('workouts') }
+        ].map(q => m('.quick-action', { onclick: q.action }, [
+          m('.qa-icon', { style: `background:${q.bg};color:${q.color}` }, m('i.fa-solid.' + q.icon)),
+          m('span', q.label)
+        ])))
+      ]),
+      // Stat Cards Row
+      m('.grid.grid-4.mb-24', [
+        m('.card.stat-card.fade-up', { style: 'animation-delay:.1s' }, [
+          m('.flex.flex-c.gap-12', [
+            m('.stat-icon', { style: 'background:var(--accent-d);color:var(--accent)' }, m('i.fa-solid.fa-fire')),
+            m('div', [ m('.stat-val', streak), m('.stat-label', 'Day Streak') ])
+          ])
+        ]),
+        m('.card.stat-card.fade-up', { style: 'animation-delay:.15s' }, [
+          m('.flex.flex-c.gap-12', [
+            m('.stat-icon', { style: 'background:rgba(255,109,0,.12);color:var(--accent2)' }, m('i.fa-solid.fa-fire-flame-curved')),
+            m('div', [ m('.stat-val', calsBurned), m('.stat-label', 'Calories Burned') ])
+          ])
+        ]),
+        m('.card.stat-card.fade-up', { style: 'animation-delay:.2s' }, [
+          m('.flex.flex-c.gap-12', [
+            m('.stat-icon', { style: 'background:rgba(64,196,255,.12);color:var(--info)' }, m('i.fa-solid.fa-weight-scale')),
+            m('div', [ m('.stat-val', u.weight + 'kg'), m('.stat-label', 'Current Weight') ])
+          ])
+        ]),
+        m('.card.stat-card.fade-up', { style: 'animation-delay:.25s' }, [
+          m('.flex.flex-c.gap-12', [
+            m('.stat-icon', { style: 'background:rgba(179,136,255,.12);color:var(--purple)' }, m('i.fa-solid.fa-bullseye')),
+            m('div', [ m('.stat-val', goalPct + '%'), m('.stat-label', 'Goal Progress') ])
+          ]),
+          m('.progress-bar.mt-16', [ m('.progress-fill', { style: `width:${goalPct}%;background:var(--purple)` }) ])
+        ])
+      ]),
+      // Today's Workout + Water + Nutrition
+      m('.grid.grid-2.mb-24', [
+        // Today's Assigned Workout
+        todayWk ? m('.card.fade-up', { style: 'animation-delay:.3s;cursor:pointer', onclick: () => navigate('workoutDetail/' + todayWk.id) }, [
+          m('.flex.flex-between.flex-c.mb-16', [
+            m('h3.text-sm', { style: 'text-transform:uppercase;letter-spacing:.8px;color:var(--text2);font-weight:600' }, 'Today\'s Workout'),
+            m('.tag.tag-orange', todayWk.difficulty)
+          ]),
+          m('h2', { style: 'font-size:20px;margin-bottom:12px' }, todayWk.title),
+          m('.flex.gap-16.mb-16', [
+            m('span.text-sm.text-muted', [ m('i.fa-regular.fa-clock'), ' ' + todayWk.duration + ' min' ]),
+            m('span.text-sm.text-muted', [ m('i.fa-solid fa-list'), ' ' + todayWk.exerciseCount + ' exercises' ])
+          ]),
+          m('.flex.gap-8.mb-16', todayWk.muscleGroups.map(mg => m('.tag.tag-green.text-xs', mg))),
+          m('.progress-bar.mb-8', [ m('.progress-fill', { style: `width:${todayWk.progress}%;background:var(--accent)` }) ]),
+          m('.text-xs.text-muted', todayWk.progress + '% complete'),
+          m('.flex.gap-8.mt-16', [
+            m('.btn.btn-primary.btn-sm.btn-block', { onclick: (e) => { e.stopPropagation(); startWorkoutPlayer(todayWk); } }, 'Start'),
+            todayWk.progress > 0 && todayWk.progress < 100 ? m('.btn.btn-secondary.btn-sm', { onclick: (e) => { e.stopPropagation(); startWorkoutPlayer(todayWk, Math.floor(todayWk.exercises.length * todayWk.progress / 100)); } }, 'Resume') : null
+          ])
+        ]) : null,
+        // Water + Daily Nutrition
+        m('div', [
+          m('.card-flat.mb-16.fade-up', { style: 'animation-delay:.35s' }, [
+            m('.flex.flex-between.flex-c.mb-16', [
+              m('h3.text-sm', { style: 'text-transform:uppercase;letter-spacing:.8px;color:var(--text2);font-weight:600' }, 'Water Intake'),
+              m('span.text-accent.font-bold', n.today.water + '/' + n.dailyGoals.water + ' glasses')
+            ]),
+            m('.water-dots', Array.from({ length: n.dailyGoals.water }, (_, i) =>
+              m('.water-dot' + (i < n.today.water ? '.filled' : ''), {
+                onclick: () => {
+                  db.nutrition.get(1).then(r => { r.today.water = i + 1; db.nutrition.put(r); this.nutrition = r; showToast('Water updated!'); });
+                }
+              }, i < n.today.water ? m('i.fa-solid fa-droplet') : '')
+            )),
+            m('.progress-bar.mt-12', [ m('.progress-fill', { style: `width:${waterPct}%;background:var(--info)` }) ])
+          ]),
+          m('.card-flat.fade-up', { style: 'animation-delay:.4s' }, [
+            m('.flex.flex-between.flex-c.mb-16', [
+              m('h3.text-sm', { style: 'text-transform:uppercase;letter-spacing:.8px;color:var(--text2);font-weight:600' }, 'Daily Nutrition'),
+              m('span.text-muted.text-xs', Math.round(calPct) + '% of goal')
+            ]),
+            m('.progress-bar.mb-12', [ m('.progress-fill', { style: `width:${calPct}%;background:var(--accent2)` }) ]),
+            m('.grid.grid-2.gap-8', [
+              [{ l:'Protein', v:n.today.protein, t:n.dailyGoals.protein, c:'var(--accent)' },
+               { l:'Carbs', v:n.today.carbs, t:n.dailyGoals.carbs, c:'var(--accent2)' },
+               { l:'Fat', v:n.today.fat, t:n.dailyGoals.fat, c:'var(--purple)' },
+               { l:'Calories', v:n.today.calories, t:n.dailyGoals.calories, c:'var(--info)' }
+              ].map(m => m('.flex.flex-between.flex-c', [
+                m('span.text-sm.text-muted', m.l),
+                m('span.text-sm.font-bold', m.v + '/' + m.t)
+              ])))
+            ])
+          ])
+        ])
+      ]),
+      // Upcoming Workout + Recent Activity
+      m('.grid.grid-2.mb-24', [
+        upcomingWk ? m('.card.fade-up', { style: 'animation-delay:.45s;cursor:pointer', onclick: () => navigate('workoutDetail/' + upcomingWk.id) }, [
+          m('h3.text-sm.mb-16', { style: 'text-transform:uppercase;letter-spacing:.8px;color:var(--text2);font-weight:600' }, 'Upcoming Workout'),
+          m('.flex.gap-12', [
+            m('img', { src: upcomingWk.image, style: 'width:64px;height:64px;border-radius:var(--rs);object-fit:cover' }),
+            m('div', [ m('h4', { style: 'font-size:15px;font-weight:700' }, upcomingWk.title), m('.flex.gap-8.mt-8', upcomingWk.muscleGroups.slice(0,3).map(mg => m('.tag.tag-green.text-xs', mg))) ])
+          ]),
+          m('.flex.gap-12.mt-12', [
+            m('span.text-xs.text-muted', [ m('i.fa-regular.fa-clock'), ' ' + upcomingWk.duration + ' min' ]),
+            m('span.text-xs.text-muted', [ m('i.fa-solid fa-signal'), ' ' + upcomingWk.difficulty ])
+          ])
+        ]) : null,
+        m('.card.fade-up', { style: 'animation-delay:.5s' }, [
+          m('h3.text-sm.mb-16', { style: 'text-transform:uppercase;letter-spacing:.8px;color:var(--text2);font-weight:600' }, 'Recent Activity'),
+          ...(this.activity || SEED_DATA.recentActivity).slice(0, 4).map(a => m('.flex.flex-c.gap-12', { style: 'padding:8px 0;border-bottom:1px solid var(--border)' }, [
+            m('i.fa-solid.' + a.icon, { style: `color:${a.color};width:20px;text-align:center;font-size:13px` }),
+            m('div', { style: 'flex:1;min-width:0' }, [ m('.text-sm', { style: 'font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis' }, a.title), m('.text-xs.text-muted', a.detail) ]),
+            m('.text-xs.text-muted', { style: 'white-space:nowrap' }, a.time.split(',')[0])
+          ]))
+        ])
+      ]),
+      // Weekly Chart + Monthly Stats
+      m('.grid.grid-2.mb-24', [
+        m('.card.fade-up', { style: 'animation-delay:.55s' }, [
+          m('h3.text-sm.mb-16', { style: 'text-transform:uppercase;letter-spacing:.8px;color:var(--text2);font-weight:600' }, 'Weekly Progress'),
+          m('.chart-wrap', [ m('canvas#weeklyChart') ])
+        ]),
+        m('.card.fade-up', { style: 'animation-delay:.6s' }, [
+          m('h3.text-sm.mb-16', { style: 'text-transform:uppercase;letter-spacing:.8px;color:var(--text2);font-weight:600' }, 'Monthly Statistics'),
+          m('.grid.grid-2.gap-16', [
+            { val: '20', label: 'Workouts Completed', icon: 'fa-dumbbell', color: 'var(--accent)' },
+            { val: '8,420', label: 'Calories Burned', icon: 'fa-fire', color: 'var(--accent2)' },
+            { val: '4.2', label: 'Avg Hours/Week', icon: 'fa-clock', color: 'var(--info)' },
+            { val: '92%', label: 'Consistency', icon: 'fa-bullseye', color: 'var(--purple)' }
+          ].map(s => m('div', { style: 'text-align:center;padding:12px;background:var(--bg2);border-radius:var(--rs)' }, [
+            m('i.fa-solid.' + s.icon, { style: `color:${s.color};font-size:20px;margin-bottom:8px;display:block` }),
+            m('div', { style: 'font-family:var(--font-d);font-size:22px;font-weight:800' }, s.val),
+            m('.text-xs.text-muted', s.label)
+          ])))
+        ])
+      ]),
+      // Trainer Messages Preview
+      m('.card.fade-up', { style: 'animation-delay:.65s;cursor:pointer', onclick: () => navigate('messages') }, [
+        m('.flex.flex-between.flex-c.mb-16', [
+          m('h3.text-sm', { style: 'text-transform:uppercase;letter-spacing:.8px;color:var(--text2);font-weight:600' }, 'Trainer Messages'),
+          m('span.text-accent.text-sm', 'View All')
+        ]),
+        SEED_DATA.messages.map(conv => {
+          const last = conv.messages[conv.messages.length - 1];
+          return m('.flex.flex-c.gap-12', { style: 'padding:10px 0;border-bottom:1px solid var(--border)' }, [
+            m('img', { src: conv.trainerAvatar, style: 'width:40px;height:40px;border-radius:50%;object-fit:cover' }),
+            m('div', { style: 'flex:1;min-width:0' }, [
+              m('.flex.flex-between', [ m('span.text-sm.font-bold', conv.trainerName), m('span.text-xs.text-muted', last.time) ]),
+              m('.text-xs.text-muted', { style: 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis' }, last.text)
+            ]),
+            conv.unread > 0 ? m('.unread-badge', conv.unread) : null
+          ]);
+        })
+      ])
+    ]);
+  }
+};
+
+// ========== WORKOUTS LIST ==========
+const Workouts = {
+  oninit: async () => { this.workouts = await db.workouts.toArray(); },
+  view: () => m('div', [
+    m('.page-header.flex.flex-between.flex-c', [
+      m('div', [ m('h1', 'My Workouts'), m('p', 'Your assigned workout programs') ]),
+      m('.layout-toggle', [
+        m('button' + (state.workoutLayout === 'grid' ? '.active' : ''), { onclick: () => { state.workoutLayout = 'grid'; m.redraw(); } }, m('i.fa-solid.fa-grid-2')),
+        m('button' + (state.workoutLayout === 'list' ? '.active' : ''), { onclick: () => { state.workoutLayout = 'list'; m.redraw(); } }, m('i.fa-solid.fa-list'))
+      ])
+    ]),
+    m('.grid' + (state.workoutLayout === 'grid' ? '.grid-3' : ''), (this.workouts || SEED_DATA.workouts).map((w, i) =>
+      state.workoutLayout === 'grid' ? m('.card.workout-card.fade-up', { style: 'animation-delay:' + (i * .06) + 's;cursor:pointer', onclick: () => navigate('workoutDetail/' + w.id) }, [
+        m('.wc-img', { style: `background-image:url(${w.image})` }, [ m('.wc-diff', m('.tag.' + diffTag(w.difficulty), w.difficulty)) ]),
+        m('.wc-body', [
+          m('h3', w.title),
+          m('.wc-meta', [
+            m('span', [ m('i.fa-regular.fa-clock'), ' ' + w.duration + ' min' ]),
+            m('span', [ m('i.fa-solid fa-list'), ' ' + w.exerciseCount + ' exercises' ])
+          ]),
+          m('.wc-muscles', w.muscleGroups.map(mg => m('.tag.tag-green.text-xs', mg))),
+          m('.wc-progress', [
+            m('.flex.flex-between.flex-c.mb-8', [ m('.text-xs.text-muted', 'Progress'), m('.text-xs.text-accent.font-bold', w.progress + '%') ]),
+            m('.progress-bar', [ m('.progress-fill', { style: `width:${w.progress}%;background:var(--accent)` }) ])
+          ]),
+          m('.wc-actions', [
+            w.progress === 0 ? m('.btn.btn-primary.btn-sm.btn-block', { onclick: (e) => { e.stopPropagation(); startWorkoutPlayer(w); } }, 'Start') :
+            w.progress < 100 ? m('.btn.btn-primary.btn-sm', { onclick: (e) => { e.stopPropagation(); startWorkoutPlayer(w, Math.floor(w.exercises.length * w.progress / 100)); } }, 'Resume') :
+            m('.btn.btn-secondary.btn-sm', { onclick: (e) => { e.stopPropagation(); startWorkoutPlayer(w); } }, 'Restart'),
+            m('.btn.btn-secondary.btn-sm', { onclick: (e) => { e.stopPropagation(); navigate('workoutDetail/' + w.id); } }, 'Details')
+          ])
+        ])
+      ]) : m('.card.flex.gap-16.fade-up', { style: 'animation-delay:' + (i * .06) + 's;cursor:pointer;align-items:center', onclick: () => navigate('workoutDetail/' + w.id) }, [
+        m('img', { src: w.image, style: 'width:80px;height:80px;border-radius:var(--rs);object-fit:cover;flex-shrink:0' }),
+        m('div', { style: 'flex:1;min-width:0' }, [
+          m('.flex.flex-c.gap-8', [ m('h3', { style: 'font-size:16px' }, w.title), m('.tag.' + diffTag(w.difficulty) + '.text-xs', w.difficulty) ]),
+          m('.flex.gap-12.mt-8', w.muscleGroups.map(mg => m('.tag.tag-green.text-xs', mg))),
+          m('.flex.gap-16.mt-8', [
+            m('span.text-xs.text-muted', [ m('i.fa-regular.fa-clock'), ' ' + w.duration + ' min' ]),
+            m('span.text-xs.text-muted', [ m('i.fa-solid fa-list'), ' ' + w.exerciseCount + ' exercises' ]),
+            m('span.text-xs.text-accent', w.progress + '%')
+          ])
+        ]),
+        m('.btn.btn-primary.btn-sm', { onclick: (e) => { e.stopPropagation(); w.progress === 0 ? startWorkoutPlayer(w) : startWorkoutPlayer(w, Math.floor(w.exercises.length * w.progress / 100)); } }, w.progress === 0 ? 'Start' : 'Resume')
+      ])
+    ))
+  ])
+};
+
+// ========== WORKOUT DETAIL ==========
+const WorkoutDetail = {
+  oninit: async (vnode) => { this.id = parseInt(vnode.attrs.id); this.workout = await db.workouts.get(this.id); },
+  view: () => {
+    const w = this.workout;
+    if (!w) return m('div', [ m('h1', 'Workout not found') ]);
+    return m('div', [
+      m('.flex.gap-12.mb-24', [
+        m('.btn-icon', { onclick: () => navigate('workouts') }, m('i.fa-solid.fa-arrow-left')),
+        m('.page-header', [ m('h1', w.title), m('p', w.description) ])
+      ]),
+      m('.grid.grid-4.mb-24', [
+        m('.card-flat.flex-c.gap-8', [ m('i.fa-regular.fa-clock.text-accent'), m('div', [ m('.text-sm.font-bold', w.duration + ' min'), m('.text-xs.text-muted', 'Duration') ]) ]),
+        m('.card-flat.flex-c.gap-8', [ m('i.fa-solid fa-signal.text-accent2'), m('div', [ m('.text-sm.font-bold', w.difficulty), m('.text-xs.text-muted', 'Difficulty') ]) ]),
+        m('.card-flat.flex-c.gap-8', [ m('i.fa-solid fa-list.text-info'), m('div', [ m('.text-sm.font-bold', w.exercises.length), m('.text-xs.text-muted', 'Exercises') ]) ]),
+        m('.card-flat.flex-c.gap-8', [ m('i.fa-solid fa-toolbox.text-purple'), m('div', [ m('.text-sm.font-bold', w.equipment.length), m('.text-xs.text-muted', 'Equipment') ]) ])
+      ]),
+      m('.flex.gap-8.mb-24.flex-c', [ m('span.text-sm.text-muted', 'Target Muscles:'), ...w.muscleGroups.map(mg => m('.tag.tag-green', mg)) ]),
+      m('.flex.gap-8.mb-24', w.equipment.map(e => m('.tag.tag-blue', e))),
+      m('h2.mb-16', { style: 'font-size:20px' }, 'Exercises'),
+      m('.flex.flex-column.gap-12.mb-24', w.exercises.map((ex, i) => m('.card-flat.exercise-card.fade-up', { style: 'animation-delay:' + (i * .04) + 's' }, [
+        m('.ex-thumb', { style: `background-image:url(${ex.thumbnail})` }),
+        m('.ex-info', [
+          m('h4', (i + 1) + '. ' + ex.name),
+          m('.ex-stats', [
+            m('span', [ m('i.fa-solid fa-layer-group'), ' ' + ex.sets + ' sets' ]),
+            m('span', [ m('i.fa-solid fa-rotate'), ' ' + ex.reps + ' reps' ]),
+            ex.weight > 0 ? m('span', [ m('i.fa-solid fa-weight-hanging'), ' ' + ex.weight + ' kg' ]) : null,
+            m('span', [ m('i.fa-regular fa-clock'), ' ' + ex.restTime + 's rest' ])
+          ]),
+          ex.notes ? m('.text-xs.text-muted.mt-8', ex.notes) : null
+        ])
+      ]))),
+      m('.btn.btn-primary.btn-lg.btn-block', { onclick: () => startWorkoutPlayer(w) }, [ m('i.fa-solid.fa-play'), ' Start Workout' ])
+    ]);
+  }
+};
+
+// ========== WORKOUT PLAYER ==========
+function startWorkoutPlayer(workout, startIdx = 0) {
+  state.workoutPlayer = {
+    workout, exerciseIdx: startIdx, setIdx: 0, paused: false,
+    restTimer: null, restTimeLeft: 0, workoutTimer: null, workoutTime: 0, finished: false
+  };
+  m.redraw();
+}
+
+const WorkoutPlayer = {
+  oninit: () => {
+    this.timerInterval = null;
+    if (state.workoutPlayer && !state.workoutPlayer.finished) {
+      this.startWorkoutTimer();
+    }
+  },
+  onremove: () => {
+    if (this.timerInterval) clearInterval(this.timerInterval);
+    if (state.workoutPlayer && state.workoutPlayer.restTimer) clearInterval(state.workoutPlayer.restTimer);
+  },
+  startWorkoutTimer() {
+    if (this.timerInterval) clearInterval(this.timerInterval);
+    this.timerInterval = setInterval(() => {
+      if (!state.workoutPlayer || state.workoutPlayer.paused || state.workoutPlayer.finished) return;
+      state.workoutPlayer.workoutTime++;
+      m.redraw();
+    }, 1000);
+  },
+  startRest(ex) {
+    if (state.workoutPlayer.restTimer) clearInterval(state.workoutPlayer.restTimer);
+    state.workoutPlayer.restTimeLeft = ex.restTime;
+    state.workoutPlayer.restTimer = setInterval(() => {
+      if (state.workoutPlayer.paused) return;
+      state.workoutPlayer.restTimeLeft--;
+      if (state.workoutPlayer.restTimeLeft <= 0) {
+        clearInterval(state.workoutPlayer.restTimer);
+        state.workoutPlayer.restTimeLeft = 0;
+      }
+      m.redraw();
+    }, 1000);
+  },
+  nextSet() {
+    const p = state.workoutPlayer;
+    const ex = p.workout.exercises[p.exerciseIdx];
+    p.setIdx++;
+    if (p.setIdx >= ex.sets) {
+      p.setIdx = 0;
+      if (p.exerciseIdx < p.workout.exercises.length - 1) {
+        p.exerciseIdx++;
+        this.startRest(p.workout.exercises[p.exerciseIdx]);
+      } else {
+        this.finishWorkout();
+      }
+    } else {
+      this.startRest(ex);
+    }
+    m.redraw();
+  },
+  prevExercise() {
+    const p = state.workoutPlayer;
+    if (p.exerciseIdx > 0) { p.exerciseIdx--; p.setIdx = 0; if (p.restTimer) clearInterval(p.restTimer); p.restTimeLeft = 0; m.redraw(); }
+  },
+  skipExercise() {
+    const p = state.workoutPlayer;
+    if (p.exerciseIdx < p.workout.exercises.length - 1) { p.exerciseIdx++; p.setIdx = 0; if (p.restTimer) clearInterval(p.restTimer); p.restTimeLeft = 0; m.redraw(); }
+  },
+  finishWorkout() {
+    if (state.workoutPlayer.restTimer) clearInterval(state.workoutPlayer.restTimer);
+    state.workoutPlayer.finished = true;
+    const cals = Math.round(state.workoutPlayer.workoutTime * 6.5);
+    state.celebration = { workout: state.workoutPlayer.workout, duration: state.workoutPlayer.workoutTime, calories: cals, exercisesCompleted: state.workoutPlayer.exercises.length, pr: ['Bench Press: 80kg x 8 (New PR!)', 'Squat: 100kg x 5 (Tied PR)'] };
+    state.workoutPlayer = null;
+    m.redraw();
+  },
+  view: () => {
+    const p = state.workoutPlayer;
+    if (!p) return null;
+    const ex = p.workout.exercises[p.exerciseIdx];
+    const totalSets = p.workout.exercises.reduce((a, e) => a + e.sets, 0);
+    let doneSets = 0;
+    for (let i = 0; i < p.exerciseIdx; i++) doneSets += p.workout.exercises[i].sets;
+    doneSets += p.setIdx;
+    const overallPct = Math.round((doneSets / totalSets) * 100);
+    const exPct = Math.round((p.setIdx / ex.sets) * 100);
+    return m('.player-wrap', [
+      m('.player-img', { style: `background-image:url(${ex.thumbnail})` }),
+      m('.player-body', [
+        m('.flex.flex-between.flex-c.mb-16', [
+          m('span.text-sm.text-muted', 'Exercise ' + (p.exerciseIdx + 1) + ' of ' + p.workout.exercises.length),
+          m('.tag.tag-accent', p.workout.title)
+        ]),
+        m('h1', { style: 'font-size:26px;margin-bottom:20px' }, ex.name),
+        m('.grid.grid-3.mb-24', [
+          m('.card-flat', { style: 'text-align:center' }, [ m('.text-xs.text-muted', 'Set'), m('div', { style: 'font-family:var(--font-d);font-size:32px;font-weight:900;color:var(--accent)' }, (p.setIdx + 1) + '/' + ex.sets) ]),
+          m('.card-flat', { style: 'text-align:center' }, [ m('.text-xs.text-muted', 'Reps'), m('div', { style: 'font-family:var(--font-d);font-size:32px;font-weight:900' }, ex.reps) ]),
+          m('.card-flat', { style: 'text-align:center' }, [ m('.text-xs.text-muted', 'Weight'), m('div', { style: 'font-family:var(--font-d);font-size:32px;font-weight:900' }, ex.weight > 0 ? ex.weight + 'kg' : 'BW') ])
+        ]),
+        ex.notes ? m('.card-flat.mb-24', { style: 'border-left:3px solid var(--accent)' }, [ m('.text-xs.text-muted', 'Note'), m('.text-sm.mt-8', ex.notes) ]) : null,
+        m('.mb-16', [
+          m('.flex.flex-between.flex-c.mb-8', [ m('.text-sm.text-muted', 'Overall Progress'), m('.text-sm.text-accent', overallPct + '%') ]),
+          m('.progress-bar', [ m('.progress-fill', { style: `width:${overallPct}%;background:var(--accent)` }) ])
+        ]),
+        m('.mb-16', [
+          m('.flex.flex-between.flex-c.mb-8', [ m('.text-sm.text-muted', 'Exercise Progress'), m('.text-sm.text-accent2', exPct + '%') ]),
+          m('.progress-bar', [ m('.progress-fill', { style: `width:${exPct}%;background:var(--accent2)` }) ])
+        ]),
+        m('.grid.grid-2.mb-24', [
+          m('.card-flat.flex-c.gap-12', [ m('i.fa-solid fa-stopwatch.text-accent', { style: 'font-size:20px' }), m('div', [ m('.text-xs.text-muted', 'Workout Time'), m('.text-lg.font-bold', { style: 'font-family:var(--font-d)' }, formatTime(p.workoutTime)) ]) ]),
+          m('.card-flat.flex-c.gap-12', [ m('i.fa-solid fa-hourglass-half.text-info', { style: 'font-size:20px' }), m('div', [ m('.text-xs.text-muted', 'Rest Time'), m('.text-lg.font-bold', { style: 'font-family:var(--font-d);color:' + (p.restTimeLeft > 0 ? 'var(--info)' : 'var(--text)') }, p.restTimeLeft > 0 ? formatTime(p.restTimeLeft) : '--:--') ]) ])
+        ])
+      ]),
+      m('.player-controls', [
+        p.paused ? m('.text-center.text-accent.text-sm.mb-12', [ m('i.fa-solid fa-pause'), ' PAUSED' ]) : null,
+        m('.ctrl-row', [
+          m('button.ctrl-btn.btn-secondary', { onclick: () => this.prevExercise() }, [ m('i.fa-solid fa-backward-step'), ' Prev' ]),
+          m('button.ctrl-btn.btn-secondary', { onclick: () => { p.paused = !p.paused; m.redraw(); } }, p.paused ? [ m('i.fa-solid fa-play'), ' Resume' ] : [ m('i.fa-solid fa-pause'), ' Pause' ]),
+          m('button.ctrl-btn.btn-primary', { onclick: () => this.nextSet(), style: 'min-width:120px' }, [ m('i.fa-solid fa-check'), ' Next Set' ]),
+          m('button.ctrl-btn.btn-secondary', { onclick: () => this.skipExercise() }, [ m('i.fa-solid fa-forward-step'), ' Skip' ]),
+          m('button.ctrl-btn.btn-danger', { onclick: () => { if (confirm('Finish workout early?')) this.finishWorkout(); } }, [ m('i.fa-solid fa-flag-checkered'), ' Finish' ])
+        ])
+      ])
+    ]);
+  }
+};
+
+// ========== CELEBRATION ==========
+const Celebration = {
+  oncreate: (vnode) => {
+    const canvas = vnode.dom.querySelector('.confetti-canvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    const colors = ['#00E676','#FF6D00','#40C4FF','#B388FF','#FF5252','#FFD600'];
+    const particles = Array.from({ length: 120 }, () => ({
+      x: Math.random() * canvas.width, y: Math.random() * canvas.height - canvas.height,
+      w: Math.random() * 10 + 4, h: Math.random() * 6 + 2,
+      color: colors[Math.floor(Math.random() * colors.length)],
+      vy: Math.random() * 3 + 2, vx: (Math.random() - .5) * 2,
+      rot: Math.random() * 360, vr: (Math.random() - .5) * 10
+    }));
+    let frame = 0;
+    function animate() {
+      if (frame > 300 || !state.celebration) return;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      particles.forEach(p => {
+        p.y += p.vy; p.x += p.vx; p.rot += p.vr;
+        ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot * Math.PI / 180);
+        ctx.fillStyle = p.color; ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+        ctx.restore();
+      });
+      frame++;
+      requestAnimationFrame(animate);
+    }
+    animate();
+  },
+  view: () => {
+    const c = state.celebration;
+    if (!c) return null;
+    return m('.celebration', [
+      m('canvas.confetti-canvas'),
+      m('div', { style: 'position:relative;z-index:1' }, [
+        m('i.fa-solid fa-trophy', { style: 'font-size:64px;color:var(--accent2);margin-bottom:24px;display:block' }),
+        m('h1', { style: 'font-size:36px;font-weight:900;margin-bottom:8px' }, 'Workout Complete!'),
+        m('p.text-muted', { style: 'font-size:16px;margin-bottom:32px' }, 'Outstanding effort. Here\'s your summary.'),
+        m('.grid.grid-3.gap-16.mb-32', { style: 'max-width:500px;margin:0 auto 32px' }, [
+          m('.summary-stat', [ m('.ss-val.text-accent', c.calories), m('.ss-label', 'Calories') ]),
+          m('.summary-stat', [ m('.ss-val.text-accent2', formatTime(c.duration)), m('.ss-label', 'Duration') ]),
+          m('.summary-stat', [ m('.ss-val.text-info', c.exercisesCompleted), m('.ss-label', 'Exercises') ])
+        ]),
+        c.pr.length > 0 ? m('.card-flat.mb-32', { style: 'max-width:400px;margin:0 auto 32px' }, [
+          m('h3.text-sm.text-accent2.mb-12', { style: 'text-transform:uppercase;letter-spacing:.5px' }, 'Personal Records'),
+          ...c.pr.map(pr => m('.text-sm', { style: 'padding:6px 0;border-bottom:1px solid var(--border)' }, pr))
+        ]) : null,
+        m('.flex.gap-12.flex-c', [
+          m('.btn.btn-primary.btn-lg', { onclick: () => { state.celebration = null; navigate('dashboard'); } }, 'Dashboard'),
+          m('.btn.btn-secondary.btn-lg', { onclick: () => { state.celebration = null; navigate('progress'); } }, 'View History')
+        ])
+      ])
+    ]);
+  }
+};
+
+// ========== PROGRESS ==========
+const Progress = {
+  oninit: async () => { this.data = await db.progress.get(1); this.health = await db.health.get(1); },
+  oncreate: () => { setTimeout(() => this.renderCharts(), 100); },
+  onupdate: () => { this.renderCharts(); },
+  onremove: () => destroyCharts(),
+  renderCharts() {
+    const d = this.data || SEED_DATA.progress;
+    const h = this.health || SEED_DATA.health;
+    const f = state.progressFilter;
+    // Weight chart
+    const wEl = document.getElementById('weightChart');
+    if (wEl) {
+      if (state.chartInstances.weight) state.chartInstances.weight.destroy();
+      state.chartInstances.weight = new Chart(wEl, {
+        type: 'line', data: { labels: h.weight.map(e => e.date.slice(5)), datasets: [{ label: 'Weight (kg)', data: h.weight.map(e => e.value), borderColor: '#00E676', backgroundColor: 'rgba(0,230,118,0.1)', fill: true, tension: .4, pointRadius: 5, pointBackgroundColor: '#00E676' }] },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: 'rgba(37,45,63,0.5)' }, ticks: { color: '#7A8BA7' } }, y: { grid: { color: 'rgba(37,45,63,0.5)' }, ticks: { color: '#7A8BA7' }, min: 76, max: 82 } } }
+      });
+    }
+    // Strength chart
+    const sEl = document.getElementById('strengthChart');
+    if (sEl) {
+      if (state.chartInstances.strength) state.chartInstances.strength.destroy();
+      const labels = ['4w ago','3w ago','2w ago','1w ago','Now'];
+      state.chartInstances.strength = new Chart(sEl, {
+        type: 'line', data: { labels, datasets: d.strength.map(s => ({ label: s.exercise, data: s.data, borderColor: ['#00E676','#FF6D00','#40C4FF'][d.strength.indexOf(s)], backgroundColor: 'transparent', tension: .4, pointRadius: 4, borderWidth: 2 })) },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#7A8BA7', font: { family: 'DM Sans' } } } }, scales: { x: { grid: { color: 'rgba(37,45,63,0.5)' }, ticks: { color: '#7A8BA7' } }, y: { grid: { color: 'rgba(37,45,63,0.5)' }, ticks: { color: '#7A8BA7' } } } }
+      });
+    }
+    // Workout consistency
+    const cEl = document.getElementById('consistencyChart');
+    if (cEl) {
+      if (state.chartInstances.consistency) state.chartInstances.consistency.destroy();
+      state.chartInstances.consistency = new Chart(cEl, {
+        type: 'bar', data: { labels: d.monthlyWorkouts.slice(-12).map((_, i) => 'W' + (i + 1)), datasets: [{ label: 'Workouts', data: d.monthlyWorkouts.slice(-12), backgroundColor: 'rgba(255,109,0,0.3)', borderColor: '#FF6D00', borderWidth: 2, borderRadius: 4 }] },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false }, ticks: { color: '#7A8BA7' } }, y: { grid: { color: 'rgba(37,45,63,0.5)' }, ticks: { color: '#7A8BA7' }, beginAtZero: true } } }
+      });
+    }
+    // Body measurements
+    const bEl = document.getElementById('bodyChart');
+    if (bEl) {
+      if (state.chartInstances.body) state.chartInstances.body.destroy();
+      const bm = d.bodyMeasurements;
+      state.chartInstances.body = new Chart(bEl, {
+        type: 'radar', data: { labels: ['Chest','Waist','Arms','Thighs'], datasets: bm.map((b, i) => ({ label: b.date.slice(5), data: [b.chest, b.waist, b.arms, b.thighs], borderColor: ['#00E676','#40C4FF','#B388FF'][i], backgroundColor: 'transparent', borderWidth: 2, pointRadius: 4 })) },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#7A8BA7' } } }, scales: { r: { grid: { color: 'rgba(37,45,63,0.5)' }, angleLines: { color: 'rgba(37,45,63,0.5)' }, ticks: { color: '#7A8BA7', backdropColor: 'transparent' }, pointLabels: { color: '#7A8BA7' } } } }
+      });
+    }
+  },
+  view: () => {
+    const d = this.data || SEED_DATA.progress;
+    return m('div', [
+      m('.page-header.flex.flex-between.flex-c', [
+        m('div', [ m('h1', 'Progress'), m('p', 'Track your fitness journey') ]),
+        m('.layout-toggle', ['week','month','3months','year'].map(f => m('button' + (state.progressFilter === f ? '.active' : ''), { onclick: () => { state.progressFilter = f; destroyCharts(); setTimeout(() => this.renderCharts(), 50); }, style: 'font-size:12px;padding:6px 12px' }, f === '3months' ? '3M' : f.charAt(0).toUpperCase() + f.slice(1))))
+      ]),
+      m('.grid.grid-2.mb-24', [
+        m('.card.fade-up', [ m('h3.text-sm.text-muted.mb-16', { style: 'text-transform:uppercase;letter-spacing:.8px;font-weight:600' }, 'Weight History'), m('.chart-wrap', [ m('canvas#weightChart') ]) ]),
+        m('.card.fade-up', { style: 'animation-delay:.05s' }, [ m('h3.text-sm.text-muted.mb-16', { style: 'text-transform:uppercase;letter-spacing:.8px;font-weight:600' }, 'Strength Improvements'), m('.chart-wrap', [ m('canvas#strengthChart') ]) ])
+      ]),
+      m('.grid.grid-2.mb-24', [
+        m('.card.fade-up', { style: 'animation-delay:.1s' }, [ m('h3.text-sm.text-muted.mb-16', { style: 'text-transform:uppercase;letter-spacing:.8px;font-weight:600' }, 'Workout Consistency'), m('.chart-wrap', [ m('canvas#consistencyChart') ]) ]),
+        m('.card.fade-up', { style: 'animation-delay:.15s' }, [ m('h3.text-sm.text-muted.mb-16', { style: 'text-transform:uppercase;letter-spacing:.8px;font-weight:600' }, 'Body Measurements'), m('.chart-wrap', [ m('canvas#bodyChart') ]) ])
+      ]),
+      m('.grid.grid-3', [
+        { val: '20', label: 'Completed Workouts', icon: 'fa-dumbbell', color: 'var(--accent)' },
+        { val: '8,420', label: 'Calories Burned', icon: 'fa-fire', color: 'var(--accent2)' },
+        { val: '3', label: 'Personal Records', icon: 'fa-trophy', color: '#FFD600' }
+      ].map((s, i) => m('.card.fade-up', { style: 'animation-delay:' + (i * .05) + 's;text-align:center' }, [
+        m('i.fa-solid.' + s.icon, { style: `color:${s.color};font-size:28px;margin-bottom:12px;display:block` }),
+        m('div', { style: 'font-family:var(--font-d);font-size:28px;font-weight:900' }, s.val),
+        m('.text-sm.text-muted', s.label)
+      ])))
+    ]);
+  }
+};
+
+// ========== NUTRITION ==========
+const Nutrition = {
+  oninit: async () => { this.data = await db.nutrition.get(1); },
+  view: () => {
+    const d = this.data || SEED_DATA.nutrition;
+    const calPct = Math.round((d.today.calories / d.dailyGoals.calories) * 100);
+    const proPct = Math.round((d.today.protein / d.dailyGoals.protein) * 100);
+    const carbPct = Math.round((d.today.carbs / d.dailyGoals.carbs) * 100);
+    const fatPct = Math.round((d.today.fat / d.dailyGoals.fat) * 100);
+    const waterPct = Math.round((d.today.water / d.dailyGoals.water) * 100);
+    return m('div', [
+      m('.page-header.flex.flex-between.flex-c', [
+        m('div', [ m('h1', 'Nutrition'), m('p', 'Track your daily nutrition') ]),
+        m('.btn.btn-primary.btn-sm', { onclick: () => state.modal = { type: 'addMeal' } }, [ m('i.fa-solid fa-plus'), ' Quick Add' ])
+      ]),
+      // Calorie ring + macros
+      m('.grid.grid-2.mb-24', [
+        m('.card.fade-up', { style: 'display:flex;flex-direction:column;align-items:center;justify-content:center;padding:28px' }, [
+          m('.macro-ring', [ m('canvas', { width: 160, height: 160, id: 'calRing', oncreate: (vn) => {
+            const ctx = vn.dom.getContext('2d'); const cx = 80, cy = 80, r = 65, lw = 12;
+            ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.strokeStyle = '#252D3F'; ctx.lineWidth = lw; ctx.stroke();
+            ctx.beginPath(); ctx.arc(cx, cy, r, -Math.PI / 2, -Math.PI / 2 + (Math.PI * 2 * calPct / 100)); ctx.strokeStyle = '#FF6D00'; ctx.lineWidth = lw; ctx.lineCap = 'round'; ctx.stroke();
+          }}), m('.macro-val', d.today.calories), m('br'), m('.macro-unit', '/ ' + d.dailyGoals.calories + ' kcal') ]),
+          m('.text-sm.text-muted.mt-12', 'Calories')
+        ]),
+        m('.grid.grid-2.gap-12', [
+          [{ label:'Protein', val:d.today.protein, max:d.dailyGoals.protein, pct:proPct, color:'var(--accent)' },
+           { label:'Carbs', val:d.today.carbs, max:d.dailyGoals.carbs, pct:carbPct, color:'var(--accent2)' },
+           { label:'Fat', val:d.today.fat, max:d.dailyGoals.fat, pct:fatPct, color:'var(--purple)' },
+           { label:'Water', val:d.today.water, max:d.dailyGoals.water, pct:waterPct, color:'var(--info)' }
+          ].map((m, i) => m('.card.fade-up', { style: 'animation-delay:' + (i * .05) + 's;text-align:center' }, [
+            m('.text-xs.text-muted', m.label),
+            m('div', { style: 'font-family:var(--font-d);font-size:22px;font-weight:800;margin:6px 0;color:' + m.color }, m.val + (m.label === 'Water' ? '' : 'g')),
+            m('.progress-bar', [ m('.progress-fill', { style: `width:${Math.min(100, m.pct)}%;background:${m.color}` }) ]),
+            m('.text-xs.text-muted.mt-4', Math.min(100, m.pct) + '%')
+          ])))
+        ])
+      ]),
+      // Meals
+      m('h2.mb-16', { style: 'font-size:20px' }, 'Today\'s Meals'),
+      m('.flex.flex-column.gap-12.mb-24', d.meals.map((m, i) => m('.meal-card.fade-up', { style: 'animation-delay:' + (i * .06) + 's' }, [
+        m('.meal-icon', { style: `background:${m.color}20;color:${m.color}` }, m('i.fa-solid.' + m.icon)),
+        m('.meal-info', [ m('h4', m.type + ' — ' + m.time), m('p', m.items.join(', ')) ]),
+        m('.meal-cal', m.calories + ' kcal')
+      ]))),
+      // Actions
+      m('.grid.grid-3.gap-12', [
+        m('.btn.btn-secondary.btn-block', { onclick: () => state.modal = { type: 'searchFood' } }, [ m('i.fa-solid fa-search'), ' Search Food' ]),
+        m('.btn.btn-secondary.btn-block', { onclick: () => showToast('Barcode scanner coming soon!', 'info') }, [ m('i.fa-solid fa-barcode'), ' Scan Barcode' ]),
+        m('.btn.btn-primary.btn-block', { onclick: () => state.modal = { type: 'addMeal' } }, [ m('i.fa-solid fa-plus'), ' Add Meal' ])
+      ])
+    ]);
+  }
+};
+
+// ========== HEALTH TRACKING ==========
+const Health = {
+  oninit: async () => { this.data = await db.health.get(1); this.user = await db.user.get(1); },
+  view: () => {
+    const d = this.data || SEED_DATA.health;
+    const u = this.user || SEED_DATA.user;
+    const bmi = (u.weight / ((u.height / 100) ** 2)).toFixed(1);
+    const cards = [
+      { id: 'weight', title: 'Weight', value: u.weight + ' kg', icon: 'fa-weight-scale', color: 'var(--accent)', detail: 'Last: ' + d.weight[d.weight.length - 1].date },
+      { id: 'bodyfat', title: 'Body Fat', value: u.bodyFat + '%', icon: 'fa-person', color: 'var(--accent2)', detail: 'Last: ' + d.bodyFat[d.bodyFat.length - 1].date },
+      { id: 'bmi', title: 'BMI', value: bmi, icon: 'fa-calculator', color: 'var(--info)', detail: parseFloat(bmi) < 25 ? 'Normal' : 'Overweight' },
+      { id: 'sleep', title: 'Sleep', value: d.sleep[d.sleep.length - 1].value + ' hrs', icon: 'fa-bed', color: 'var(--purple)', detail: 'Last night' },
+      { id: 'heartrate', title: 'Heart Rate', value: d.heartRate[d.heartRate.length - 1].value + ' bpm', icon: 'fa-heartbeat', color: 'var(--danger)', detail: 'Resting' },
+      { id: 'bp', title: 'Blood Pressure', value: d.bloodPressure[d.bloodPressure.length - 1].systolic + '/' + d.bloodPressure[d.bloodPressure.length - 1].diastolic, icon: 'fa-gauge-high', color: 'var(--accent2)', detail: 'mmHg' },
+      { id: 'mood', title: 'Mood', value: ['', '', '', '', '', 'Great'][d.mood[d.mood.length - 1].value], icon: 'fa-face-smile', color: '#FFD600', detail: d.mood[d.mood.length - 1].value + '/5' },
+      { id: 'energy', title: 'Energy Level', value: d.energy[d.energy.length - 1].value + '/10', icon: 'fa-bolt', color: 'var(--accent)', detail: 'Today' }
+    ];
+    return m('div', [
+      m('.page-header', [ m('h1', 'Health Tracking'), m('p', 'Monitor your health metrics') ]),
+      m('.grid.grid-2.gap-16', cards.map((c, i) => m('.health-card.fade-up', { style: 'animation-delay:' + (i * .04) + 's', onclick: () => state.modal = { type: 'healthDetail', data: c, healthData: d } }, [
+        m('.hc-icon', { style: `background:${c.color}15;color:${c.color}` }, m('i.fa-solid.' + c.icon)),
+        m('.hc-info', [ m('h4', c.title), m('p', c.detail) ]),
+        m('div', { style: 'font-family:var(--font-d);font-size:20px;font-weight:800;flex-shrink:0' }, c.value),
+        m('i.fa-solid.fa-chevron-right.text-muted', { style: 'font-size:12px' })
+      ])))
+    ]);
+  }
+};
+
+// ========== MESSAGES ==========
+const Messages = {
+  oninit: async () => { this.conversations = await db.messages.toArray(); if (!state.selectedConversation && this.conversations.length) state.selectedConversation = this.conversations[0].id; },
+  view: () => {
+    const convs = this.conversations || SEED_DATA.messages;
+    const active = convs.find(c => c.id === state.selectedConversation) || convs[0];
+    return m('div', [
+      m('.page-header', [ m('h1', 'Messages'), m('p', 'Chat with your trainers') ]),
+      m('.chat-layout', [
+        m('.chat-list', [
+          m('div', { style: 'padding:12px 16px;border-bottom:1px solid var(--border)' }, m('input', { placeholder: 'Search conversations...', style: 'font-size:13px' })),
+          convs.map(c => m('.chat-item' + (state.selectedConversation === c.id ? '.active' : ''), { onclick: () => { state.selectedConversation = c.id; m.redraw(); } }, [
+            m('.chat-avatar', { style: `background-image:url(${c.trainerAvatar})` }, c.online ? m('.online-dot') : null),
+            m('.chat-preview', [ m('h4', c.trainerName), m('p', c.messages[c.messages.length - 1].text) ]),
+            m('div', { style: 'display:flex;flex-direction:column;align-items:flex-end;gap:4px' }, [
+              m('.chat-time', c.messages[c.messages.length - 1].time),
+              c.unread > 0 ? m('.unread-badge', c.unread) : null
+            ])
+          ]))
+        ]),
+        active ? m('.chat-main', [
+          m('.flex.flex-c.gap-12', { style: 'padding:14px 16px;border-bottom:1px solid var(--border)' }, [
+            m('img', { src: active.trainerAvatar, style: 'width:36px;height:36px;border-radius:50%;object-fit:cover' }),
+            m('div', [ m('h4', { style: 'font-size:15px;font-weight:600' }, active.trainerName), m('.text-xs', { style: 'color:' + (active.online ? 'var(--accent)' : 'var(--text3)') }, active.online ? 'Online' : 'Offline') ])
+          ]),
+          m('.chat-messages', active.messages.map(msg => m('.msg.' + msg.from, [
+            msg.text,
+            m('.msg-time', msg.time),
+            msg.from === 'trainer' && msg.text.includes('form') ? m('img.msg-img', { src: 'https://picsum.photos/seed/formtip/400/250' }) : null
+          ])),
+          // Typing indicator
+          active.online ? m('.flex.gap-8', { style: 'padding:4px 20px' }, [ m('.typing-dot'), m('.typing-dot'), m('.typing-dot') ]) : null,
+          m('.chat-input-wrap', [
+            m('input', { placeholder: 'Type a message...', value: state.messageInput[active.id] || '', oninput: (e) => { state.messageInput[active.id] = e.target.value; }, onkeydown: (e) => {
+              if (e.key === 'Enter' && state.messageInput[active.id]?.trim()) {
+                const text = state.messageInput[active.id].trim();
+                db.messages.get(active.id).then(c => {
+                  c.messages.push({ id: Date.now(), from: 'user', text, time: 'Just now', date: new Date().toISOString().slice(0, 10) });
+                  db.messages.put(c);
+                  this.conversations = this.conversations.map(x => x.id === c.id ? c : x);
+                  state.messageInput[active.id] = '';
+                  m.redraw();
+                });
+              }
+            }}),
+            m('.btn-icon', { style: 'background:var(--accent);border-color:var(--accent);color:#0B0E13' }, m('i.fa-solid fa-paper-plane'))
+          ])
+        ]) : m('.chat-main', { style: 'display:flex;align-items:center;justify-content:center' }, m('.text-muted', 'Select a conversation'))
+      ])
+    ]);
+  }
+};
+
+// ========== SUBSCRIPTION ==========
+const Subscription = {
+  oninit: async () => { this.data = await db.subscription.get(1); },
+  view: () => {
+    const s = this.data || SEED_DATA.subscription;
+    return m('div', [
+      m('.page-header', [ m('h1', 'Subscription'), m('p', 'Manage your plan') ]),
+      m('.plan-card.mb-24.fade-up', [
+        m('.flex.flex-between.flex-c', [
+          m('div', [ m('.tag.tag-orange.mb-12', s.plan + ' Plan'), m('h2', { style: 'font-size:28px;font-weight:900' }, '$' + s.price + '/' + s.cycle) ]),
+          m('i.fa-solid fa-crown', { style: 'font-size:48px;color:var(--accent2);opacity:.3' })
+        ]),
+        m('.text-sm.text-muted.mt-8', 'Renews on ' + s.renewalDate + ' — Member since ' + s.startDate),
+        m('.grid.grid-3.gap-8.mt-24', s.benefits.map(b => m('.flex.flex-c.gap-8.text-sm', [ m('i.fa-solid fa-check.text-accent', { style: 'font-size:12px' }), b ])))
+      ]),
+      m('h2.mb-16', { style: 'font-size:20px' }, 'Payment History'),
+      m('.card-flat', s.history.map((h, i) => m('.flex.flex-between.flex-c', { style: 'padding:14px 0;' + (i < s.history.length - 1 ? 'border-bottom:1px solid var(--border)' : '') }, [
+        m('div', [ m('.text-sm.font-bold', h.date), m('.text-xs.text-muted', s.plan + ' Plan') ]),
+        m('.flex.flex-c.gap-12', [ m('span.font-bold', '$' + h.amount), m('.tag.tag-green.text-xs', h.status) ])
+      ]))),
+      m('.grid.grid-3.gap-12.mt-24', [
+        m('.btn.btn-primary.btn-block', { onclick: () => showToast('Upgrade options coming soon!', 'info') }, 'Upgrade Plan'),
+        m('.btn.btn-secondary.btn-block', { onclick: () => showToast('Subscription management coming soon!', 'info') }, 'Manage'),
+        m('.btn.btn-danger.btn-block', { onclick: () => { if (confirm('Cancel your subscription?')) showToast('Cancellation requested.', 'info'); } }, 'Cancel')
+      ])
+    ]);
+  }
+};
+
+// ========== PROFILE ==========
+const Profile = {
+  oninit: async () => {
+    this.user = JSON.parse(JSON.stringify(await db.user.get(1)));
+    this.editing = false;
+    this.saved = false;
+  },
+  view: () => {
+    const u = this.user;
+    return m('div', [
+      m('.page-header.flex.flex-between.flex-c', [
+        m('div', [ m('h1', 'Profile'), m('p', 'Manage your account') ]),
+        m('.btn.btn-secondary.btn-sm', { onclick: () => { this.editing = !this.editing; m.redraw(); } }, this.editing ? 'Cancel' : 'Edit Profile')
+      ]),
+      // Avatar
+      m('.flex.flex-c.gap-16.mb-24', [
+        m('img', { src: u.avatar, style: 'width:80px;height:80px;border-radius:50%;object-fit:cover;border:3px solid var(--accent)' }),
+        m('div', [ m('h2', { style: 'font-size:22px' }, u.name), m('.text-muted', u.email), m('.text-xs.text-muted.mt-4', 'Member since ' + u.joinDate) ])
+      ]),
+      // Personal Info
+      m('.card-flat.mb-24', [
+        m('h3.text-sm.text-muted.mb-16', { style: 'text-transform:uppercase;letter-spacing:.8px;font-weight:600' }, 'Personal Information'),
+        m('.form-row', [
+          m('.form-group', [ m('label', 'Full Name'), m('input', { value: u.name, disabled: !this.editing, oninput: (e) => { u.name = e.target.value; } }) ]),
+          m('.form-group', [ m('label', 'Email'), m('input', { value: u.email, disabled: !this.editing, oninput: (e) => { u.email = e.target.value; } }) ])
+        ]),
+        m('.form-row', [
+          m('.form-group', [ m('label', 'Phone'), m('input', { value: u.phone, disabled: !this.editing, oninput: (e) => { u.phone = e.target.value; } }) ]),
+          m('.form-group', [ m('label', 'Gender'), m('select', { disabled: !this.editing, onchange: (e) => { u.gender = e.target.value; } }, ['Male','Female','Other'].map(g => m('option', { value: g, selected: u.gender === g }, g))) ])
+        ])
+      ]),
+      // Fitness Goals
+      m('.card-flat.mb-24', [
+        m('h3.text-sm.text-muted.mb-16', { style: 'text-transform:uppercase;letter-spacing:.8px;font-weight:600' }, 'Fitness Goals'),
+        m('.form-row', [
+          m('.form-group', [ m('label', 'Fitness Goal'), m('select', { disabled: !this.editing, onchange: (e) => { u.fitnessGoal = e.target.value; } }, ['Build Muscle','Lose Weight','Stay Fit','Improve Endurance','Increase Flexibility'].map(g => m('option', { value: g, selected: u.fitnessGoal === g }, g))) ]),
+          m('.form-group', [ m('label', 'Activity Level'), m('select', { disabled: !this.editing, onchange: (e) => { u.activityLevel = e.target.value; } }, ['Sedentary','Light','Moderate','Active','Very Active'].map(l => m('option', { value: l, selected: u.activityLevel === l }, l))) ])
+        ]),
+        m('.form-row', [
+          m('.form-group', [ m('label', 'Height (cm)'), m('input[type=number]', { value: u.height, disabled: !this.editing, oninput: (e) => { u.height = parseFloat(e.target.value) || 0; } }) ]),
+          m('.form-group', [ m('label', 'Target Weight (kg)'), m('input[type=number]', { value: u.targetWeight, disabled: !this.editing, oninput: (e) => { u.targetWeight = parseFloat(e.target.value) || 0; } }) ])
+        ])
+      ]),
+      // Measurements
+      m('.card-flat.mb-24', [
+        m('h3.text-sm.text-muted.mb-16', { style: 'text-transform:uppercase;letter-spacing:.8px;font-weight:600' }, 'Measurements (cm)'),
+        m('.grid.grid-3.gap-12', Object.entries(u.measurements).map(([k, v]) => m('.form-group', [ m('label', k.charAt(0).toUpperCase() + k.slice(1)), m('input[type=number]', { value: v, disabled: !this.editing, oninput: (e) => { u.measurements[k] = parseFloat(e.target.value) || 0; } }) ])))
+      ]),
+      // Notifications
+      m('.card-flat.mb-24', [
+        m('h3.text-sm.text-muted.mb-16', { style: 'text-transform:uppercase;letter-spacing:.8px;font-weight:600' }, 'Notifications'),
+        ...Object.entries(u.notifications).map(([k, v]) => m('.flex.flex-between.flex-c', { style: 'padding:10px 0;border-bottom:1px solid var(--border)' }, [
+          m('span.text-sm', k.replace(/([A-Z])/g, ' $1').trim()),
+          m('.toggle-switch' + (v ? '.on' : ''), { onclick: () => { if (this.editing) { u.notifications[k] = !u.notifications[k]; m.redraw(); } } })
+        ]))
+      ]),
+      // Privacy
+      m('.card-flat.mb-24', [
+        m('h3.text-sm.text-muted.mb-16', { style: 'text-transform:uppercase;letter-spacing:.8px;font-weight:600' }, 'Privacy'),
+        m('.flex.flex-between.flex-c', { style: 'padding:10px 0;border-bottom:1px solid var(--border)' }, [ m('span.text-sm', 'Profile Visibility'), m('.toggle-switch.on') ]),
+        m('.flex.flex-between.flex-c', { style: 'padding:10px 0' }, [ m('span.text-sm', 'Share Progress'), m('.toggle-switch') ])
+      ]),
+      // Password
+      this.editing ? m('.card-flat.mb-24', [
+        m('h3.text-sm.text-muted.mb-16', { style: 'text-transform:uppercase;letter-spacing:.8px;font-weight:600' }, 'Change Password'),
+        m('.form-group', [ m('label', 'Current Password'), m('input[type=password]', { placeholder: 'Enter current password' }) ]),
+        m('.form-row', [
+          m('.form-group', [ m('label', 'New Password'), m('input[type=password]', { placeholder: 'Enter new password' }) ]),
+          m('.form-group', [ m('label', 'Confirm Password'), m('input[type=password]', { placeholder: 'Confirm new password' }) ])
+        ])
+      ]) : null,
+      // Save
+      this.editing ? m('.btn.btn-primary.btn-lg.btn-block', { onclick: async () => { await db.user.put(u); this.editing = false; showToast('Profile saved successfully!'); m.redraw(); } }, 'Save Changes') : null
+    ]);
+  }
+};
+
+// ========== NOTIFICATIONS ==========
+const Notifications = {
+  oninit: async () => { this.notifs = await db.notifications.toArray(); },
+  view: () => {
+    const notifs = this.notifs || SEED_DATA.notifications;
+    const unreadCount = notifs.filter(n => !n.read).length;
+    return m('div', [
+      m('.page-header.flex.flex-between.flex-c', [
+        m('div', [ m('h1', 'Notifications'), m('p', unreadCount + ' unread notifications') ]),
+        m('.btn.btn-secondary.btn-sm', { onclick: async () => { const all = await db.notifications.toArray(); all.forEach(n => n.read = true); await db.notifications.bulkPut(all); this.notifs = all; showToast('All marked as read'); } }, 'Mark All Read')
+      ]),
+      m('.card-flat', notifs.length === 0 ? m('.text-muted.text-center', { style: 'padding:40px' }, 'No notifications') :
+        notifs.map(n => m('.notif-item' + (n.read ? '' : '.unread'), { onclick: async () => { n.read = true; await db.notifications.put(n); m.redraw(); } }, [
+          m('.ni-icon', { style: `background:${n.color}15;color:${n.color}` }, m('i.fa-solid.' + n.icon)),
+          m('.ni-body', [ m('h4', n.title), m('p', n.text) ]),
+          m('.ni-time', n.time)
+        ]))
+      )
+    ]);
+  }
+};
+
+// ========== SUPPORT ==========
+const Support = {
+  view: () => {
+    const faqs = [
+      { q: 'How do I track my workouts?', a: 'Go to the Workouts tab, select a workout program, and tap Start. The workout player will guide you through each exercise with timers and set tracking.' },
+      { q: 'Can I customize my meal plan?', a: 'Yes! Navigate to Nutrition and use the Quick Add or Search Food features to log custom meals. Your trainer can also create personalized plans.' },
+      { q: 'How does the streak system work?', a: 'Your streak increases each day you complete at least one workout. Missing a day resets the streak. Consistency is key!' },
+      { q: 'How do I cancel my subscription?', a: 'Go to the Subscription page and tap Cancel. Your access continues until the end of the current billing period.' },
+      { q: 'Is my health data secure?', a: 'All data is stored locally on your device using encrypted storage. We never share your health information with third parties.' }
+    ];
+    return m('div', [
+      m('.page-header', [ m('h1', 'Support'), m('p', 'How can we help you?') ]),
+      m('.flex.flex-column.gap-16', [
+        m('.card.fade-up', { style: 'cursor:pointer', onclick: () => state.modal = { type: 'faq', data: faqs } }, [
+          m('.flex.flex-c.gap-16', [
+            m('.stat-icon', { style: 'background:var(--accent-d);color:var(--accent)' }, m('i.fa-solid fa-circle-question')),
+            m('div', { style: 'flex:1' }, [ m('h3', { style: 'font-size:16px' }, 'Frequently Asked Questions'), m('.text-sm.text-muted', 'Find quick answers to common questions') ]),
+            m('i.fa-solid.fa-chevron-right.text-muted')
+          ])
+        ]),
+        m('.card.fade-up', { style: 'cursor:pointer;animation-delay:.05s', onclick: () => state.modal = { type: 'ticket' } }, [
+          m('.flex.flex-c.gap-16', [
+            m('.stat-icon', { style: 'background:rgba(64,196,255,.12);color:var(--info)' }, m('i.fa-solid fa-ticket')),
+            m('div', { style: 'flex:1' }, [ m('h3', { style: 'font-size:16px' }, 'Create Support Ticket'), m('.text-sm.text-muted', 'Get help from our support team') ]),
+            m('i.fa-solid.fa-chevron-right.text-muted')
+          ])
+        ]),
+        m('.card.fade-up', { style: 'cursor:pointer;animation-delay:.1s', onclick: () => showToast('Live chat coming soon!', 'info') }, [
+          m('.flex.flex-c.gap-16', [
+            m('.stat-icon', { style: 'background:rgba(179,136,255,.12);color:var(--purple)' }, m('i.fa-solid fa-comments')),
+            m('div', { style: 'flex:1' }, [ m('h3', { style: 'font-size:16px' }, 'Live Chat'), m('.text-sm.text-muted', 'Chat with support in real-time') ]),
+            m('.tag.tag-blue.text-xs', 'Coming Soon')
+          ])
+        ]),
+        m('.card-flat.fade-up', { style: 'animation-delay:.15s' }, [
+          m('h3.text-sm.text-muted.mb-16', { style: 'text-transform:uppercase;letter-spacing:.8px;font-weight:600' }, 'Contact Information'),
+          m('.flex.flex-column.gap-12', [
+            m('.flex.flex-c.gap-12', [ m('i.fa-solid fa-envelope.text-accent'), m('span.text-sm', 'support@fitforge.com') ]),
+            m('.flex.flex-c.gap-12', [ m('i.fa-solid fa-phone.text-accent'), m('span.text-sm', '+1 (800) 555-0199') ]),
+            m('.flex.flex-c.gap-12', [ m('i.fa-solid fa-clock.text-accent'), m('span.text-sm', 'Mon-Fri, 9AM-6PM EST') ])
+          ])
+        ])
+      ])
+    ]);
+  }
+};
+
+// ========== MODALS ==========
+const Modal = {
+  view: () => {
+    const m = state.modal;
+    if (!m) return null;
+    return m('.modal-overlay', { onclick: (e) => { if (e.target === e.currentTarget) state.modal = null; } }, [
+      m('.modal', [
+        m.type === 'addMeal' ? m(AddMealModal) : null,
+        m.type === 'addWeight' ? m(AddWeightModal) : null,
+        m.type === 'searchFood' ? m(SearchFoodModal) : null,
+        m.type === 'faq' ? m(FaqModal, { faqs: m.data }) : null,
+        m.type === 'ticket' ? m(TicketModal) : null,
+        m.type === 'healthDetail' ? m(HealthDetailModal, { data: m.data, healthData: m.healthData }) : null,
+        m('.btn-icon', { style: 'position:absolute;top:16px;right:16px', onclick: () => state.modal = null }, m('i.fa-solid fa-xmark'))
+      ])
+    ]);
+  }
+};
+
+const AddMealModal = {
+  oninit: () => { this.mealType = 'Snack'; this.items = ''; this.calories = ''; },
+  view: () => m('div', [
+    m('h3', 'Log Meal'),
+    m('.form-group', [ m('label', 'Meal Type'), m('select', { onchange: (e) => { this.mealType = e.target.value; } }, ['Breakfast','Lunch','Dinner','Snacks'].map(t => m('option', t))) ]),
+    m('.form-group', [ m('label', 'Food Items'), m('textarea', { rows: 3, placeholder: 'e.g., Chicken breast, rice, salad', oninput: (e) => { this.items = e.target.value; } }) ]),
+    m('.form-group', [ m('label', 'Calories (approx)'), m('input[type=number]', { placeholder: 'e.g., 500', oninput: (e) => { this.calories = e.target.value; } }) ]),
+    m('.btn.btn-primary.btn-block.btn-lg.mt-16', { onclick: async () => {
+      if (!this.items.trim()) return showToast('Please enter food items', 'error');
+      const n = await db.nutrition.get(1);
+      n.meals.push({ id: Date.now(), type: this.mealType, icon: { Breakfast:'fa-sun', Lunch:'fa-cloud-sun', Dinner:'fa-moon', Snacks:'fa-cookie-bite' }[this.mealType], color: '#00E676', items: this.items.split(',').map(s => s.trim()), calories: parseInt(this.calories) || 0, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) });
+      n.today.calories += parseInt(this.calories) || 0;
+      await db.nutrition.put(n);
+      state.modal = null;
+      showToast('Meal logged successfully!');
+    } }, 'Log Meal')
+  ])
+};
+
+const AddWeightModal = {
+  oninit: () => { this.weight = ''; },
+  view: () => m('div', [
+    m('h3', 'Log Weight'),
+    m('.form-group', [ m('label', 'Weight (kg)'), m('input[type=number]', { step: '0.1', placeholder: 'e.g., 78.5', oninput: (e) => { this.weight = e.target.value; } }) ]),
+    m('.btn.btn-primary.btn-block.btn-lg.mt-16', { onclick: async () => {
+      if (!this.weight) return showToast('Please enter your weight', 'error');
+      const w = parseFloat(this.weight);
+      const u = await db.user.get(1); u.weight = w; await db.user.put(u);
+      const h = await db.health.get(1);
+      h.weight.push({ date: new Date().toISOString().slice(0, 10), value: w });
+      await db.health.put(h);
+      state.modal = null;
+      showToast('Weight updated to ' + w + ' kg!');
+    } }, 'Save Weight')
+  ])
+};
+
+const SearchFoodModal = {
+  oninit: () => { this.query = ''; this.results = []; this.searched = false; },
+  view: () => {
+    const foods = ['Chicken Breast (100g)','Brown Rice (1 cup)','Banana','Greek Yogurt (170g)','Salmon Fillet (150g)','Sweet Potato (medium)','Almonds (28g)','Egg (large)','Oatmeal (1 cup)','Avocado (half)','Broccoli (1 cup)','Protein Shake'];
+    const filtered = this.query ? foods.filter(f => f.toLowerCase().includes(this.query.toLowerCase())) : [];
+    return m('div', [
+      m('h3', 'Search Food'),
+      m('.form-group', [ m('input', { placeholder: 'Search foods...', value: this.query, oninput: (e) => { this.query = e.target.value; this.searched = true; } }) ]),
+      this.searched ? m('.flex.flex-column.gap-8', { style: 'max-height:300px;overflow-y:auto' },
+        filtered.length === 0 ? m('.text-muted.text-center', { style: 'padding:20px' }, 'No foods found') :
+        filtered.map(f => m('.flex.flex-between.flex-c', { style: 'padding:10px 12px;background:var(--bg2);border-radius:var(--rs);cursor:pointer', onclick: () => { state.modal = { type: 'addMeal' }; showToast(f + ' selected', 'info'); } }, [
+          m('span.text-sm', f), m('i.fa-solid fa-plus.text-accent')
+        ]))
+      ) : m('.text-muted.text-sm.text-center', { style: 'padding:20px' }, 'Type to search for foods')
+    ]);
+  }
+};
+
+const FaqModal = {
+  view: ({ attrs: { faqs } }) => m('div', [
+    m('h3', 'Frequently Asked Questions'),
+    m('.flex.flex-column.gap-12', faqs.map((faq, i) => m('div', { style: 'border-bottom:1px solid var(--border);padding-bottom:12px' }, [
+      m('.text-sm.font-bold', { style: 'color:var(--accent)' }, faq.q),
+      m('.text-sm.text-muted.mt-8', faq.a)
+    ])))
+  ])
+};
+
+const TicketModal = {
+  oninit: () => { this.subject = ''; this.message = ''; },
+  view: () => m('div', [
+    m('h3', 'Create Support Ticket'),
+    m('.form-group', [ m('label', 'Subject'), m('input', { placeholder: 'Brief description', oninput: (e) => { this.subject = e.target.value; } }) ]),
+    m('.form-group', [ m('label', 'Message'), m('textarea', { rows: 4, placeholder: 'Describe your issue...', oninput: (e) => { this.message = e.target.value; } }) ]),
+    m('.btn.btn-primary.btn-block.btn-lg.mt-16', { onclick: () => {
+      if (!this.subject.trim() || !this.message.trim()) return showToast('Please fill all fields', 'error');
+      state.modal = null; showToast('Ticket submitted! We\'ll respond within 24 hours.');
+    } }, 'Submit Ticket')
+  ])
+};
+
+const HealthDetailModal = {
+  oninit: async (vnode) => { this.entry = ''; this.data = vnode.attrs.data; this.healthData = vnode.attrs.healthData; },
+  view: () => {
+    const d = this.data;
+    let history = [];
+    if (d.id === 'weight') history = this.healthData.weight.map(e => e.date + ': ' + e.value + ' kg');
+    else if (d.id === 'bodyfat') history = this.healthData.bodyFat.map(e => e.date + ': ' + e.value + '%');
+    else if (d.id === 'sleep') history = this.healthData.sleep.map(e => e.date + ': ' + e.value + ' hrs');
+    else if (d.id === 'heartrate') history = this.healthData.heartRate.map(e => e.date + ': ' + e.value + ' bpm');
+    else if (d.id === 'bp') history = this.healthData.bloodPressure.map(e => e.date + ': ' + e.systolic + '/' + e.diastolic + ' mmHg');
+    else if (d.id === 'mood') history = this.healthData.mood.map(e => e.date + ': ' + e.value + '/5');
+    else if (d.id === 'energy') history = this.healthData.energy.map(e => e.date + ': ' + e.value + '/10');
+    return m('div', [
+      m('.flex.flex-c.gap-16.mb-24', [
+        m('.hc-icon', { style: `background:${d.color}15;color:${d.color};width:56px;height:56px;font-size:24px` }, m('i.fa-solid.' + d.icon)),
+        m('div', [ m('h3', d.title), m('div', { style: 'font-family:var(--font-d);font-size:28px;font-weight:900;color:' + d.color }, d.value) ])
+      ]),
+      m('h4.text-sm.text-muted.mb-12', { style: 'text-transform:uppercase;letter-spacing:.5px' }, 'History'),
+      m('.flex.flex-column.gap-8.mb-24', { style: 'max-height:200px;overflow-y:auto' },
+        history.length > 0 ? history.map(h => m('.text-sm', { style: 'padding:8px 12px;background:var(--bg2);border-radius:var(--rs)' }, h)) : m('.text-muted.text-sm', 'No history recorded'))
+      ,
+      d.id !== 'bmi' ? m('.form-group', [ m('label', 'Add New Entry'), m('input', { placeholder: 'Enter value', type: 'number', step: '0.1', oninput: (e) => { this.entry = e.target.value; } }) ]) : null,
+      d.id !== 'bmi' ? m('.btn.btn-primary.btn-block', { onclick: async () => {
+        if (!this.entry) return showToast('Please enter a value', 'error');
+        const h = await db.health.get(1);
+        const today = new Date().toISOString().slice(0, 10);
+        const val = parseFloat(this.entry);
+        if (d.id === 'weight') { h.weight.push({ date: today, value: val }); const u = await db.user.get(1); u.weight = val; await db.user.put(u); }
+        else if (d.id === 'bodyfat') { h.bodyFat.push({ date: today, value: val }); const u = await db.user.get(1); u.bodyFat = val; await db.user.put(u); }
+        else if (d.id === 'sleep') h.sleep.push({ date: today, value: val });
+        else if (d.id === 'heartrate') h.heartRate.push({ date: today, value: val });
+        else if (d.id === 'bp') h.bloodPressure.push({ date: today, systolic: Math.round(val), diastolic: Math.round(val * 0.65) });
+        else if (d.id === 'mood') h.mood.push({ date: today, value: Math.min(5, Math.max(1, Math.round(val))) });
+        else if (d.id === 'energy') h.energy.push({ date: today, value: Math.min(10, Math.max(1, Math.round(val))) });
+        await db.health.put(h);
+        state.modal = null;
+        showToast('Entry added successfully!');
+      } }, 'Add Entry') : null
+    ]);
+  }
+};
+
+// ========== TOASTS ==========
+const Toasts = {
+  view: () => m('.toast-container', state.toasts.map(t => m('.toast.toast-' + t.type, [
+    m('i.fa-solid.' + (t.type === 'success' ? 'fa-check-circle' : t.type === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle')),
+    t.msg
+  ])))
+};
+
+// ========== ROUTER ==========
+function resolveRoute() {
+  const r = state.currentRoute;
+  if (r.startsWith('workoutDetail/')) return { component: WorkoutDetail, attrs: { id: r.split('/')[1] } };
+  const map = { dashboard: Dashboard, workouts: Workouts, progress: Progress, nutrition: Nutrition, health: Health, messages: Messages, subscription: Subscription, profile: Profile, notifications: Notifications, support: Support };
+  return map[r] ? { component: map[r], attrs: {} } : { component: Dashboard, attrs: {} };
+}
+
+// ========== MAIN APP ==========
+const App = {
+  oninit: async () => { await initApp(); },
+  view: () => {
+    const route = resolveRoute();
+    return m('.app-wrap', [
+      m(Sidebar),
+      m('main.main', [
+        m(route.component, route.attrs)
+      ]),
+      state.workoutPlayer ? m(WorkoutPlayer) : null,
+      state.celebration ? m(Celebration) : null,
+      state.modal ? m(Modal) : null,
+      m(Toasts),
+      m(BottomNav),
+      // Sidebar overlay for mobile
+      state.sidebarOpen ? m('.modal-overlay', { style: 'z-index:99', onclick: () => { state.sidebarOpen = false; } }) : null
+    ]);
+  }
+};
+
+// ========== BOOT ==========
+initApp().then(() => {
+  m.mount(document.getElementById('app'), App);
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FitForge — Admin Panel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<script src="https://cdn.jsdelivr.net/npm/mithril@2.2.2/mithril.min.js"></script>
+<script src="https://unpkg.com/dexie@3.2.7/dist/dexie.js"></script>
+<style>
+:root{--bg:#090C10;--bg2:#0F1319;--card:#151B27;--card-h:#1B2233;--border:#232D40;--text:#E4E8ED;--text2:#6E7F99;--text3:#3E4C63;--accent:#00E676;--accent-d:rgba(0,230,118,.12);--warn:#FFB300;--danger:#FF5252;--info:#40C4FF;--purple:#B388FF;--orange:#FF6D00;--r:12px;--rs:8px;--sh:0 4px 24px rgba(0,0,0,.4);--font-d:'Outfit',sans-serif;--font-b:'DM Sans',sans-serif;--sidebar-w:260px}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:var(--font-b);background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;-webkit-font-smoothing:antialiased}
+::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+h1,h2,h3,h4,h5,h6{font-family:var(--font-d);font-weight:700;line-height:1.2}
+button{font-family:var(--font-b);cursor:pointer;border:none;outline:none;background:none;color:inherit}
+input,textarea,select{font-family:var(--font-b);background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:var(--rs);padding:9px 13px;width:100%;transition:border .2s;font-size:13px}
+input:focus,textarea:focus,select:focus{outline:none;border-color:var(--accent)}
+select option{background:var(--bg2);color:var(--text)}
+a{color:inherit;text-decoration:none}
+.app{display:flex;min-height:100vh}
+.sidebar{width:var(--sidebar-w);background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;position:fixed;top:0;left:0;bottom:0;z-index:50;overflow-y:auto}
+.sidebar .brand{padding:24px 20px 20px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--border)}
+.sidebar .brand .logo{width:38px;height:38px;background:linear-gradient(135deg,var(--accent),#009E4F);border-radius:10px;display:flex;align-items:center;justify-content:center;font-family:var(--font-d);font-weight:900;font-size:16px;color:#090C10;flex-shrink:0}
+.sidebar .brand span{font-family:var(--font-d);font-weight:800;font-size:18px;letter-spacing:-.3px}
+.sidebar .brand small{display:block;font-size:10px;color:var(--text3);font-weight:500;letter-spacing:.5px;text-transform:uppercase}
+.sidebar nav{flex:1;padding:12px 10px}
+.sidebar .nav-label{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;font-weight:700;padding:16px 12px 6px}
+.sidebar .nav-btn{width:100%;display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:var(--rs);font-size:13px;font-weight:500;color:var(--text2);transition:all .15s;margin-bottom:2px;text-align:left}
+.sidebar .nav-btn:hover{background:var(--card);color:var(--text)}
+.sidebar .nav-btn.active{background:var(--accent-d);color:var(--accent);font-weight:600}
+.sidebar .nav-btn i{width:18px;text-align:center;font-size:14px}
+.sidebar .nav-btn .count{margin-left:auto;background:var(--card);padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;color:var(--text3)}
+.sidebar .nav-btn.active .count{background:rgba(0,230,118,.2);color:var(--accent)}
+.main{margin-left:var(--sidebar-w);flex:1;padding:28px 32px;min-height:100vh}
+.topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:28px}
+.topbar h1{font-size:26px;font-weight:800}
+.topbar p{color:var(--text2);font-size:13px;margin-top:2px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:20px}
+.card-flat{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:20px}
+.btn{display:inline-flex;align-items:center;gap:7px;padding:9px 18px;border-radius:var(--rs);font-weight:600;font-size:13px;transition:all .15s;justify-content:center;white-space:nowrap}
+.btn-primary{background:var(--accent);color:#090C10}.btn-primary:hover{background:#00F080;box-shadow:0 0 20px rgba(0,230,118,.25)}
+.btn-secondary{background:var(--bg2);border:1px solid var(--border);color:var(--text)}.btn-secondary:hover{border-color:var(--text2)}
+.btn-danger{background:rgba(255,82,82,.12);color:var(--danger);border:1px solid rgba(255,82,82,.2)}.btn-danger:hover{background:rgba(255,82,82,.22)}
+.btn-sm{padding:6px 12px;font-size:12px}
+.btn-icon{width:36px;height:36px;padding:0;display:flex;align-items:center;justify-content:center;border-radius:var(--rs);background:var(--bg2);border:1px solid var(--border);font-size:13px;transition:all .15s}
+.btn-icon:hover{border-color:var(--accent);color:var(--accent)}
+.btn-icon.danger:hover{border-color:var(--danger);color:var(--danger)}
+.btn-block{width:100%}
+.btn-lg{padding:14px 28px;font-size:15px}
+.tag{display:inline-flex;align-items:center;padding:3px 9px;border-radius:20px;font-size:10px;font-weight:700;letter-spacing:.3px;text-transform:uppercase}
+.tag-green{background:var(--accent-d);color:var(--accent)}
+.tag-orange{background:rgba(255,109,0,.12);color:var(--orange)}
+.tag-red{background:rgba(255,82,82,.12);color:var(--danger)}
+.tag-blue{background:rgba(64,196,255,.12);color:var(--info)}
+.tag-purple{background:rgba(179,136,255,.12);color:var(--purple)}
+.tag-yellow{background:rgba(255,179,0,.12);color:var(--warn)}
+.table-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:var(--r);background:var(--card)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+thead{background:var(--bg2)}
+th{padding:12px 16px;text-align:left;font-weight:600;color:var(--text2);font-size:11px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);white-space:nowrap}
+td{padding:12px 16px;border-bottom:1px solid var(--border);vertical-align:middle}
+tbody tr{transition:background .1s}
+tbody tr:hover{background:var(--card-h)}
+tbody tr:last-child td{border-bottom:none}
+.table-actions{display:flex;gap:6px;justify-content:flex-end}
+.stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:28px}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:20px;display:flex;align-items:center;gap:16px}
+.stat-card .sc-icon{width:48px;height:48px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
+.stat-card .sc-val{font-family:var(--font-d);font-size:26px;font-weight:800;line-height:1}
+.stat-card .sc-label{font-size:11px;color:var(--text2);margin-top:2px;text-transform:uppercase;letter-spacing:.5px;font-weight:600}
+.form-group{margin-bottom:16px}
+.form-group label{display:block;font-size:11px;font-weight:700;color:var(--text2);margin-bottom:5px;text-transform:uppercase;letter-spacing:.5px}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.form-row-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
+.form-row-4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px}
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:200;display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(4px)}
+.modal{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:28px;width:100%;max-width:560px;max-height:85vh;overflow-y:auto;position:relative}
+.modal.wide{max-width:720px}
+.modal h3{font-size:20px;font-weight:800;margin-bottom:20px;padding-right:32px}
+.toolbar{display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap}
+.toolbar .search-box{position:relative;flex:1;max-width:320px}
+.toolbar .search-box input{padding-left:36px}
+.toolbar .search-box i{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:13px}
+.toolbar .filter-select{min-width:150px}
+.toast-container{position:fixed;top:20px;right:20px;z-index:400;display:flex;flex-direction:column;gap:8px}
+.toast{padding:13px 18px;border-radius:var(--rs);font-size:13px;font-weight:500;animation:slideIn .3s ease;box-shadow:var(--sh);display:flex;align-items:center;gap:10px;min-width:260px}
+.toast-success{background:#0D2818;border:1px solid rgba(0,230,118,.3);color:var(--accent)}
+.toast-error{background:#2D0D0D;border:1px solid rgba(255,82,82,.3);color:var(--danger)}
+@keyframes slideIn{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}
+@keyframes fadeUp{from{transform:translateY(16px);opacity:0}to{transform:translateY(0);opacity:1}}
+.fade-up{animation:fadeUp .4s ease both}
+.pagination{display:flex;align-items:center;gap:6px;justify-content:flex-end;margin-top:16px}
+.pg-btn{width:34px;height:34px;display:flex;align-items:center;justify-content:center;border-radius:var(--rs);font-size:12px;font-weight:600;background:var(--bg2);border:1px solid var(--border);color:var(--text2);transition:all .15s}
+.pg-btn:hover{border-color:var(--accent);color:var(--accent)}
+.pg-btn.active{background:var(--accent);color:#090C10;border-color:var(--accent)}
+.pg-info{font-size:12px;color:var(--text3);margin-right:8px}
+.confirm-body{text-align:center;padding:10px 0}
+.confirm-body i{font-size:48px;margin-bottom:16px;display:block}
+.confirm-body h4{font-size:18px;margin-bottom:8px}
+.confirm-body p{color:var(--text2);font-size:14px;margin-bottom:24px}
+.confirm-actions{display:flex;gap:10px;justify-content:center}
+@media(max-width:1100px){.stats-row{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:768px){.sidebar{transform:translateX(-100%)}.sidebar.open{transform:translateX(0)}.main{margin-left:0;padding:16px}.stats-row{grid-template-columns:1fr 1fr}.form-row,.form-row-3,.form-row-4{grid-template-columns:1fr}.toolbar{flex-direction:column;align-items:stretch}.toolbar .search-box{max-width:100%}}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+var db = new Dexie('FitForgeAdminDB');
+db.version(1).stores({
+  admins:'++id,name,email,role', trainers:'++id,name,email,specialty,online',
+  users:'++id,name,email,plan,status', workouts:'++id,title,difficulty',
+  exercises:'++id,workoutId,name', foods:'++id,name,category',
+  meals:'++id,userId,type,date', healthEntries:'++id,userId,type,date',
+  billing:'++id,userId,plan,status,date'
+});
+
+var SEED = {
+  admins:[
+    {id:1,name:'Super Admin',email:'admin@fitforge.com',role:'Super Admin',avatar:'https://picsum.photos/seed/admin1/100/100',lastLogin:'2025-01-07 09:15'},
+    {id:2,name:'John Doe',email:'john@fitforge.com',role:'Moderator',avatar:'https://picsum.photos/seed/admin2/100/100',lastLogin:'2025-01-06 14:30'}
+  ],
+  trainers:[
+    {id:1,name:'Sarah Chen',email:'sarah@fitforge.com',specialty:'Strength & Conditioning',phone:'+1 555-0101',online:true,avatar:'https://picsum.photos/seed/sarah/100/100',clients:24,rating:4.9,joined:'2023-06-15'},
+    {id:2,name:'Mike Torres',email:'mike@fitforge.com',specialty:'Mobility & Recovery',phone:'+1 555-0102',online:false,avatar:'https://picsum.photos/seed/mike/100/100',clients:18,rating:4.7,joined:'2023-09-01'},
+    {id:3,name:'Lisa Park',email:'lisa@fitforge.com',specialty:'HIIT & Cardio',phone:'+1 555-0103',online:true,avatar:'https://picsum.photos/seed/lisa/100/100',clients:31,rating:4.8,joined:'2023-03-20'},
+    {id:4,name:'David Kim',email:'david@fitforge.com',specialty:'Nutrition & Weight Loss',phone:'+1 555-0104',online:false,avatar:'https://picsum.photos/seed/david/100/100',clients:22,rating:4.6,joined:'2024-01-10'}
+  ],
+  users:[
+    {id:1,name:'Alex Morgan',email:'alex@fitforge.com',plan:'Pro',status:'Active',avatar:'https://picsum.photos/seed/alexmorgan/100/100',joined:'2024-01-15',workouts:48,weight:78.5,trainerId:1},
+    {id:2,name:'Jamie Lee',email:'jamie@fitforge.com',plan:'Free',status:'Active',avatar:'https://picsum.photos/seed/jamie/100/100',joined:'2024-06-20',workouts:12,weight:65.2,trainerId:2},
+    {id:3,name:'Sam Wilson',email:'sam@fitforge.com',plan:'Pro',status:'Active',avatar:'https://picsum.photos/seed/sam/100/100',joined:'2024-03-10',workouts:67,weight:88.1,trainerId:3},
+    {id:4,name:'Taylor Brooks',email:'taylor@fitforge.com',plan:'Team',status:'Active',avatar:'https://picsum.photos/seed/taylor/100/100',joined:'2024-08-05',workouts:29,weight:72.0,trainerId:1},
+    {id:5,name:'Jordan Riley',email:'jordan@fitforge.com',plan:'Pro',status:'Suspended',avatar:'https://picsum.photos/seed/jordan/100/100',joined:'2024-04-18',workouts:35,weight:91.3,trainerId:4},
+    {id:6,name:'Casey Nguyen',email:'casey@fitforge.com',plan:'Free',status:'Inactive',avatar:'https://picsum.photos/seed/casey/100/100',joined:'2024-09-12',workouts:3,weight:58.7,trainerId:null}
+  ],
+  workouts:[
+    {id:1,title:'Upper Body Power',difficulty:'Intermediate',duration:45,muscleGroups:'Chest, Shoulders, Triceps',trainerId:1,assignedCount:24,image:'https://picsum.photos/seed/upperpower/100/100'},
+    {id:2,title:'Leg Day Destroyer',difficulty:'Advanced',duration:55,muscleGroups:'Quads, Hamstrings, Glutes',trainerId:1,assignedCount:18,image:'https://picsum.photos/seed/legday/100/100'},
+    {id:3,title:'Core & Cardio Blast',difficulty:'Beginner',duration:30,muscleGroups:'Core, Cardio',trainerId:3,assignedCount:31,image:'https://picsum.photos/seed/corecardio/100/100'},
+    {id:4,title:'Pull Day Strength',difficulty:'Intermediate',duration:50,muscleGroups:'Back, Biceps, Rear Delts',trainerId:1,assignedCount:20,image:'https://picsum.photos/seed/pullday/100/100'},
+    {id:5,title:'HIIT Express',difficulty:'Advanced',duration:25,muscleGroups:'Full Body, Cardio',trainerId:3,assignedCount:28,image:'https://picsum.photos/seed/hiit/100/100'},
+    {id:6,title:'Mobility & Recovery',difficulty:'Beginner',duration:20,muscleGroups:'Full Body, Flexibility',trainerId:2,assignedCount:15,image:'https://picsum.photos/seed/mobility/100/100'}
+  ],
+  exercises:[
+    {id:1,workoutId:1,name:'Barbell Bench Press',sets:4,reps:8,weight:80,restTime:90,order:1},
+    {id:2,workoutId:1,name:'Incline Dumbbell Press',sets:3,reps:10,weight:30,restTime:75,order:2},
+    {id:3,workoutId:1,name:'Overhead Press',sets:4,reps:8,weight:50,restTime:90,order:3},
+    {id:4,workoutId:1,name:'Lateral Raises',sets:3,reps:15,weight:12,restTime:60,order:4},
+    {id:5,workoutId:2,name:'Barbell Squats',sets:5,reps:5,weight:100,restTime:120,order:1},
+    {id:6,workoutId:2,name:'Romanian Deadlifts',sets:4,reps:8,weight:80,restTime:90,order:2},
+    {id:7,workoutId:2,name:'Leg Press',sets:4,reps:12,weight:180,restTime:90,order:3},
+    {id:8,workoutId:3,name:'Plank Hold',sets:3,reps:60,weight:0,restTime:30,order:1},
+    {id:9,workoutId:3,name:'Mountain Climbers',sets:3,reps:30,weight:0,restTime:30,order:2},
+    {id:10,workoutId:4,name:'Deadlifts',sets:5,reps:5,weight:120,restTime:120,order:1},
+    {id:11,workoutId:4,name:'Pull-ups',sets:4,reps:8,weight:0,restTime:90,order:2},
+    {id:12,workoutId:5,name:'Box Jumps',sets:4,reps:12,weight:0,restTime:20,order:1},
+    {id:13,workoutId:5,name:'Kettlebell Swings',sets:4,reps:15,weight:20,restTime:20,order:2},
+    {id:14,workoutId:6,name:'Cat-Cow Stretch',sets:2,reps:10,weight:0,restTime:0,order:1},
+    {id:15,workoutId:6,name:'Pigeon Pose',sets:2,reps:45,weight:0,restTime:0,order:2}
+  ],
+  foods:[
+    {id:1,name:'Chicken Breast (100g)',category:'Protein',calories:165,protein:31,carbs:0,fat:3.6},
+    {id:2,name:'Brown Rice (1 cup)',category:'Grains',calories:216,protein:5,carbs:45,fat:1.8},
+    {id:3,name:'Salmon Fillet (150g)',category:'Protein',calories:312,protein:34,carbs:0,fat:18},
+    {id:4,name:'Sweet Potato (medium)',category:'Vegetables',calories:103,protein:2,carbs:24,fat:0.1},
+    {id:5,name:'Greek Yogurt (170g)',category:'Dairy',calories:100,protein:17,carbs:6,fat:0.7},
+    {id:6,name:'Banana',category:'Fruit',calories:105,protein:1.3,carbs:27,fat:0.4},
+    {id:7,name:'Almonds (28g)',category:'Nuts',calories:164,protein:6,carbs:6,fat:14},
+    {id:8,name:'Oatmeal (1 cup)',category:'Grains',calories:154,protein:5,carbs:27,fat:2.6},
+    {id:9,name:'Egg (large)',category:'Protein',calories:72,protein:6,carbs:0.4,fat:5},
+    {id:10,name:'Avocado (half)',category:'Fruit',calories:161,protein:2,carbs:9,fat:15},
+    {id:11,name:'Broccoli (1 cup)',category:'Vegetables',calories:55,protein:3.7,carbs:11,fat:0.6},
+    {id:12,name:'Whey Protein Shake',category:'Supplements',calories:120,protein:24,carbs:3,fat:1}
+  ],
+  meals:[
+    {id:1,userId:1,type:'Breakfast',items:'Oatmeal, 2 Eggs, Green Tea',calories:420,date:'2025-01-07'},
+    {id:2,userId:1,type:'Lunch',items:'Chicken Breast, Brown Rice, Salad',calories:580,date:'2025-01-07'},
+    {id:3,userId:2,type:'Breakfast',items:'Greek Yogurt, Banana',calories:205,date:'2025-01-07'},
+    {id:4,userId:3,type:'Dinner',items:'Salmon, Sweet Potato, Broccoli',calories:470,date:'2025-01-06'}
+  ],
+  healthEntries:[
+    {id:1,userId:1,type:'Weight',value:78.5,date:'2025-01-07'},
+    {id:2,userId:1,type:'Weight',value:78.8,date:'2025-01-05'},
+    {id:3,userId:1,type:'Body Fat',value:18.2,date:'2025-01-07'},
+    {id:4,userId:2,type:'Weight',value:65.2,date:'2025-01-06'},
+    {id:5,userId:3,type:'Weight',value:88.1,date:'2025-01-05'},
+    {id:6,userId:1,type:'Sleep',value:7.5,date:'2025-01-07'},
+    {id:7,userId:1,type:'Heart Rate',value:62,date:'2025-01-07'}
+  ],
+  billing:[
+    {id:1,userId:1,plan:'Pro',amount:14.99,status:'Paid',date:'2025-01-15',nextDate:'2025-02-15'},
+    {id:2,userId:1,plan:'Pro',amount:14.99,status:'Paid',date:'2024-12-15',nextDate:'2025-01-15'},
+    {id:3,userId:3,plan:'Pro',amount:14.99,status:'Paid',date:'2025-01-10',nextDate:'2025-02-10'},
+    {id:4,userId:4,plan:'Team',amount:29.99,status:'Paid',date:'2025-01-05',nextDate:'2025-02-05'},
+    {id:5,userId:5,plan:'Pro',amount:14.99,status:'Failed',date:'2025-01-12',nextDate:'2025-02-12'},
+    {id:6,userId:1,plan:'Pro',amount:14.99,status:'Refunded',date:'2024-11-15',nextDate:'2024-12-15'}
+  ]
+};
+
+function initDB(){
+  return db.admins.count().then(function(c){
+    if(c===0) return db.transaction('rw',db.admins,db.trainers,db.users,db.workouts,db.exercises,db.foods,db.meals,db.healthEntries,db.billing,function(){
+      db.admins.bulkAdd(SEED.admins);db.trainers.bulkAdd(SEED.trainers);db.users.bulkAdd(SEED.users);
+      db.workouts.bulkAdd(SEED.workouts);db.exercises.bulkAdd(SEED.exercises);db.foods.bulkAdd(SEED.foods);
+      db.meals.bulkAdd(SEED.meals);db.healthEntries.bulkAdd(SEED.healthEntries);db.billing.bulkAdd(SEED.billing);
+    });
+  });
+}
+
+var state={route:'dashboard',modal:null,confirm:null,toasts:[],search:{},filters:{},pages:{admins:1,trainers:1,users:1,workouts:1,foods:1,meals:1,healthEntries:1,billing:1},pageSize:8};
+
+function showToast(msg,type){type=type||'success';var id=Date.now();state.toasts.push({id:id,msg:msg,type:type});m.redraw();setTimeout(function(){state.toasts=state.toasts.filter(function(t){return t.id!==id;});m.redraw();},3000);}
+function diffTag(d){if(d==='Beginner')return'tag-green';if(d==='Intermediate')return'tag-orange';if(d==='Advanced')return'tag-red';return'tag-blue';}
+function statusTag(s){if(s==='Active'||s==='Paid')return'tag-green';if(s==='Suspended'||s==='Failed')return'tag-red';if(s==='Inactive')return'tag-yellow';if(s==='Refunded')return'tag-purple';return'tag-blue';}
+function planTag(p){if(p==='Pro')return'tag-green';if(p==='Team')return'tag-blue';return'tag-yellow';}
+function nav(r){state.route=r;m.redraw();window.scrollTo(0,0);}
+function openModal(t,d){state.modal={type:t,data:d?JSON.parse(JSON.stringify(d)):null};m.redraw();}
+function closeModal(){state.modal=null;m.redraw();}
+function openConfirm(m,fn){state.confirm={msg:m,onConfirm:fn};m.redraw();}
+function paginate(a,p){var s=(p-1)*state.pageSize;return a.slice(s,s+state.pageSize);}
+function pageItems(t,p){var pages=Math.ceil(t/state.pageSize),b=[];if(pages<=1)return b;if(p>1)b.push({label:'<',page:p-1});for(var i=1;i<=pages;i++){if(pages>7&&i>2&&i<pages-1&&Math.abs(i-p)>1){if(i===3||i===pages-2)b.push({label:'...',page:null});continue;}b.push({label:String(i),page:i});}if(p<pages)b.push({label:'>',page:p+1});return b;}
+function updateCount(t,c){var e=document.getElementById('count-'+t);if(e)e.textContent=String(c);}
+
+var Sidebar={
+  view:function(){
+    var sections=[
+      {label:'Main',items:[{id:'dashboard',icon:'fa-chart-pie',label:'Dashboard'}]},
+      {label:'Management',items:[{id:'admins',icon:'fa-user-shield',label:'Admins',table:'admins'},{id:'trainers',icon:'fa-user-tie',label:'Trainers',table:'trainers'},{id:'users',icon:'fa-users',label:'Users',table:'users'}]},
+      {label:'Content',items:[{id:'workouts',icon:'fa-dumbbell',label:'Workouts',table:'workouts'},{id:'foods',icon:'fa-apple-whole',label:'Food Database',table:'foods'}]},
+      {label:'Data',items:[{id:'meals',icon:'fa-utensils',label:'Meal Logs',table:'meals'},{id:'health',icon:'fa-heart-pulse',label:'Health Entries',table:'healthEntries'},{id:'billing',icon:'fa-credit-card',label:'Billing',table:'billing'}]}
+    ];
+    return m('.sidebar',[
+      m('.brand',[m('.logo','FF'),m('div',[m('span','FitForge'),m('small','Admin Panel')])]),
+      m('nav',sections.map(function(sec){
+        return m('div',[m('.nav-label',sec.label),sec.items.map(function(it){
+          var cnt=it.table?m('.count',{id:'count-'+it.table},'...'):null;
+          return m('button.nav-btn'+(state.route===it.id?'.active':''),{onclick:function(){nav(it.id);}},[m('i.fa-solid.'+it.icon),it.label,cnt]);
+        })]);
+      }))
+    ]);
+  }
+};
+
+var DashboardPage={
+  oninit:function(){var s=this;s.stats={};
+    db.admins.count().then(function(c){s.stats.admins=c;m.redraw();});
+    db.trainers.count().then(function(c){s.stats.trainers=c;m.redraw();});
+    db.users.count().then(function(c){s.stats.users=c;m.redraw();});
+    db.workouts.count().then(function(c){s.stats.workouts=c;m.redraw();});
+    db.foods.count().then(function(c){s.stats.foods=c;m.redraw();});
+    db.billing.where('status').equals('Paid').count().then(function(c){s.stats.revenue=c;m.redraw();});
+    db.users.where('status').equals('Active').count().then(function(c){s.stats.activeUsers=c;m.redraw();});
+    db.users.where('plan').equals('Pro').count().then(function(c){s.stats.proUsers=c;m.redraw();});
+    db.billing.where('status').equals('Failed').count().then(function(c){s.stats.failedPayments=c;m.redraw();});
+    db.meals.count().then(function(c){s.stats.totalMeals=c;m.redraw();});
+  },
+  view:function(){
+    var s=this.stats;
+    var cards=[
+      {icon:'fa-users',bg:'var(--accent-d)',color:'var(--accent)',val:s.users||0,label:'Total Users'},
+      {icon:'fa-user-tie',bg:'rgba(64,196,255,.12)',color:'var(--info)',val:s.trainers||0,label:'Trainers'},
+      {icon:'fa-dumbbell',bg:'rgba(255,109,0,.12)',color:'var(--orange)',val:s.workouts||0,label:'Workouts'},
+      {icon:'fa-apple-whole',bg:'rgba(179,136,255,.12)',color:'var(--purple)',val:s.foods||0,label:'Food Items'},
+      {icon:'fa-circle-check',bg:'var(--accent-d)',color:'var(--accent)',val:s.activeUsers||0,label:'Active Users'},
+      {icon:'fa-crown',bg:'rgba(255,179,0,.12)',color:'var(--warn)',val:s.proUsers||0,label:'Pro Subscribers'},
+      {icon:'fa-credit-card',bg:'rgba(255,82,82,.12)',color:'var(--danger)',val:s.failedPayments||0,label:'Failed Payments'},
+      {icon:'fa-utensils',bg:'rgba(64,196,255,.12)',color:'var(--info)',val:s.totalMeals||0,label:'Meal Logs'}
+    ];
+    return m('div',[m('.topbar',[m('div',[m('h1','Dashboard'),m('p','System overview and key metrics')])]),
+      m('.stats-row',cards.map(function(c,i){
+        return m('.stat-card.fade-up',{style:'animation-delay:'+(i*0.04)+'s'},[m('.sc-icon',{style:'background:'+c.bg+';color:'+c.color},m('i.fa-solid.'+c.icon)),m('div',[m('.sc-val',String(c.val)),m('.sc-label',c.label)])]);
+      }))
+    ]);
+  }
+};
+
+function CrudTable(config){
+  return{
+    oninit:function(){var self=this;self.items=[];self.loading=true;
+      self.refresh=function(){self.loading=true;m.redraw();db[config.table].toCollection().sortBy(config.sortKey||'id').then(function(arr){self.items=arr;self.loading=false;updateCount(config.table,arr.length);m.redraw();});};
+      self.refresh();
+    },
+    view:function(){
+      var self=this;
+      var search=(state.search[config.table]||'').toLowerCase();
+      var filtered=self.items;
+      if(search){filtered=filtered.filter(function(item){return config.searchFields.some(function(f){return String(item[f]||'').toLowerCase().indexOf(search)!==-1;});});}
+      if(config.filterField&&state.filters[config.table]){var fv=state.filters[config.table];filtered=filtered.filter(function(item){return item[config.filterField]===fv;});}
+      var page=state.pages[config.table]||1;
+      var paged=paginate(filtered,page);
+      var pages=pageItems(filtered.length,page);
+      var filterEl=null;
+      if(config.filterField){
+        var opts=config.filterOptions.map(function(o){return m('option',{value:o},o);});
+        filterEl=m('select.filter-select',{value:state.filters[config.table]||'',onchange:function(e){state.filters[config.table]=e.target.value||undefined;state.pages[config.table]=1;m.redraw();}},[m('option',{value:''},'All '+config.filterField)].concat(opts));
+      }
+      var rows=[];
+      if(paged.length===0){rows.push(m('tr',m('td',{colspan:config.columns.length+1,style:'text-align:center;padding:40px;color:var(--text3)'},'No records found')));}
+      else{paged.forEach(function(item){
+        var cells=config.columns.map(function(col){var val=item[col.key];if(col.render){val=col.render(val,item);}else if(col.tag){val=m('.'+col.tag(val),String(val));}else{val=String(val!=null?val:'\u2014');}return m('td',val);});
+        var actions=m('td',m('.table-actions',[m('button.btn-icon',{title:'Edit',onclick:function(){openModal(config.table+'-form',item);}},m('i.fa-solid.fa-pen-to-square')),m('button.btn-icon.danger',{title:'Delete',onclick:function(){openConfirm('Delete this '+config.singular+'?',function(){db[config.table].delete(item.id).then(function(){self.refresh();showToast(config.singular+' deleted');});});}},m('i.fa-solid.fa-trash-can'))]));
+        rows.push(m('tr',cells.concat([actions])));
+      });}
+      var pagEl=null;
+      if(filtered.length>state.pageSize){var pgBtns=pages.map(function(p){if(p.page){return m('button.pg-btn'+(p.page===page?'.active':''),{onclick:function(){state.pages[config.table]=p.page;m.redraw();}},p.label);}return m('span.pg-btn',{style:'cursor:default;border:none;background:none'},p.label);});var info='Showing '+((page-1)*state.pageSize+1)+'-'+Math.min(page*state.pageSize,filtered.length)+' of '+filtered.length;pagEl=m('.pagination',[m('.pg-info',info)].concat(pgBtns));}
+      var tableContent=self.loading?m('.card-flat',{style:'text-align:center;padding:60px;color:var(--text3)'},m('i.fa-solid.fa-spinner.fa-spin',{style:'font-size:24px'})):m('.table-wrap',m('table',[m('thead',m('tr',config.columns.map(function(col){return m('th',col.label);}).concat([m('th',{style:'width:120px;text-align:right'},'Actions')]))),m('tbody',rows)]));
+      return m('div',[m('.toolbar',[m('.search-box',[m('i.fa-solid.fa-magnifying-glass'),m('input',{placeholder:'Search '+config.title.toLowerCase()+'...',value:state.search[config.table]||'',oninput:function(e){state.search[config.table]=e.target.value;state.pages[config.table]=1;m.redraw();}})]),filterEl,m('div',{style:'margin-left:auto'},[m('.btn.btn-primary.btn-sm',{onclick:function(){openModal(config.table+'-form');}},[m('i.fa-solid.fa-plus'),' Add New'])])]),tableContent,pagEl]);
+    }
+  };
+}
+
+function renderAvatar(v,item,pfx){return m('.flex.flex-c.gap-10',[m('img',{src:item.avatar||'https://picsum.photos/seed/'+pfx+item.id+'/100/100',style:'width:32px;height:32px;border-radius:50%;object-fit:cover'}),m('span',{style:'font-weight:600'},v)]);}
+function renderTrainerName(v,item){return m('.flex.flex-c.gap-10',[m('img',{src:item.avatar||'https://picsum.photos/seed/t'+item.id+'/100/100',style:'width:32px;height:32px;border-radius:50%;object-fit:cover'}),m('div',[m('span',{style:'font-weight:600'},v),m('.text-xs',{style:'color:'+(item.online?'var(--accent)':'var(--text3)')},item.online?'Online':'Offline')])]);}
+function renderWorkoutTitle(v,item){return m('.flex.flex-c.gap-10',[m('img',{src:item.image||'https://picsum.photos/seed/w'+item.id+'/100/100',style:'width:36px;height:36px;border-radius:var(--rs);object-fit:cover'}),m('span',{style:'font-weight:600'},v)]);}
+function renderMealType(v){var c={Breakfast:'tag-yellow',Lunch:'tag-orange',Dinner:'tag-purple',Snacks:'tag-green'};return m('.'+(c[v]||'tag-blue'),v);}
+function renderHealthType(v){var c={Weight:'tag-green','Body Fat':'tag-orange',Sleep:'tag-purple','Heart Rate':'tag-red','Blood Pressure':'tag-blue',Mood:'tag-yellow',Energy:'tag-green'};return m('.'+(c[v]||'tag-blue'),v);}
+function renderHealthValue(v,item){var u={Weight:'kg','Body Fat':'%',Sleep:'hrs','Heart Rate':'bpm','Blood Pressure':'mmHg',Mood:'/5',Energy:'/10'};return m('span',{style:'font-weight:600'},v+' '+(u[item.type]||''));}
+
+var AdminsTable=CrudTable({table:'admins',title:'Admins',singular:'admin',sortKey:'id',searchFields:['name','email','role'],columns:[{key:'id',label:'ID'},{key:'name',label:'Name',render:function(v,i){return renderAvatar(v,i,'a');}},{key:'email',label:'Email'},{key:'role',label:'Role',render:function(v){return m('.tag.tag-purple',v);}},{key:'lastLogin',label:'Last Login'}]});
+var TrainersTable=CrudTable({table:'trainers',title:'Trainers',singular:'trainer',sortKey:'id',searchFields:['name','email','specialty'],columns:[{key:'id',label:'ID'},{key:'name',label:'Name',render:renderTrainerName},{key:'email',label:'Email'},{key:'specialty',label:'Specialty'},{key:'clients',label:'Clients',render:function(v){return m('span',{style:'font-weight:600'},String(v));}},{key:'rating',label:'Rating',render:function(v){return m('span.text-accent',{style:'font-weight:600'},v?v.toFixed(1):'\u2014');}}]});
+var UsersTable=CrudTable({table:'users',title:'Users',singular:'user',sortKey:'id',searchFields:['name','email','plan'],filterField:'status',filterOptions:['Active','Inactive','Suspended'],columns:[{key:'id',label:'ID'},{key:'name',label:'Name',render:function(v,i){return renderAvatar(v,i,'u');}},{key:'email',label:'Email'},{key:'plan',label:'Plan',tag:planTag},{key:'status',label:'Status',tag:statusTag},{key:'workouts',label:'Workouts',render:function(v){return m('span',{style:'font-weight:600'},String(v||0));}},{key:'weight',label:'Weight',render:function(v){return v?v+' kg':'\u2014';}}]});
+var WorkoutsTable=CrudTable({table:'workouts',title:'Workouts',singular:'workout',sortKey:'id',searchFields:['title','difficulty','muscleGroups'],filterField:'difficulty',filterOptions:['Beginner','Intermediate','Advanced'],columns:[{key:'id',label:'ID'},{key:'title',label:'Title',render:renderWorkoutTitle},{key:'difficulty',label:'Difficulty',tag:diffTag},{key:'duration',label:'Duration',render:function(v){return v+' min';}},{key:'muscleGroups',label:'Muscles',render:function(v){return m('span',{style:'font-size:12px;color:var(--text2)'},v);}},{key:'assignedCount',label:'Assigned',render:function(v){return m('span',{style:'font-weight:600'},String(v||0));}}]});
+var FoodsTable=CrudTable({table:'foods',title:'Foods',singular:'food item',sortKey:'id',searchFields:['name','category'],filterField:'category',filterOptions:['Protein','Grains','Vegetables','Fruit','Dairy','Nuts','Supplements'],columns:[{key:'id',label:'ID'},{key:'name',label:'Name',render:function(v){return m('span',{style:'font-weight:600'},v);}},{key:'category',label:'Category',render:function(v){return m('.tag.tag-blue',v);}},{key:'calories',label:'Calories',render:function(v){return m('span',{style:'font-weight:600'},String(v));}},{key:'protein',label:'Protein',render:function(v){return v+'g';}},{key:'carbs',label:'Carbs',render:function(v){return v+'g';}},{key:'fat',label:'Fat',render:function(v){return v+'g';}}]});
+var MealsTable=CrudTable({table:'meals',title:'Meal Logs',singular:'meal log',sortKey:'id',searchFields:['userId','type','items'],columns:[{key:'id',label:'ID'},{key:'userId',label:'User ID',render:function(v){return m('span',{style:'font-weight:600'},'User #'+v);}},{key:'type',label:'Type',render:renderMealType},{key:'items',label:'Items',render:function(v){return m('span',{style:'font-size:12px;color:var(--text2);max-width:250px;display:inline-block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis'},v);}},{key:'calories',label:'Calories',render:function(v){return m('span',{style:'font-weight:600'},String(v));}},{key:'date',label:'Date'}]});
+var HealthTable=CrudTable({table:'healthEntries',title:'Health Entries',singular:'health entry',sortKey:'id',searchFields:['userId','type'],filterField:'type',filterOptions:['Weight','Body Fat','Sleep','Heart Rate','Blood Pressure','Mood','Energy'],columns:[{key:'id',label:'ID'},{key:'userId',label:'User ID',render:function(v){return m('span',{style:'font-weight:600'},'User #'+v);}},{key:'type',label:'Type',render:renderHealthType},{key:'value',label:'Value',render:renderHealthValue},{key:'date',label:'Date'}]});
+var BillingTable=CrudTable({table:'billing',title:'Billing',singular:'billing record',sortKey:'id',searchFields:['userId','plan'],filterField:'status',filterOptions:['Paid','Failed','Refunded'],columns:[{key:'id',label:'ID'},{key:'userId',label:'User ID',render:function(v){return m('span',{style:'font-weight:600'},'User #'+v);}},{key:'plan',label:'Plan',tag:planTag},{key:'amount',label:'Amount',render:function(v){return m('span',{style:'font-weight:600'},'$'+v.toFixed(2));}},{key:'status',label:'Status',tag:statusTag},{key:'date',label:'Date'},{key:'nextDate',label:'Next Billing'}]});
+
+var AdminForm={view:function(){var d=state.modal.data||{};var isEdit=!!d.id;var roleOpts=['Super Admin','Moderator','Viewer'].map(function(r){return m('option',{value:r,selected:d.role===r},r);});return m('div',[m('h3',isEdit?'Edit Admin':'Add Admin'),m('.form-group',[m('label','Name'),m('input',{value:d.name||'',placeholder:'Full name',oninput:function(e){d.name=e.target.value;}})]),m('.form-group',[m('label','Email'),m('input[type=email]',{value:d.email||'',placeholder:'email@example.com',oninput:function(e){d.email=e.target.value;}})]),m('.form-group',[m('label','Role'),m('select',{value:d.role||'Moderator',onchange:function(e){d.role=e.target.value;}},roleOpts)]),m('.btn.btn-primary.btn-block.btn-lg.mt-16',{onclick:function(){if(!d.name||!d.email)return showToast('Name and email required','error');d.avatar=d.avatar||'https://picsum.photos/seed/admin'+Date.now()+'/100/100';d.lastLogin=d.lastLogin||new Date().toISOString().slice(0,16).replace('T',' ');var save=isEdit?db.admins.put(d):db.admins.add(d);save.then(function(){closeModal();showToast(isEdit?'Admin updated':'Admin added');});}},isEdit?'Save Changes':'Add Admin')]);}};
+
+var TrainerForm={view:function(){var d=state.modal.data||{};var isEdit=!!d.id;return m('div',[m('h3',isEdit?'Edit Trainer':'Add Trainer'),m('.form-row',[m('.form-group',[m('label','Name'),m('input',{value:d.name||'',placeholder:'Full name',oninput:function(e){d.name=e.target.value;}})]),m('.form-group',[m('label','Email'),m('input[type=email]',{value:d.email||'',placeholder:'email@example.com',oninput:function(e){d.email=e.target.value;}})])]),m('.form-row',[m('.form-group',[m('label','Specialty'),m('input',{value:d.specialty||'',placeholder:'e.g., Strength & Conditioning',oninput:function(e){d.specialty=e.target.value;}})]),m('.form-group',[m('label','Phone'),m('input',{value:d.phone||'',placeholder:'+1 555-0100',oninput:function(e){d.phone=e.target.value;}})])]),m('.form-row',[m('.form-group',[m('label','Clients'),m('input[type=number]',{value:d.clients||0,oninput:function(e){d.clients=parseInt(e.target.value)||0;}})]),m('.form-group',[m('label','Rating'),m('input[type=number]',{value:d.rating||0,step:'0.1',max:'5',oninput:function(e){d.rating=parseFloat(e.target.value)||0;}})])]),m('.form-group',[m('label','Online'),m('select',{value:d.online?'true':'false',onchange:function(e){d.online=e.target.value==='true';}},[m('option',{value:'false'},'Offline'),m('option',{value:'true'},'Online')])]),m('.btn.btn-primary.btn-block.btn-lg.mt-16',{onclick:function(){if(!d.name||!d.email)return showToast('Name and email required','error');d.avatar=d.avatar||'https://picsum.photos/seed/trainer'+Date.now()+'/100/100';d.joined=d.joined||new Date().toISOString().slice(0,10);var save=isEdit?db.trainers.put(d):db.trainers.add(d);save.then(function(){closeModal();showToast(isEdit?'Trainer updated':'Trainer added');});}},isEdit?'Save Changes':'Add Trainer')]);}};
+
+var UserForm={view:function(){var d=state.modal.data||{};var isEdit=!!d.id;var planOpts=['Free','Pro','Team'].map(function(p){return m('option',{value:p,selected:d.plan===p},p);});var statusOpts=['Active','Inactive','Suspended'].map(function(s){return m('option',{value:s,selected:d.status===s},s);});var trainerOpts=[m('option',{value:''},'None'),m('option',{value:'1'},'Sarah Chen'),m('option',{value:'2'},'Mike Torres'),m('option',{value:'3'},'Lisa Park'),m('option',{value:'4'},'David Kim')];return m('div',[m('h3',isEdit?'Edit User':'Add User'),m('.form-row',[m('.form-group',[m('label','Name'),m('input',{value:d.name||'',placeholder:'Full name',oninput:function(e){d.name=e.target.value;}})]),m('.form-group',[m('label','Email'),m('input[type=email]',{value:d.email||'',placeholder:'email@example.com',oninput:function(e){d.email=e.target.value;}})])]),m('.form-row-3',[m('.form-group',[m('label','Plan'),m('select',{value:d.plan||'Free',onchange:function(e){d.plan=e.target.value;}},planOpts)]),m('.form-group',[m('label','Status'),m('select',{value:d.status||'Active',onchange:function(e){d.status=e.target.value;}},statusOpts)]),m('.form-group',[m('label','Weight (kg)'),m('input[type=number]',{value:d.weight||'',step:'0.1',oninput:function(e){d.weight=parseFloat(e.target.value)||null;}})])]),m('.form-group',[m('label','Assigned Trainer'),m('select',{value:d.trainerId||'',onchange:function(e){d.trainerId=e.target.value?parseInt(e.target.value):null;}},trainerOpts)]),m('.btn.btn-primary.btn-block.btn-lg.mt-16',{onclick:function(){if(!d.name||!d.email)return showToast('Name and email required','error');d.avatar=d.avatar||'https://picsum.photos/seed/user'+Date.now()+'/100/100';d.joined=d.joined||new Date().toISOString().slice(0,10);d.workouts=d.workouts||0;var save=isEdit?db.users.put(d):db.users.add(d);save.then(function(){closeModal();showToast(isEdit?'User updated':'User added');});}},isEdit?'Save Changes':'Add User')]);}};
+
+var WorkoutForm={
+  oninit:function(){var self=this;self.exercises=[];if(state.modal.data&&state.modal.data.id){db.exercises.where('workoutId').equals(state.modal.data.id).sortBy('order').then(function(ex){self.exercises=ex;m.redraw();});}},
+  view:function(){
+    var self=this;var d=state.modal.data||{};var isEdit=!!d.id;
+    var diffOpts=['Beginner','Intermediate','Advanced'].map(function(x){return m('option',{value:x,selected:d.difficulty===x},x);});
+    var trainerOpts=[m('option',{value:'1'},'Sarah Chen'),m('option',{value:'2'},'Mike Torres'),m('option',{value:'3'},'Lisa Park'),m('option',{value:'4'},'David Kim')];
+    var exRows=[];
+    if(self.exercises.length>0){self.exercises.forEach(function(ex,idx){exRows.push(m('tr',[m('td',m('input',{value:ex.name,style:'min-width:140px',placeholder:'Exercise name',oninput:function(e){ex.name=e.target.value;}})),m('td',m('input[type=number]',{value:ex.sets,style:'width:60px',oninput:function(e){ex.sets=parseInt(e.target.value)||0;}})),m('td',m('input[type=number]',{value:ex.reps,style:'width:60px',oninput:function(e){ex.reps=parseInt(e.target.value)||0;}})),m('td',m('input[type=number]',{value:ex.weight,style:'width:70px',oninput:function(e){ex.weight=parseFloat(e.target.value)||0;}})),m('td',m('input[type=number]',{value:ex.restTime,style:'width:60px',oninput:function(e){ex.restTime=parseInt(e.target.value)||0;}})),m('td',m('button.btn-icon.danger',{onclick:function(){self.exercises.splice(idx,1);m.redraw();}},m('i.fa-solid.fa-xmark')))]));});}
+    var exTable=self.exercises.length>0?m('.table-wrap',{style:'margin-bottom:16px'},m('table',[m('thead',m('tr',[m('th','Name'),m('th','Sets'),m('th','Reps'),m('th','Weight'),m('th','Rest'),m('th','')])),m('tbody',exRows)])):m('.card-flat',{style:'text-align:center;padding:24px;color:var(--text3);margin-bottom:16px'},'No exercises added yet');
+    return m('div',[m('h3',isEdit?'Edit Workout':'Add Workout'),m('.form-group',[m('label','Title'),m('input',{value:d.title||'',placeholder:'Workout title',oninput:function(e){d.title=e.target.value;}})]),m('.form-row-3',[m('.form-group',[m('label','Difficulty'),m('select',{value:d.difficulty||'Beginner',onchange:function(e){d.difficulty=e.target.value;}},diffOpts)]),m('.form-group',[m('label','Duration (min)'),m('input[type=number]',{value:d.duration||30,oninput:function(e){d.duration=parseInt(e.target.value)||30;}})]),m('.form-group',[m('label','Trainer'),m('select',{value:d.trainerId||'1',onchange:function(e){d.trainerId=parseInt(e.target.value);}},trainerOpts)])]),m('.form-group',[m('label','Muscle Groups (comma separated)'),m('input',{value:d.muscleGroups||'',placeholder:'Chest, Shoulders, Triceps',oninput:function(e){d.muscleGroups=e.target.value;}})]),m('.form-group',[m('label','Image URL'),m('input',{value:d.image||'',placeholder:'https://...',oninput:function(e){d.image=e.target.value;}})]),m('h4',{style:'font-size:16px;margin:20px 0 12px'},'Exercises ('+self.exercises.length+')'),m('.btn.btn-secondary.btn-sm.mb-16',{onclick:function(){self.exercises.push({id:Date.now(),workoutId:d.id||0,name:'',sets:3,reps:10,weight:0,restTime:60,order:self.exercises.length+1});m.redraw();}},[m('i.fa-solid.fa-plus'),' Add Exercise']),exTable,m('.btn.btn-primary.btn-block.btn-lg',{onclick:function(){if(!d.title)return showToast('Title required','error');d.assignedCount=d.assignedCount||0;var saveWorkout=isEdit?db.workouts.put(d):db.workouts.add(d);saveWorkout.then(function(wid){var w=isEdit?d.id:wid;var p=[];if(isEdit)p.push(db.exercises.where('workoutId').equals(w).delete());self.exercises.forEach(function(ex){ex.workoutId=w;delete ex.id;p.push(db.exercises.add(ex));});return Promise.all(p);}).then(function(){closeModal();showToast(isEdit?'Workout updated':'Workout added');});}},isEdit?'Save Changes':'Add Workout')]);
+  }
+};
+
+var FoodForm={view:function(){var d=state.modal.data||{};var isEdit=!!d.id;var catOpts=['Protein','Grains','Vegetables','Fruit','Dairy','Nuts','Supplements'].map(function(c){return m('option',{value:c,selected:d.category===c},c);});return m('div',[m('h3',isEdit?'Edit Food':'Add Food'),m('.form-group',[m('label','Name'),m('input',{value:d.name||'',placeholder:'e.g., Chicken Breast (100g)',oninput:function(e){d.name=e.target.value;}})]),m('.form-group',[m('label','Category'),m('select',{value:d.category||'Protein',onchange:function(e){d.category=e.target.value;}},catOpts)]),m('.form-row-4',[m('.form-group',[m('label','Calories'),m('input[type=number]',{value:d.calories||0,oninput:function(e){d.calories=parseInt(e.target.value)||0;}})]),m('.form-group',[m('label','Protein (g)'),m('input[type=number]',{value:d.protein||0,step:'0.1',oninput:function(e){d.protein=parseFloat(e.target.value)||0;}})]),m('.form-group',[m('label','Carbs (g)'),m('input[type=number]',{value:d.carbs||0,step:'0.1',oninput:function(e){d.carbs=parseFloat(e.target.value)||0;}})]),m('.form-group',[m('label','Fat (g)'),m('input[type=number]',{value:d.fat||0,step:'0.1',oninput:function(e){d.fat=parseFloat(e.target.value)||0;}})])]),m('.btn.btn-primary.btn-block.btn-lg.mt-16',{onclick:function(){if(!d.name)return showToast('Name required','error');var save=isEdit?db.foods.put(d):db.foods.add(d);save.then(function(){closeModal();showToast(isEdit?'Food updated':'Food added');});}},isEdit?'Save Changes':'Add Food')]);}};
+
+var MealForm={view:function(){var d=state.modal.data||{};var isEdit=!!d.id;var typeOpts=['Breakfast','Lunch','Dinner','Snacks'].map(function(t){return m('option',{value:t,selected:d.type===t},t);});return m('div',[m('h3',isEdit?'Edit Meal Log':'Add Meal Log'),m('.form-row',[m('.form-group',[m('label','User ID'),m('input[type=number]',{value:d.userId||'',placeholder:'1',oninput:function(e){d.userId=parseInt(e.target.value)||null;}})]),m('.form-group',[m('label','Type'),m('select',{value:d.type||'Breakfast',onchange:function(e){d.type=e.target.value;}},typeOpts)])]),m('.form-group',[m('label','Items'),m('textarea',{rows:2,value:d.items||'',placeholder:'Chicken breast, rice, salad',oninput:function(e){d.items=e.target.value;}})]),m('.form-row',[m('.form-group',[m('label','Calories'),m('input[type=number]',{value:d.calories||0,oninput:function(e){d.calories=parseInt(e.target.value)||0;}})]),m('.form-group',[m('label','Date'),m('input[type=date]',{value:d.date||new Date().toISOString().slice(0,10),oninput:function(e){d.date=e.target.value;}})])]),m('.btn.btn-primary.btn-block.btn-lg.mt-16',{onclick:function(){if(!d.userId||!d.items)return showToast('User ID and items required','error');var save=isEdit?db.meals.put(d):db.meals.add(d);save.then(function(){closeModal();showToast(isEdit?'Meal log updated':'Meal log added');});}},isEdit?'Save Changes':'Add Meal Log')]);}};
+
+var HealthForm={view:function(){var d=state.modal.data||{};var isEdit=!!d.id;var typeOpts=['Weight','Body Fat','Sleep','Heart Rate','Blood Pressure','Mood','Energy'].map(function(t){return m('option',{value:t,selected:d.type===t},t);});return m('div',[m('h3',isEdit?'Edit Health Entry':'Add Health Entry'),m('.form-row',[m('.form-group',[m('label','User ID'),m('input[type=number]',{value:d.userId||'',placeholder:'1',oninput:function(e){d.userId=parseInt(e.target.value)||null;}})]),m('.form-group',[m('label','Type'),m('select',{value:d.type||'Weight',onchange:function(e){d.type=e.target.value;}},typeOpts)])]),m('.form-row',[m('.form-group',[m('label','Value'),m('input[type=number]',{value:d.value||'',step:'0.1',oninput:function(e){d.value=parseFloat(e.target.value)||0;}})]),m('.form-group',[m('label','Date'),m('input[type=date]',{value:d.date||new Date().toISOString().slice(0,10),oninput:function(e){d.date=e.target.value;}})])]),m('.btn.btn-primary.btn-block.btn-lg.mt-16',{onclick:function(){if(!d.userId||!d.value)return showToast('User ID and value required','error');var save=isEdit?db.healthEntries.put(d):db.healthEntries.add(d);save.then(function(){closeModal();showToast(isEdit?'Health entry updated':'Health entry added');});}},isEdit?'Save Changes':'Add Health Entry')]);}};
+
+var BillingForm={view:function(){var d=state.modal.data||{};var isEdit=!!d.id;var planOpts=['Free','Pro','Team'].map(function(p){return m('option',{value:p,selected:d.plan===p},p);});var statusOpts=['Paid','Failed','Refunded'].map(function(s){return m('option',{value:s,selected:d.status===s},s);});return m('div',[m('h3',isEdit?'Edit Billing Record':'Add Billing Record'),m('.form-row',[m('.form-group',[m('label','User ID'),m('input[type=number]',{value:d.userId||'',placeholder:'1',oninput:function(e){d.userId=parseInt(e.target.value)||null;}})]),m('.form-group',[m('label','Plan'),m('select',{value:d.plan||'Pro',onchange:function(e){d.plan=e.target.value;}},planOpts)])]),m('.form-row-3',[m('.form-group',[m('label','Amount ($)'),m('input[type=number]',{value:d.amount||0,step:'0.01',oninput:function(e){d.amount=parseFloat(e.target.value)||0;}})]),m('.form-group',[m('label','Status'),m('select',{value:d.status||'Paid',onchange:function(e){d.status=e.target.value;}},statusOpts)]),m('.form-group',[m('label','Date'),m('input[type=date]',{value:d.date||new Date().toISOString().slice(0,10),oninput:function(e){d.date=e.target.value;}})])]),m('.form-group',[m('label','Next Billing Date'),m('input[type=date]',{value:d.nextDate||'',oninput:function(e){d.nextDate=e.target.value;}})]),m('.btn.btn-primary.btn-block.btn-lg.mt-16',{onclick:function(){if(!d.userId)return showToast('User ID required','error');var save=isEdit?db.billing.put(d):db.billing.add(d);save.then(function(){closeModal();showToast(isEdit?'Billing record updated':'Billing record added');});}},isEdit?'Save Changes':'Add Billing Record')]);}};
+
+var Modal={
+  view:function(){
+    var mod=state.modal;if(!mod)return null;
+    var formMap={'admins-form':AdminForm,'trainers-form':TrainerForm,'users-form':UserForm,'workouts-form':WorkoutForm,'foods-form':FoodForm,'meals-form':MealForm,'healthEntries-form':HealthForm,'billing-form':BillingForm};
+    var formComp=formMap[mod.type];
+    var isWide=mod.type==='workouts-form';
+    return m('.modal-overlay',{onclick:function(e){if(e.target===e.currentTarget)closeModal();}},[m('.modal'+(isWide?'.wide':''),[formComp?m(formComp):null,m('button.btn-icon',{style:'position:absolute;top:16px;right:16px',onclick:closeModal},m('i.fa-solid.fa-xmark'))])]);
+  }
+};
+
+var ConfirmDialog={
+  view:function(){
+    if(!state.confirm)return null;
+    return m('.modal-overlay',{onclick:function(e){if(e.target===e.currentTarget){state.confirm=null;m.redraw();}}},[m('.modal',{style:'max-width:400px;text-align:center'},[m('.confirm-body',[m('i.fa-solid.fa-triangle-exclamation',{style:'color:var(--warn)'}),m('h4','Are you sure?'),m('p',state.confirm.msg),m('.confirm-actions',[m('.btn.btn-secondary',{onclick:function(){state.confirm=null;m.redraw();}},'Cancel'),m('.btn.btn-danger',{onclick:function(){var fn=state.confirm.onConfirm;state.confirm=null;fn();}},'Delete')])])])]);
+  }
+};
+
+var Toasts={view:function(){return m('.toast-container',state.toasts.map(function(t){var icon=t.type==='success'?'fa-check-circle':'fa-exclamation-circle';return m('.toast.toast-'+t.type,[m('i.fa-solid.'+icon),t.msg]);}));}};
+
+var App={
+  oninit:function(){initDB();},
+  view:function(){
+    var page=null;
+    switch(state.route){
+      case 'dashboard':page=m(DashboardPage);break;
+      case 'admins':page=m('div',[m('.topbar',[m('div',[m('h1','Admins'),m('p','Manage administrator accounts')])]),m(AdminsTable)]);break;
+      case 'trainers':page=m('div',[m('.topbar',[m('div',[m('h1','Trainers'),m('p','Manage trainer profiles')])]),m(TrainersTable)]);break;
+      case 'users':page=m('div',[m('.topbar',[m('div',[m('h1','Users'),m('p','Manage user accounts and subscriptions')])]),m(UsersTable)]);break;
+      case 'workouts':page=m('div',[m('.topbar',[m('div',[m('h1','Workouts'),m('p','Manage workout programs and exercises')])]),m(WorkoutsTable)]);break;
+      case 'foods':page=m('div',[m('.topbar',[m('div',[m('h1','Food Database'),m('p','Manage food items and nutritional data')])]),m(FoodsTable)]);break;
+      case 'meals':page=m('div',[m('.topbar',[m('div',[m('h1','Meal Logs'),m('p','View and manage user meal entries')])]),m(MealsTable)]);break;
+      case 'health':page=m('div',[m('.topbar',[m('div',[m('h1','Health Entries'),m('p','View and manage user health data')])]),m(HealthTable)]);break;
+      case 'billing':page=m('div',[m('.topbar',[m('div',[m('h1','Billing'),m('p','Manage payment records and subscriptions')])]),m(BillingTable)]);break;
+      default:page=m(DashboardPage);
+    }
+    var children=[m(Sidebar),m('.main',[page])];
+    if(state.modal)children.push(m(Modal));
+    if(state.confirm)children.push(m(ConfirmDialog));
+    children.push(m(Toasts));
+    return m('.app',children);
+  }
+};
+
+initDB().then(function(){m.mount(document.getElementById('app'),App);});
+</script>
+</body>
+</html>
