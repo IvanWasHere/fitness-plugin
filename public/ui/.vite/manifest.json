@@ -1,33 +1,40 @@
 {
-  "_boot-ByU3IRAo.js": {
-    "file": "assets/boot-ByU3IRAo.js",
-    "name": "boot"
+  "_session-BzjxcZfa.css": {
+    "file": "assets/session-BzjxcZfa.css",
+    "src": "_session-BzjxcZfa.css"
+  },
+  "_session-D2yu0zeK.js": {
+    "file": "assets/session-D2yu0zeK.js",
+    "name": "session",
+    "css": [
+      "assets/session-BzjxcZfa.css"
+    ]
   },
   "src/admin/main.tsx": {
-    "file": "assets/admin-Mat0jhfU.js",
+    "file": "assets/admin-Dl-K5TVM.js",
     "name": "admin",
     "src": "src/admin/main.tsx",
     "isEntry": true,
     "imports": [
-      "_boot-ByU3IRAo.js"
+      "_session-D2yu0zeK.js"
     ]
   },
   "src/trainer/main.tsx": {
-    "file": "assets/trainer-DPyFAXqb.js",
+    "file": "assets/trainer-ByBTDVce.js",
     "name": "trainer",
     "src": "src/trainer/main.tsx",
     "isEntry": true,
     "imports": [
-      "_boot-ByU3IRAo.js"
+      "_session-D2yu0zeK.js"
     ]
   },
   "src/user/main.tsx": {
-    "file": "assets/user-B15fdswV.js",
+    "file": "assets/user-_OX-c9NG.js",
     "name": "user",
     "src": "src/user/main.tsx",
     "isEntry": true,
     "imports": [
-      "_boot-ByU3IRAo.js"
+      "_session-D2yu0zeK.js"
     ]
   }
 }

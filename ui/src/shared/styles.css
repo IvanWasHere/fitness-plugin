@@ -1,0 +1,208 @@
+/*
+ * Shared chrome for the three SPAs.
+ *
+ * Every value here reads a `--fc-*` custom property emitted by the PHP shell
+ * (plans/07-theming.md) with a hard-coded fallback, so the app is still legible
+ * if the theme block fails to load. Screen-level CSS arrives with the ported
+ * prototype styles in W1.5 — this is the shell and the auth panel only.
+ */
+
+.fc-screen {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  box-sizing: border-box;
+}
+
+.fc-card {
+  width: 100%;
+  max-width: 420px;
+  background: var(--fc-color-card, #171d2a);
+  border: 1px solid var(--fc-color-border, #252d3f);
+  border-radius: var(--fc-layout-radius, 14px);
+  box-shadow: var(--fc-layout-shadow, 0 4px 24px rgba(0, 0, 0, 0.35));
+  padding: 32px;
+  box-sizing: border-box;
+}
+
+.fc-brand {
+  margin: 0 0 4px;
+  font-family: var(--fc-type-heading-font, inherit);
+  font-weight: var(--fc-type-heading-weight, 700);
+  font-size: 26px;
+  letter-spacing: -0.01em;
+  color: var(--fc-color-text, #e8ecf1);
+}
+
+.fc-sub {
+  margin: 0 0 24px;
+  color: var(--fc-color-text-muted, #8fa0bc);
+  font-size: 14px;
+}
+
+.fc-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 24px;
+  background: var(--fc-color-background-alt, #111621);
+  border-radius: var(--fc-layout-radius-small, 8px);
+  padding: 4px;
+}
+
+.fc-tab {
+  flex: 1;
+  border: 0;
+  background: transparent;
+  color: var(--fc-color-text-muted, #8fa0bc);
+  padding: 9px 12px;
+  border-radius: var(--fc-layout-radius-small, 8px);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.fc-tab[aria-selected='true'] {
+  background: var(--fc-color-card-hover, #1e2538);
+  color: var(--fc-color-text, #e8ecf1);
+}
+
+.fc-field {
+  display: block;
+  margin-bottom: 16px;
+}
+
+.fc-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+  color: var(--fc-color-text-muted, #8fa0bc);
+}
+
+.fc-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px 14px;
+  font: inherit;
+  color: var(--fc-color-text, #e8ecf1);
+  background: var(--fc-color-background-alt, #111621);
+  border: 1px solid var(--fc-color-border, #252d3f);
+  border-radius: var(--fc-layout-radius-small, 8px);
+}
+
+.fc-input:focus-visible {
+  outline: 2px solid var(--fc-color-primary, #00e676);
+  outline-offset: 1px;
+}
+
+.fc-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 20px;
+  font-size: 14px;
+  color: var(--fc-color-text-muted, #8fa0bc);
+}
+
+.fc-button {
+  width: 100%;
+  padding: 13px 16px;
+  font: inherit;
+  font-weight: 600;
+  color: var(--fc-color-primary-contrast, #0b0e13);
+  background: var(--fc-color-primary, #00e676);
+  border: 0;
+  border-radius: var(--fc-layout-radius-small, 8px);
+  cursor: pointer;
+}
+
+.fc-button:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.fc-link {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  font-size: 14px;
+  color: var(--fc-color-primary, #00e676);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.fc-footnote {
+  margin: 20px 0 0;
+  text-align: center;
+  font-size: 14px;
+  color: var(--fc-color-text-muted, #8fa0bc);
+}
+
+.fc-alert {
+  margin: 0 0 20px;
+  padding: 12px 14px;
+  border-radius: var(--fc-layout-radius-small, 8px);
+  font-size: 14px;
+  border: 1px solid transparent;
+}
+
+.fc-alert--error {
+  color: var(--fc-color-danger, #ff5252);
+  border-color: var(--fc-color-danger, #ff5252);
+  background: rgba(255, 82, 82, 0.08);
+}
+
+.fc-alert--ok {
+  color: var(--fc-color-success, #00e676);
+  border-color: var(--fc-color-success, #00e676);
+  background: rgba(0, 230, 118, 0.08);
+}
+
+/* --- signed-in shell -------------------------------------------------- */
+
+.fc-shell {
+  text-align: center;
+  max-width: 520px;
+}
+
+.fc-avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  margin: 0 auto 16px;
+  display: block;
+  border: 2px solid var(--fc-color-primary, #00e676);
+}
+
+.fc-role {
+  display: inline-block;
+  margin-bottom: 20px;
+  padding: 4px 10px;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--fc-color-primary, #00e676);
+  background: rgba(0, 230, 118, 0.1);
+  border-radius: 999px;
+}
+
+.fc-swatches {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin: 0 0 24px;
+}
+
+.fc-swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: 1px solid var(--fc-color-border, #252d3f);
+}
+
+.fc-meta {
+  margin: 0 0 24px;
+  font-size: 13px;
+  color: var(--fc-color-text-subtle, #4a5568);
+}

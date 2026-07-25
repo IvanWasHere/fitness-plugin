@@ -36,7 +36,23 @@ $_SERVER['HTTP_HOST']      = $_SERVER['HTTP_HOST'] ?? 'fitnessplugin.test';
 $_SERVER['REQUEST_URI']    = '/';
 $_SERVER['REQUEST_METHOD'] = 'GET';
 
+// Core reads REMOTE_ADDR directly (retrieve_password() logs the requesting IP),
+// and PHPUnit's CLI request has none.
+$_SERVER['REMOTE_ADDR'] = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
+
 require $wpLoad;
+
+/*
+ * Auth cookies: fire the actions, skip the setcookie().
+ *
+ * PHPUnit has already written to stdout by the time a test signs a user in, so
+ * `setcookie()` raises "headers already sent" — an artefact of the CLI harness,
+ * not of the code under test. `send_auth_cookies` is checked *after*
+ * `set_auth_cookie`/`set_logged_in_cookie` fire (pluggable.php), so suppressing
+ * the wire write leaves the plugin's cookie-bridging plumbing — and therefore
+ * the nonce-after-login assertion — fully exercised.
+ */
+add_filter('send_auth_cookies', '__return_false');
 
 if (!function_exists('FitnessClub') || !FitnessClub()) {
     fwrite(STDERR, "FitnessClub plugin is not active — activate it before running tests.\n");

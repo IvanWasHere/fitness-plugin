@@ -81,7 +81,14 @@ return [
         'api_per_minute_auth'    => 100,
         'api_per_minute_public'  => 10,
         'login_per_minute_ip'    => 5,
+        'register_per_hour_ip'   => 5,
         'password_reset_per_hour' => 3,
+        // Confirming a reset (key + new password) is per IP — a stolen key is
+        // tried in bulk, one email at a time.
+        'password_reset_confirm_per_hour_ip' => 10,
+        // Minimum length for a password set through the app. WordPress itself
+        // has no minimum; "12345" would otherwise be accepted.
+        'password_min_length'    => 10,
         'messages_per_minute'    => 30,
         'checkout_per_hour'      => 10,
 

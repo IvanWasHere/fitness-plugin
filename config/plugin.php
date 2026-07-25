@@ -137,7 +137,11 @@ return [
   |
   */
 
-  'ajax' => [],
+  'ajax' => [
+    // Nonce refresh for long-lived SPA sessions — see the class docblock for
+    // why this cannot be a REST route.
+    \FitnessClub\Ajax\NonceProvider::class,
+  ],
 
   /*
   |--------------------------------------------------------------------------
@@ -152,6 +156,8 @@ return [
 
   'providers' => [
     \FitnessClub\Providers\UpgradeProvider::class,
+    \FitnessClub\Providers\AuthServiceProvider::class,
+    \FitnessClub\Providers\ApiServiceProvider::class,
     \FitnessClub\Providers\RewriteServiceProvider::class,
     \FitnessClub\Providers\CliServiceProvider::class,
   ]

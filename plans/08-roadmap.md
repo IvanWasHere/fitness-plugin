@@ -111,7 +111,7 @@ trainer, Q3) **can read** the shared client but **cannot write** Sarah's
 trainer is not a session owner; and every guard returns false for id 0 / negative
 / nonexistent. Full gate: **42 tests, 116 assertions green.**
 
-### W1.3 Auth + boot (3 d)
+### W1.3 Auth + boot (3 d) — ✅ **complete 2026-07-25**
 Cookie/nonce plumbing, **nonce-expiry refresh-and-retry in the API client**,
 `GET /auth/me`, login/register/forgot/reset endpoints, the **role→SPA resolution**
 in `RewriteServiceProvider`, the Blade shell + Vite-manifest enqueue, boot payload.
@@ -120,6 +120,89 @@ Rate limiter (with the object-cache detection from [03](03-backend.md#rate-limit
 *Done when:* an unauthenticated visitor to `/{base}` sees the login panel; a
 logged-in `fc_user` gets the user SPA, a trainer the trainer SPA, an admin the
 admin SPA — each an empty shell with their name and theme applied.
+
+**Build notes.**
+
+- **Endpoints** (`Http/Controllers/Api/AuthController`, full `args` schemas in
+  `api/fitnessclub/v1/routes.php`): `login`, `register`, `logout`, `me`,
+  `password/forgot`, `password/reset`. Public routes are guarded by
+  `requireGuest()` rather than `__return_true`, so a call made *with* a session
+  cannot silently swap users — except `password/reset`, where the **key** is the
+  authorisation and someone still signed in on that browser must be able to
+  follow the link they were emailed (the SPA shows the reset form over the
+  signed-in shell for the same reason). Login and forgot are deliberately flat — a wrong
+  password, an unknown email and an unknown username return the identical
+  `fc_invalid_credentials`, and forgot answers the same 200 either way, so
+  neither endpoint is an account-enumeration oracle. Registration cannot hide a
+  taken address, so it says so plainly (`fc_email_taken`, 409). Login and
+  register return **the boot payload**, not a token: the app goes from the login
+  panel to the dashboard with no second round trip.
+- **The nonce-after-login trap.** `wp_set_auth_cookie()` sends the cookie but
+  never populates `$_COOKIE`, and `wp_create_nonce()` reads the session token out
+  of `$_COOKIE`. A nonce minted in the login response is therefore signed against
+  the *anonymous* session and every subsequent call 403s.
+  `AuthServiceProvider` bridges the cookie on `set_logged_in_cookie` (and clears
+  it on `clear_auth_cookie`). Verified over real HTTP, not only in PHPUnit: login
+  → `/auth/me` with the returned nonce → 200.
+- **Nonce refresh is admin-ajax, not REST** (`Ajax\NonceProvider`, action
+  `fc_nonce`). A `GET /auth/nonce` cannot work: `rest_cookie_check_errors()`
+  rejects the whole request when a cookie-authenticated caller sends a stale
+  nonce, and dropping the header instead makes WordPress treat the caller as
+  anonymous — the route would mint a nonce for user 0. admin-ajax authenticates
+  from the cookie with no nonce of its own, which is what core's Heartbeat uses.
+  `ApiClient` intercepts `rest_cookie_invalid_nonce`, refreshes (one shared
+  in-flight refresh for a burst), retries **once**, then surfaces re-login.
+- **Rate limiter** (`Support/RateLimiter` + `RateLimitException`): fixed-window
+  buckets `fc_rl_{bucket}_{userId|ipHash}`, IPs hashed with the site salt (a raw
+  IP is personal data). Honest split on the object-cache caveat — the targeted
+  buckets (login 5/min/IP, register 5/h/IP, forgot 3/h per address *and* 9/h per
+  IP, reset-confirm 10/h/IP) always run; the blanket 100/10-per-minute bucket in
+  `ApiServiceProvider` only engages when `wp_using_ext_object_cache()`, because a
+  per-request limiter writing to `wp_options` is the problem it claims to solve.
+  `shouldThrottleEveryRequest()` reports that decision rather than implying a
+  protection that is not there. The dedicated lightweight table that would lift
+  the restriction is deferred — it needs a migration and a pruning job. 429s
+  carry `limit`, `resets_at`, `retry_after` and a `Retry-After` header.
+- **Boot payload** (`Services/BootPresenter`): one object, two carriers —
+  `me()` is the `/auth/me` body, `shell()` is the same plus `restUrl`/`nonce`/
+  `ajaxUrl`/`brand`/`locale`/`flags` for `data-boot`. Built in one place so the
+  app cannot paint one thing and then re-render into another.
+  `Services/EntitlementService` implements the Q3 merge (booleans union, caps
+  max, `max_messages_per_week` per trainer, free-tier floor when nothing is
+  active); W1.4 adds the consumption side. `Services/ThemeService` merges
+  bundled ← selected ← overrides and emits `--fc-*` custom properties scoped to
+  `#fc-app`, inlined in the shell (<2 KB — a request would cost more).
+- **Front end** (`ui/src/shared/`): `api.ts` (client + `ApiError` with stable
+  `fc_*` codes), `session.tsx`/`session-context.ts` (session state, starts
+  *resolved* — no `/auth/me` on mount), `AuthPanel.tsx` (login/register/forgot/
+  reset; hand-rolled view switching until react-router lands in W1.5, with
+  `reset` reachable by URL because it is the emailed link's target),
+  `AppShell.tsx` (login panel ⇄ role shell). Sign-in that resolves to a
+  different role **navigates** rather than re-renders — which bundle loads is a
+  server decision (D9/D10), so a trainer signing in through the user bundle's
+  login panel must be handed off.
+- **Password reset lands in the app**, not wp-login: `retrieve_password_message`
+  is rewritten to `/{base}/reset?key=…&login=…` for non-administrators.
+  Administrators keep the core flow on purpose — they work in wp-admin, and an
+  admin locked out by a broken app route is a support incident.
+- **Q17c** is implemented as the planned default (precedence admin > trainer >
+  user, no switcher) in `AppRouter::currentRole()`, and covered by a test. It is
+  still listed as open in [09](09-gap-register.md) pending confirmation; nothing
+  else depends on the answer.
+- Test-harness note: PHPUnit has already written to stdout by the time a test
+  signs a user in, so `setcookie()` raises "headers already sent". The bootstrap
+  filters `send_auth_cookies` to false — that filter is checked *after* the
+  `set_logged_in_cookie` action fires, so the cookie-bridging path stays fully
+  exercised while the wire write is skipped.
+
+*Exit criterion met*, verified both in PHPUnit and over real HTTP against the dev
+site: anonymous `GET /fitness/` → 200, user bundle, `user: null`, theme block
+present → login panel; sign in → boot payload with the member's name, `spa:
+user`; the returned nonce authenticates `/auth/me`; a stale nonce yields exactly
+`rest_cookie_invalid_nonce` (what the client retries on) and `fc_nonce` returns a
+working replacement; logout → 200 and `/auth/me` → 401. Gate: **phpcs 0 errors,
+phpunit 73 tests / 276 assertions, `ui/` typecheck + lint + format + build
+green.**
 
 ### W1.4 Workout domain (6 d)
 `fc_workouts`/`fc_exercises`/`fc_user_workouts` read endpoints;

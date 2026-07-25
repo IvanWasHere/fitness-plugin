@@ -1,0 +1,61 @@
+{
+  "theme_name": "default",
+  "version": "1.0.0",
+  "color_scheme": "dark",
+  "colors": {
+    "primary": "#00E676",
+    "primary_contrast": "#0B0E13",
+    "secondary": "#FF6D00",
+    "success": "#00E676",
+    "danger": "#FF5252",
+    "warning": "#FFB300",
+    "info": "#40C4FF",
+    "purple": "#B388FF",
+    "background": "#0B0E13",
+    "background_alt": "#111621",
+    "card": "#171D2A",
+    "card_hover": "#1E2538",
+    "border": "#252D3F",
+    "text": "#E8ECF1",
+    "text_muted": "#8FA0BC",
+    "text_subtle": "#4A5568"
+  },
+  "typography": {
+    "font_family": "'DM Sans', system-ui, sans-serif",
+    "heading_font": "'Outfit', system-ui, sans-serif",
+    "base_size": "16px",
+    "line_height": "1.6",
+    "heading_weight": "700"
+  },
+  "layout": {
+    "container_width": "1400px",
+    "sidebar_width": "72px",
+    "radius": "14px",
+    "radius_small": "8px",
+    "radius_large": "20px",
+    "spacing": "20px",
+    "shadow": "0 4px 24px rgba(0,0,0,.35)"
+  },
+  "components": {
+    "dashboard": {
+      "show_workout_progress": true,
+      "show_nutrition_summary": true,
+      "show_stats_cards": true,
+      "show_charts": true,
+      "columns": 2
+    },
+    "workout_tracker": {
+      "layout": "vertical",
+      "show_video": true,
+      "show_timer": true,
+      "show_set_tracker": true,
+      "rest_sound": true
+    },
+    "navigation": {
+      "position": "left",
+      "sticky": true,
+      "show_icons": true,
+      "show_labels": false
+    }
+  }
+}

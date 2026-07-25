@@ -3,16 +3,61 @@
  *
  * The shell renders `<div id="fc-app" data-boot="…">` where the JSON carries
  * everything the SPA needs for its first frame — REST root, nonce, current user,
- * theme tokens, entitlements, and the app base path. The SPA never guesses its
- * own configuration.
+ * theme tokens, entitlements, counts and the app base path. The SPA never
+ * guesses its own configuration, and `GET /auth/me` returns the same shape so a
+ * refresh is a straight replacement rather than a merge.
  */
 export interface BootUser {
+  /** fc_users.id — internal, never "the user id" in the API. */
   id: number;
   wp_user_id: number;
   display_name: string;
+  email?: string;
   avatar_url?: string;
   role: 'fc_user' | 'fc_trainer' | 'administrator' | string;
+  timezone?: string;
+  onboarded?: boolean;
+  /** Present for trainers and admins: fc_trainers.id. */
+  trainer_id?: number;
 }
+
+export interface BootSubscription {
+  plan_name: string;
+  plan_slug: string;
+  status: string;
+  cycle: string;
+  renews_at: string | null;
+  trainer_id: number | null;
+  cancel_at_period_end: boolean;
+}
+
+export interface BootTrainer {
+  id: number;
+  display_name: string | null;
+  avatar_url: string | null;
+  specialization: string | null;
+  is_primary: boolean;
+  status: string;
+}
+
+export interface BootEntitlements {
+  has_active_subscription: boolean;
+  trainers_used: number;
+  max_trainers: number;
+  message_quota_by_trainer: Record<string, number | null>;
+  [key: string]: unknown;
+}
+
+export interface BootTheme {
+  theme_name?: string;
+  color_scheme?: string;
+  colors?: Record<string, string>;
+  typography?: Record<string, string>;
+  layout?: Record<string, string>;
+  components?: Record<string, Record<string, unknown>>;
+}
+
+export type SpaName = 'user' | 'trainer' | 'admin';
 
 export interface BootApp {
   /** Configured front-end slug, e.g. "/fitness". */
@@ -20,18 +65,33 @@ export interface BootApp {
   /** react-router basename. */
   basename: string;
   /** Which SPA the backend resolved for this role. */
-  spa: 'user' | 'trainer' | 'admin';
+  spa: SpaName;
 }
 
-export interface BootPayload {
-  restUrl: string;
-  nonce: string;
+export interface BootCounts {
+  unread_messages: number;
+  unread_notifications: number;
+}
+
+/** The `GET /auth/me` body. */
+export interface BootIdentity {
   user: BootUser | null;
+  subscriptions: BootSubscription[];
+  trainers: BootTrainer[];
+  entitlements: BootEntitlements;
+  theme: BootTheme;
   app: BootApp;
-  theme?: Record<string, unknown>;
-  entitlements?: Record<string, unknown>;
-  brand?: string;
-  locale?: string;
+  counts: BootCounts;
+}
+
+/** The identity plus the transport bits only the shell can supply. */
+export interface BootPayload extends BootIdentity {
+  restUrl: string;
+  ajaxUrl: string;
+  nonce: string;
+  brand: string;
+  locale: string;
+  flags: { registration_open: boolean; [key: string]: boolean };
 }
 
 const MOUNT_ID = 'fc-app';
@@ -53,6 +113,40 @@ export function readBoot(): BootPayload | null {
     console.error('[fitnessclub] could not parse data-boot payload');
     return null;
   }
+}
+
+/**
+ * The boot payload, or a usable stand-in when running bare against the Vite dev
+ * server. The stand-in points at the conventional WordPress paths, so `npm run
+ * dev` with no WordPress shell still talks to a real backend rather than
+ * crashing on a null.
+ */
+export function bootOrDefaults(spa: SpaName): BootPayload {
+  const boot = readBoot();
+  if (boot) {
+    return boot;
+  }
+
+  return {
+    restUrl: '/wp-json/fitnessclub/v1/',
+    ajaxUrl: '/wp-admin/admin-ajax.php',
+    nonce: '',
+    brand: 'FitnessClub',
+    locale: 'en_US',
+    flags: { registration_open: true },
+    user: null,
+    subscriptions: [],
+    trainers: [],
+    entitlements: {
+      has_active_subscription: false,
+      trainers_used: 0,
+      max_trainers: 0,
+      message_quota_by_trainer: {},
+    },
+    theme: {},
+    app: { base: '/fitness', basename: '/fitness', spa },
+    counts: { unread_messages: 0, unread_notifications: 0 },
+  };
 }
 
 /** The mount node, created if missing (dev server has no WP shell). */

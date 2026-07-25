@@ -2,6 +2,8 @@
 
 namespace FitnessClub\Providers;
 
+use FitnessClub\Services\BootPresenter;
+use FitnessClub\Services\ThemeService;
 use FitnessClub\Support\AppRouter;
 use FitnessClub\Support\ViteAssets;
 use FitnessClub\WPBones\Support\ServiceProvider;
@@ -46,9 +48,7 @@ class RewriteServiceProvider extends ServiceProvider
      */
     public function appBase(): string
     {
-        $base = sanitize_title((string) $this->plugin->options->get('routing.app_base', 'fitness'));
-
-        return '' === $base ? 'fitness' : $base;
+        return AppRouter::base();
     }
 
     public function addRewriteRules(): void
@@ -84,65 +84,28 @@ class RewriteServiceProvider extends ServiceProvider
             return;
         }
 
-        $spa  = AppRouter::currentSpa();
-        $base = '/' . $this->appBase();
+        $spa = AppRouter::currentSpa();
 
         status_header(200);
         nocache_headers();
 
+        // toHTML(), not (string) or render(): wpBones' render() *echoes* and
+        // returns null outside ajax, so casting would emit the page as a side
+        // effect and leave $html empty. Capturing it keeps the one echo below the
+        // only place output happens.
+        //
         // The shell is our own Blade template that renders the full HTML document;
         // dynamic values are escaped inside it (esc_attr on data-boot, {{ }} on the
         // rest). The rendered markup is therefore output as-is.
-        $html = (string) $this->plugin->view('app.shell', [
-            'boot' => $this->bootPayload($spa, $base),
-            'tags' => ViteAssets::tags($spa),
-            'lang' => get_bloginfo('language'),
-        ]);
+        $html = $this->plugin->view('app.shell', [
+            'boot'     => (new BootPresenter())->shell(),
+            'tags'     => ViteAssets::tags($spa),
+            'themeCss' => (new ThemeService())->cssVariables(),
+            'lang'     => get_bloginfo('language'),
+        ])->toHTML();
 
         echo $html; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 
         exit;
-    }
-
-    /**
-     * The boot payload injected into the shell (plans/02-api-contract.md).
-     * Minimal for now; a BootPresenter fills in theme tokens + entitlements later.
-     *
-     * @return array<string,mixed>
-     */
-    private function bootPayload(string $spa, string $base): array
-    {
-        $user = wp_get_current_user();
-
-        return [
-            'restUrl' => esc_url_raw(rest_url('fitnessclub/v1/')),
-            'nonce'   => wp_create_nonce('wp_rest'),
-            'user'    => $user->exists() ? [
-                'id'           => 0, // fc_users.id — resolved once that table is rebuilt
-                'wp_user_id'   => (int) $user->ID,
-                'display_name' => $user->display_name,
-                'avatar_url'   => get_avatar_url($user->ID),
-                'role'         => $this->primaryRole($user),
-            ] : null,
-            'app' => [
-                'base'     => $base,
-                'basename' => $base,
-                'spa'      => $spa,
-            ],
-            'brand'  => $this->plugin->options->get('branding.name', 'FitForge'),
-            'locale' => determine_locale(),
-        ];
-    }
-
-    private function primaryRole(\WP_User $user): string
-    {
-        if (user_can($user, 'manage_options')) {
-            return 'administrator';
-        }
-        if (in_array('fc_trainer', (array) $user->roles, true)) {
-            return 'fc_trainer';
-        }
-
-        return 'fc_user';
     }
 }
