@@ -159,6 +159,7 @@ return [
     \FitnessClub\Providers\AuthServiceProvider::class,
     \FitnessClub\Providers\ApiServiceProvider::class,
     \FitnessClub\Providers\RewriteServiceProvider::class,
+    \FitnessClub\Providers\ScheduleProvider::class,
     \FitnessClub\Providers\CliServiceProvider::class,
   ]
 

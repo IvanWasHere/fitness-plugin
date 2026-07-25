@@ -80,7 +80,19 @@
 
     <rule ref="WordPress.DB.PreparedSQLPlaceholders"/>
 
-    <rule ref="WordPress.Security.EscapeOutput"/>
+    <rule ref="WordPress.Security.EscapeOutput">
+        <!--
+            Exception messages are data, not output, in this plugin: services throw
+            DomainException / RateLimitException, controllers turn them into WP_Error,
+            and the REST layer JSON-encodes them. Nothing here ever echoes an
+            exception, so the sniff's assumption (uncaught exceptions render to the
+            page) does not hold, and satisfying it would mean esc_html() on strings
+            that are about to be JSON-encoded — double-escaped text in the API.
+            The rest of EscapeOutput stays on, including for the one place that does
+            echo: the front-end shell render.
+        -->
+        <exclude name="WordPress.Security.EscapeOutput.ExceptionNotEscaped"/>
+    </rule>
     <rule ref="WordPress.Security.ValidatedSanitizedInput"/>
     <rule ref="WordPress.Security.NonceVerification"/>
 

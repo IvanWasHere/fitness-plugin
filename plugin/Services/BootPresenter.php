@@ -51,7 +51,7 @@ final class BootPresenter
             'user'          => $loggedIn ? $this->user($wpUser, $fcUserId) : null,
             'subscriptions' => $fcUserId > 0 ? $this->subscriptions($fcUserId) : [],
             'trainers'      => $fcUserId > 0 ? $this->trainers($fcUserId) : [],
-            'entitlements'  => $this->entitlements->forUser($fcUserId),
+            'entitlements'  => $this->presentEntitlements($fcUserId),
             'theme'         => $this->theme->activeTokens(),
             'app'           => $this->app(),
             'counts'        => $loggedIn ? $this->counts((int) $wpUser->ID, $fcUserId) : self::emptyCounts(),
@@ -76,6 +76,23 @@ final class BootPresenter
                 'registration_open' => (bool) FitnessClub()->options->get('features.registration_open', true),
             ],
         ];
+    }
+
+    /**
+     * Entitlements as the client expects them. The per-trainer quota map is an
+     * *object* on the wire even when empty — PHP would encode an empty array as
+     * `[]`, and a client doing `quota[trainerId]` on a JSON array is a bug
+     * waiting for the first user with no trainers.
+     *
+     * @return array<string,mixed>
+     */
+    private function presentEntitlements(int $fcUserId): array
+    {
+        $entitlements = $this->entitlements->forUser($fcUserId);
+
+        $entitlements['message_quota_by_trainer'] = (object) ($entitlements['message_quota_by_trainer'] ?? []);
+
+        return $entitlements;
     }
 
     /**

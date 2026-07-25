@@ -67,7 +67,6 @@ final class RateLimiter
         );
 
         if ($state['count'] > $limit) {
-            // phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped -- never echoed; the message is JSON-encoded into a WP_Error by the REST layer.
             throw new RateLimitException($bucket, $limit, $state['reset']);
         }
 

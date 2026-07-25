@@ -9,9 +9,12 @@ if (!defined('ABSPATH')) {
 | Plugin deactivation
 |--------------------------------------------------------------------------
 |
-| This file is included when the plugin is deactivated.
-| Usually here you may enter a flush_rewrite_rules();
+| Roles and data survive deactivation on purpose — deactivating to debug a
+| conflict must not strip live accounts. Only the things that would keep firing
+| without the plugin loaded are torn down: rewrite rules and cron events.
 |
 */
 
 flush_rewrite_rules();
+
+\FitnessClub\Providers\ScheduleProvider::unschedule();

@@ -113,5 +113,25 @@ return [
         'water_goal_ml'  => 2000,
         'rest_seconds'   => 60,
         'currency'       => 'USD',
+
+        // Used for the calorie estimate when a user has not entered a weight.
+        // Onboarding asks for one; until then an estimate beats no number.
+        'body_weight_kg' => 70.0,
+    ],
+
+    /*
+    | MET (metabolic equivalent) per workout type, for the calorie estimate
+    | kcal = MET x body-weight-kg x hours. Compendium-of-Physical-Activities
+    | mid-range values: the honest resolution of a session-level estimate is
+    | roughly +/-20%, so per-exercise precision here would be false precision.
+    | Replaces the prototype's `elapsedSeconds * 6.5` for every user and workout.
+    */
+    'met_values' => [
+        'strength'    => 5.0,
+        'cardio'      => 7.5,
+        'hiit'        => 9.0,
+        'flexibility' => 2.5,
+        'recovery'    => 2.3,
+        'default'     => 5.0,
     ],
 ];

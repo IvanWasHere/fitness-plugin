@@ -204,7 +204,7 @@ working replacement; logout → 200 and `/auth/me` → 401. Gate: **phpcs 0 erro
 phpunit 73 tests / 276 assertions, `ui/` typecheck + lint + format + build
 green.**
 
-### W1.4 Workout domain (6 d)
+### W1.4 Workout domain (6 d) — ✅ **complete 2026-07-25**
 `fc_workouts`/`fc_exercises`/`fc_user_workouts` read endpoints;
 `WorkoutSessionService` complete state machine; all `/sessions/*` endpoints;
 PR detection; `ActivityService`; `EntitlementService`.
@@ -213,6 +213,85 @@ PR detection; `ActivityService`; `EntitlementService`.
 simulated 20-minute gap → log 24 sets → complete — and the resulting rows,
 duration, volume and PRs are all correct. **This test is the phase's real exit
 criterion.**
+
+**Build notes.**
+
+- **Reads** (`Services/WorkoutService`, `Http/Controllers/Api/WorkoutController`):
+  `GET /workouts` (status/difficulty/type/q + paging with `X-WP-Total`),
+  `GET /workouts/{id}` with ordered exercises, `GET /exercises/{id}`. Every query
+  joins `fc_user_workouts`, so scope is **in the query rather than in a check
+  that can be forgotten** — a foreign id is a 404, not a leak. Video URLs are
+  *withheld* rather than the resource refused when a plan lacks
+  `has_video_workouts` (`video_locked: true`), because a readable workout with a
+  locked video is an upgrade prompt and a 403 is a dead end.
+- **The state machine** (`Services/WorkoutSessionService`) and all ten
+  `/sessions/*` routes. Three invariants, each with a test:
+  - *Time is derived, never reported.* `duration_seconds` is recomputed from
+    `started_at`/`last_resumed_at` on pause and complete.
+    **`paused_seconds` needs no `paused_at` column** — at resume it is exactly
+    `(now − started_at) − duration_seconds`, i.e. wall-clock minus active time,
+    which is self-healing if a write is ever lost. (01-database.md's schema has
+    no `paused_at`; this is why none was added.)
+  - *One open session per user*, enforced in a transaction with
+    `SELECT … FOR UPDATE` since MySQL has no partial unique index. The 409 names
+    the open session so the UI can offer resume-or-discard.
+  - *Every read is user-scoped and every transition is a transaction.*
+- **Set logging is idempotent** on `(session, exercise, set_index)` — the player
+  fires it mid-workout on gym wifi, so a retry corrects the set instead of
+  inventing a phantom one. Verified over HTTP: four POSTs, three set rows.
+- **PR detection** compares the session against `fc_personal_records` and upserts
+  strictly-greater winners (matching your own record is not a new one).
+  `max_volume` is the exercise's **total** volume in one session, and `best_time`
+  is the **longest** hold for `metric='seconds'` exercises — right for planks and
+  carries, and the reason a lower-is-better timed event will need its own record
+  type rather than reusing this one. Weight/volume records are not fabricated for
+  bodyweight or timed work.
+- **Calories** are MET × body weight × hours, from a `met_values` table in
+  `config/fitnessclub.php`, falling back to a configured body weight until
+  onboarding collects one. This replaces the prototype's `elapsedSeconds * 6.5`,
+  which gave every user on every workout the same number.
+- **Abandon keeps partial credit** (§8.1): elapsed time and logged sets stand,
+  and the assignment's `progress_percentage` keeps what was earned rather than
+  resetting — which is what the prototype's percentage-bearing workout cards show.
+- **`ActivityService`** separates feed rows from audit rows in one table
+  (`is_audit`), with the actor recorded — audit rows are exempt from the 12-month
+  prune, because an audit trail with a retention window is not one. A minimal
+  `NotificationService` (create + per-category preference) and `StreakService`
+  (calendar days in the *user's* timezone; a live streak counts today or
+  yesterday) land here because the celebration payload needs both.
+- **`EntitlementService`** gained `can()` / `limit()` / `hasActiveSubscription()`
+  / `messageQuotaFor()` / `unavailable()` over W1.3's merge, plus a per-request
+  memo (a gated endpoint asks several questions and must not re-run the
+  subscription join for each).
+- **Stale-session cleanup**, which the plan puts with the state machine: without
+  it a user who closes the tab mid-workout keeps an open session forever and
+  every later start answers 409. `ScheduleProvider` registers a daily job; the
+  closed session is credited only its **accumulated** active time, never the
+  hours a tab sat closed, or every duration and calorie figure downstream
+  inflates. Deactivation unschedules it.
+  **Plan correction:** 03-backend.md says "registered via wpBones' schedule
+  provider (`config/plugin.php → schedules`)" — wpBones v2 has no such feature
+  (it covers CPTs, taxonomies, shortcodes, widgets and ajax, not WP-Cron), so
+  this is native `wp_schedule_event` wrapped in a provider.
+- `MemberController` holds what every member endpoint needs once: the caller's
+  `fc_users.id` resolved from the WordPress user (**never** accepted as a
+  parameter), entitlement gates that answer `fc_feature_unavailable` +
+  `required_feature`, pagination headers, and one place where a service's
+  `DomainException` becomes the contract's error envelope.
+- phpcs: `WordPress.Security.EscapeOutput.ExceptionNotEscaped` is now excluded
+  with a written rationale — exception messages here are JSON-encoded into
+  `WP_Error`, never echoed, and `esc_html()`-ing them would double-escape the API.
+  The rest of EscapeOutput stays on, including for the one place that does echo.
+
+*Exit criterion met* by `tests/Integration/WorkoutSessionTest.php`: start → 10 min
+→ pause → 20-minute gap → resume → 24 sets → 15 min → complete yields
+`duration 1500 s`, `paused 1200 s`, `completion 100%`, `volume 10 800 kg`,
+`calories 167` (MET 5.0 × 80 kg × 1500 s), **24 new personal records**, the
+assignment at 100% with `times_completed = 1`, and the feed and notification rows
+written. Time is simulated by moving the stored timestamps — the only honest way
+to test a duration the client is not allowed to report. Also driven end to end
+over real HTTP against the dev site. Gate: **phpcs 0 errors, phpunit 105 tests /
+445 assertions.**
 
 ### W1.5 User SPA shell + workout screens (8 d)
 React 18 + TS in the **Vite `ui/` workspace** — the `ui/src/user/` entry plus the
