@@ -79,6 +79,18 @@ export class ApiClient {
     }
   }
 
+  /**
+   * A URL that authenticates without request headers, for `navigator.sendBeacon`.
+   *
+   * A beacon cannot carry `X-WP-Nonce` — the API allows no custom headers — but
+   * WordPress also accepts the nonce as a `_wpnonce` parameter, which is how the
+   * player flushes queued sets during `pagehide`, when there is no time left for
+   * a normal request.
+   */
+  beaconUrl(path: string): string {
+    return `${this.restUrl}/${path.replace(/^\//, '')}?_wpnonce=${encodeURIComponent(this.nonce)}`;
+  }
+
   get<T>(path: string, params?: Record<string, string | number | boolean>): Promise<T> {
     const query = params
       ? `?${new URLSearchParams(Object.entries(params).map(([k, v]) => [k, String(v)])).toString()}`
@@ -92,6 +104,10 @@ export class ApiClient {
 
   put<T>(path: string, body?: unknown): Promise<T> {
     return this.send<T>('PUT', path, body);
+  }
+
+  patch<T>(path: string, body?: unknown): Promise<T> {
+    return this.send<T>('PATCH', path, body);
   }
 
   delete<T>(path: string): Promise<T> {
@@ -180,13 +196,16 @@ export class ApiClient {
    * `response.json()` would throw a SyntaxError that says nothing useful.
    */
   private async parse(response: Response): Promise<unknown> {
+    // `null`, not `{}`. An empty body means "no content", and an empty object is
+    // *truthy* — return one and every caller that checks `if (result)` before
+    // reading a field gets a crash three components later instead of a null.
     if (response.status === 204) {
-      return {};
+      return null;
     }
 
     const text = await response.text();
     if (text === '') {
-      return {};
+      return null;
     }
 
     try {

@@ -293,7 +293,7 @@ to test a duration the client is not allowed to report. Also driven end to end
 over real HTTP against the dev site. Gate: **phpcs 0 errors, phpunit 105 tests /
 445 assertions.**
 
-### W1.5 User SPA shell + workout screens (8 d)
+### W1.5 User SPA shell + workout screens (8 d) — ✅ **complete 2026-07-25**
 React 18 + TS in the **Vite `ui/` workspace** — the `ui/src/user/` entry plus the
 shared `ui/src/shared/` (API client, design system, chart/modal components)
 ([D10](00-architecture.md#d10--front-end-three-vite-compiled-react-spas)). Router
@@ -304,6 +304,86 @@ celebration screen.
 
 *Done when:* a seeded user can log in, open a workout, complete it on a phone with
 the screen off between sets, and see correct numbers on the celebration screen.
+
+**Build notes.**
+
+- **Router + chrome** (`ui/src/user/App.tsx`): react-router with `basename` from
+  the boot payload — never a constant, because the front-end URL is configurable
+  (D9). Deep links work (`/fitness/workouts/1` loads directly). Navigation is
+  data-driven from one `NAV` array, so each later screen is one line. Both
+  prototype navigation bugs are fixed: the off-canvas sidebar now has a way to
+  open on mobile (`sidebarOpen` was set to `false` and never to `true`, leaving
+  the whole primary nav unreachable under 768px), and the bottom bar lists real
+  destinations instead of sending "More" to Messages.
+- **Design system** (`shared/styles/app.css`): the prototype CSS ported with its
+  four documented corrections — tokens aliased onto the theme's `--fc-*`
+  properties instead of `:root` literals, `--text2` at the WCAG-passing
+  `#8FA0BC`, the ~15 utility classes the prototype used but never defined, and
+  **no CDN anything** (icons are inline SVG in `components/Icon.tsx`, which also
+  retires the `m('i.fa-solid fa-list')` space-instead-of-dot bug in 35 places).
+  `.fc-btn` is only ever on real buttons and links.
+  **The bug worth remembering:** scoping the reset as `#fc-app *` gives it an
+  id's specificity (1,0,0), which beats *every class in the file* — `padding: 0`
+  won over `.fc-card`, `background: none` over `.fc-btn--primary`, and the whole
+  app rendered as unstyled boxes. Every base rule now goes through
+  `:where(#fc-app)`, which is scoped and contributes zero specificity.
+- **Timers are timestamp-derived** (`shared/hooks/timers.ts`): an interval only
+  triggers a re-render; the value is computed at render time. Elapsed is measured
+  from **`elapsed_seconds` plus the local delta since that response arrived**,
+  not by parsing a server timestamp into local time — so a device whose clock is
+  ten minutes off still shows the right duration. Verified in the browser: a
+  reload mid-workout came back reading 5:23, not 0:00.
+- **Offline set queue** (`user/state/setQueue.ts`): optimistic enqueue,
+  deduplicated on the same `(exercise, set)` key the server is idempotent on,
+  sequential delivery with capped backoff, persisted to localStorage against a
+  crash, and flushed with `sendBeacon` on pagehide (which is why `ApiClient`
+  grew `beaconUrl()` — a beacon cannot set `X-WP-Nonce`, but WordPress accepts
+  `_wpnonce` as a parameter).
+- **Wake lock** (`shared/hooks/useWakeLock.ts`) re-acquires on `visibilitychange`,
+  because the API drops the lock whenever the page is hidden and does not restore
+  it. A refusal (battery saver, Firefox, insecure origin) is not surfaced — the
+  timers are timestamp-derived precisely so a sleeping screen costs nothing.
+- **`confirm()` is gone.** Stopping a workout uses the app's own dialog
+  (`components/Modal.tsx`) with Escape-to-close and focus return; the native one
+  blocks the JS thread and looks broken on mobile.
+- **Dashboard is composed client-side for now**, in a single `useDashboard()`
+  hook so W1.6 swaps one function rather than rewriting the screen. Its streak
+  uses the same rule as the server's `StreakService`, deliberately — a temporary
+  second answer is better than two different answers on two screens.
+
+**Three bugs this package found in W1.3/W1.4 code, each now covered by a test:**
+
+1. **`GET /sessions/active` returned a zero-byte 200** when nothing was running.
+   WordPress does not serialise a bare `null` body, and the client's parser
+   turned "empty" into `{}` — truthy, with no fields, so the player crashed on
+   `session.exercises`. Now **204**, and the client parses an empty body as
+   `null` rather than `{}`.
+2. **Set logging silently discarded sets.** `duration_seconds`/`rest_taken_seconds`
+   were declared as plain `integer` in the args schema, so an explicit `null`
+   was rejected with 400 — and the queue treats 4xx as unretryable, so the set
+   vanished while the badge still read "Saved". The schema now accepts
+   `['integer', 'null']`, the client omits unmeasured fields, and a dropped write
+   is *reported* ("1 not saved") instead of swallowed.
+3. **"8/8 exercises" for a workout with one exercise done.** `was_skipped` is
+   only recomputed for exercises that receive a set, so untouched ones kept the
+   `0` default and counted as completed. `complete()`/`abandon()` now settle it
+   at the end, when "no sets" really does mean skipped.
+
+**Dependency note.** react-router-dom is pinned to the latest 7.18.1: *no*
+version is currently advisory-free — ≤7.17.0 carries fourteen advisories that do
+apply to us (open-redirect XSS, SSR/hydration issues), while ≥7.12 carries one
+RSC-mode CSRF advisory that does not, since RSC mode is not enabled. The
+remaining audit findings are dev-only (`brace-expansion` via eslint).
+
+*Exit criterion met*, driven in a real browser against the dev site: signed in as
+a seeded member → dashboard → started **Upper Body Power** → logged sets with a
+90-second rest countdown → reloaded mid-workout and the session, cursor and
+elapsed time all rehydrated → finished → celebration showed 6:38, 46 kcal
+(MET 5.0 × 82.5 kg), 640 kg volume, three personal records and a 1-day streak,
+with every number matching the database. Gate: **phpcs 0 errors, phpunit 108
+tests / 456 assertions, `ui/` typecheck + lint + format + build green.**
+Mobile layout is verified by the responsive CSS and the fixed hamburger path, not
+on a physical device — the wake lock in particular cannot be exercised here.
 
 ### W1.6 Dashboard aggregate (2 d)
 `GET /user/dashboard`, transient caching + invalidation, streak calculation,

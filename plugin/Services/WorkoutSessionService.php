@@ -451,6 +451,7 @@ final class WorkoutSessionService
             $calories = $this->estimateCalories($fcUserId, (int) $session['workout_id'], $duration);
 
             $this->recomputeCompletion($sessionId);
+            $this->markSkippedExercises($sessionId);
 
             $wpdb->update(
                 $wpdb->prefix . 'fc_workout_sessions',
@@ -510,6 +511,7 @@ final class WorkoutSessionService
 
         try {
             $this->recomputeCompletion($sessionId);
+            $this->markSkippedExercises($sessionId);
 
             $wpdb->update(
                 $wpdb->prefix . 'fc_workout_sessions',
@@ -843,6 +845,31 @@ final class WorkoutSessionService
             ['completion_percentage' => $percentage, 'updated_at' => $this->now()],
             ['id' => $sessionId]
         );
+    }
+
+    /**
+     * An exercise nobody logged a set against was skipped.
+     *
+     * `recomputeExerciseLog()` only ever runs for exercises that received a set,
+     * so an exercise the user walked past keeps the column's `0` default and
+     * counts as completed — which is how a celebration screen ends up claiming
+     * "8/8 exercises" for a workout where one exercise was done. Settle it once
+     * at the end, when "no sets" genuinely means skipped rather than "not yet".
+     */
+    private function markSkippedExercises(int $sessionId): void
+    {
+        global $wpdb;
+
+        $wpdb->query($wpdb->prepare(
+            "UPDATE {$wpdb->prefix}fc_exercise_logs el
+                SET el.was_skipped = 1
+              WHERE el.session_id = %d
+                AND NOT EXISTS (
+                      SELECT 1 FROM {$wpdb->prefix}fc_set_logs sl
+                       WHERE sl.exercise_log_id = el.id
+                    )",
+            $sessionId
+        ));
     }
 
     /**

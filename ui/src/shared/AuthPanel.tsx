@@ -21,7 +21,7 @@ export function AuthPanel() {
 
   return (
     <div className="fc-screen">
-      <div className="fc-card">
+      <div className="fc-auth-card">
         <h1 className="fc-brand">{boot.brand}</h1>
         <p className="fc-sub">{subtitleFor(view)}</p>
 
@@ -88,7 +88,6 @@ function LoginForm({ onForgot }: { onForgot: () => void }) {
 
       <Field label="Email">
         <input
-          className="fc-input"
           type="email"
           autoComplete="username"
           required
@@ -99,7 +98,6 @@ function LoginForm({ onForgot }: { onForgot: () => void }) {
 
       <Field label="Password">
         <input
-          className="fc-input"
           type="password"
           autoComplete="current-password"
           required
@@ -113,7 +111,7 @@ function LoginForm({ onForgot }: { onForgot: () => void }) {
         Keep me signed in
       </label>
 
-      <button className="fc-button" type="submit" disabled={busy}>
+      <button className="fc-btn fc-btn--primary fc-btn--block" type="submit" disabled={busy}>
         {busy ? 'Signing in…' : 'Sign in'}
       </button>
 
@@ -142,7 +140,6 @@ function RegisterForm() {
 
       <Field label="Your name">
         <input
-          className="fc-input"
           type="text"
           autoComplete="name"
           value={displayName}
@@ -152,7 +149,6 @@ function RegisterForm() {
 
       <Field label="Email">
         <input
-          className="fc-input"
           type="email"
           autoComplete="username"
           required
@@ -163,7 +159,6 @@ function RegisterForm() {
 
       <Field label="Password">
         <input
-          className="fc-input"
           type="password"
           autoComplete="new-password"
           required
@@ -172,7 +167,7 @@ function RegisterForm() {
         />
       </Field>
 
-      <button className="fc-button" type="submit" disabled={busy}>
+      <button className="fc-btn fc-btn--primary fc-btn--block" type="submit" disabled={busy}>
         {busy ? 'Creating your account…' : 'Create account'}
       </button>
     </form>
@@ -195,7 +190,6 @@ function ForgotForm({ onBack }: { onBack: () => void }) {
 
       <Field label="Email">
         <input
-          className="fc-input"
           type="email"
           autoComplete="username"
           required
@@ -204,7 +198,7 @@ function ForgotForm({ onBack }: { onBack: () => void }) {
         />
       </Field>
 
-      <button className="fc-button" type="submit" disabled={busy}>
+      <button className="fc-btn fc-btn--primary fc-btn--block" type="submit" disabled={busy}>
         {busy ? 'Sending…' : 'Email me a reset link'}
       </button>
 
@@ -233,7 +227,7 @@ function ResetForm({ onDone }: { onDone: () => void }) {
         <p className="fc-alert fc-alert--error">
           That reset link is incomplete. Request a new one from the sign-in screen.
         </p>
-        <button className="fc-button" type="button" onClick={onDone}>
+        <button className="fc-btn fc-btn--primary fc-btn--block" type="button" onClick={onDone}>
           Back to sign in
         </button>
       </>
@@ -244,7 +238,7 @@ function ResetForm({ onDone }: { onDone: () => void }) {
     return (
       <>
         <p className="fc-alert fc-alert--ok">{done}</p>
-        <button className="fc-button" type="button" onClick={onDone}>
+        <button className="fc-btn fc-btn--primary fc-btn--block" type="button" onClick={onDone}>
           Sign in
         </button>
       </>
@@ -257,7 +251,6 @@ function ResetForm({ onDone }: { onDone: () => void }) {
 
       <Field label="New password">
         <input
-          className="fc-input"
           type="password"
           autoComplete="new-password"
           required
@@ -266,7 +259,7 @@ function ResetForm({ onDone }: { onDone: () => void }) {
         />
       </Field>
 
-      <button className="fc-button" type="submit" disabled={busy}>
+      <button className="fc-btn fc-btn--primary fc-btn--block" type="submit" disabled={busy}>
         {busy ? 'Saving…' : 'Save new password'}
       </button>
     </form>

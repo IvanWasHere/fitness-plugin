@@ -1,1 +1,0 @@
-import{a as e,i as t,n,o as r,r as i,t as a}from"./session-D2yu0zeK.js";var o=r(),s=e(),c=t();(0,s.createRoot)(n()).render((0,c.jsx)(o.StrictMode,{children:(0,c.jsx)(a,{spa:`admin`,children:(0,c.jsx)(i,{role:`admin`})})}));

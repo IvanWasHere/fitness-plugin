@@ -1,40 +1,49 @@
 {
-  "_session-BzjxcZfa.css": {
-    "file": "assets/session-BzjxcZfa.css",
-    "src": "_session-BzjxcZfa.css"
-  },
-  "_session-D2yu0zeK.js": {
-    "file": "assets/session-D2yu0zeK.js",
-    "name": "session",
-    "css": [
-      "assets/session-BzjxcZfa.css"
+  "_AppShell-svJqxvMu.js": {
+    "file": "assets/AppShell-svJqxvMu.js",
+    "name": "AppShell",
+    "imports": [
+      "_AuthPanel--iQwgroO.js"
     ]
   },
+  "_AuthPanel--iQwgroO.js": {
+    "file": "assets/AuthPanel--iQwgroO.js",
+    "name": "AuthPanel",
+    "css": [
+      "assets/AuthPanel-CVxOuKjj.css"
+    ]
+  },
+  "_AuthPanel-CVxOuKjj.css": {
+    "file": "assets/AuthPanel-CVxOuKjj.css",
+    "src": "_AuthPanel-CVxOuKjj.css"
+  },
   "src/admin/main.tsx": {
-    "file": "assets/admin-Dl-K5TVM.js",
+    "file": "assets/admin-Bo5knu9M.js",
     "name": "admin",
     "src": "src/admin/main.tsx",
     "isEntry": true,
     "imports": [
-      "_session-D2yu0zeK.js"
+      "_AuthPanel--iQwgroO.js",
+      "_AppShell-svJqxvMu.js"
     ]
   },
   "src/trainer/main.tsx": {
-    "file": "assets/trainer-ByBTDVce.js",
+    "file": "assets/trainer-BeR9RrYz.js",
     "name": "trainer",
     "src": "src/trainer/main.tsx",
     "isEntry": true,
     "imports": [
-      "_session-D2yu0zeK.js"
+      "_AuthPanel--iQwgroO.js",
+      "_AppShell-svJqxvMu.js"
     ]
   },
   "src/user/main.tsx": {
-    "file": "assets/user-_OX-c9NG.js",
+    "file": "assets/user-DPJ3-DIc.js",
     "name": "user",
     "src": "src/user/main.tsx",
     "isEntry": true,
     "imports": [
-      "_session-D2yu0zeK.js"
+      "_AuthPanel--iQwgroO.js"
     ]
   }
 }

@@ -1,4 +1,4 @@
-import './styles.css';
+import './styles/app.css';
 import { AuthPanel } from './AuthPanel';
 import { isResetLink } from './auth-route';
 import { useSession } from './session-context';
@@ -40,7 +40,7 @@ function RoleShell({ role }: { role: SpaName }) {
 
   return (
     <div className="fc-screen">
-      <div className="fc-card fc-shell">
+      <div className="fc-auth-card fc-text-center">
         {user.avatar_url && <img className="fc-avatar" src={user.avatar_url} alt="" />}
         <span className="fc-role">{ROLE_LABEL[role]}</span>
         <h1 className="fc-brand">{user.display_name}</h1>
@@ -63,7 +63,11 @@ function RoleShell({ role }: { role: SpaName }) {
           notifications · {boot.trainers.length} trainer{boot.trainers.length === 1 ? '' : 's'}
         </p>
 
-        <button className="fc-button" type="button" onClick={() => void logout()}>
+        <button
+          className="fc-btn fc-btn--primary fc-btn--block"
+          type="button"
+          onClick={() => void logout()}
+        >
           Sign out
         </button>
       </div>

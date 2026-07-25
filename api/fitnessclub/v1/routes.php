@@ -284,28 +284,34 @@ Route::post('/sessions/(?P<id>\d+)/sets', SessionController::class . '@logSet', 
             'type'     => 'integer',
             'minimum'  => 0,
         ],
+        // Every measure is nullable, and the schema has to say so: a timed hold
+        // has no reps, a bodyweight set has no weight, and the first set of a
+        // workout has no rest before it. Declaring these as plain `integer` makes
+        // WordPress reject an explicit null with 400 rest_invalid_param — which
+        // the player's offline queue then discards as unretryable, losing the set
+        // while reporting it saved.
         'reps' => [
-            'type'    => 'integer',
+            'type'    => ['integer', 'null'],
             'minimum' => 0,
             'maximum' => 10000,
         ],
         'weight_kg' => [
-            'type'    => 'number',
+            'type'    => ['number', 'null'],
             'minimum' => 0,
             'maximum' => 1000,
         ],
         'duration_seconds' => [
-            'type'    => 'integer',
+            'type'    => ['integer', 'null'],
             'minimum' => 0,
             'maximum' => 86400,
         ],
         'rest_taken_seconds' => [
-            'type'    => 'integer',
+            'type'    => ['integer', 'null'],
             'minimum' => 0,
             'maximum' => 86400,
         ],
         'rpe' => [
-            'type'    => 'integer',
+            'type'    => ['integer', 'null'],
             'minimum' => 1,
             'maximum' => 10,
         ],
@@ -346,10 +352,10 @@ Route::patch('/sessions/(?P<id>\d+)/review', SessionController::class . '@review
                 'properties' => [
                     'exercise_id'      => ['type' => 'integer', 'minimum' => 1],
                     'set_index'        => ['type' => 'integer', 'minimum' => 0],
-                    'reps'             => ['type' => 'integer', 'minimum' => 0],
-                    'weight_kg'        => ['type' => 'number', 'minimum' => 0],
-                    'duration_seconds' => ['type' => 'integer', 'minimum' => 0],
-                    'rpe'              => ['type' => 'integer', 'minimum' => 1, 'maximum' => 10],
+                    'reps'             => ['type' => ['integer', 'null'], 'minimum' => 0],
+                    'weight_kg'        => ['type' => ['number', 'null'], 'minimum' => 0],
+                    'duration_seconds' => ['type' => ['integer', 'null'], 'minimum' => 0],
+                    'rpe'              => ['type' => ['integer', 'null'], 'minimum' => 1, 'maximum' => 10],
                 ],
             ],
         ],

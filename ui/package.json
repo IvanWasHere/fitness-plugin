@@ -13,8 +13,10 @@
     "format:check": "prettier --check src"
   },
   "dependencies": {
+    "@tanstack/react-query": "^5.101.4",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^7.18.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",

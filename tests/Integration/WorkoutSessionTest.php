@@ -160,6 +160,40 @@ final class WorkoutSessionTest extends WorkoutFixtureCase
         )));
     }
 
+    public function testExercisesNobodyTouchedCountAsSkippedNotCompleted(): void
+    {
+        $fixture = $this->seedMemberWithWorkout();
+        $session = $this->sessions->start($fixture['fc_user_id'], $fixture['workout_id']);
+
+        // One exercise done, seven walked past.
+        $this->sessions->logSet($fixture['fc_user_id'], $session['id'], $fixture['exercise_ids'][0], 0, [
+            'reps'      => 8,
+            'weight_kg' => 80,
+        ]);
+
+        $celebration = $this->sessions->complete(
+            $fixture['wp_user_id'],
+            $fixture['fc_user_id'],
+            $session['id']
+        );
+
+        // "8/8 exercises" for a workout where one exercise happened is a lie the
+        // celebration screen was telling: `was_skipped` defaults to 0 and is only
+        // recomputed for exercises that received a set.
+        $this->assertSame(1, $celebration['exercises_completed']);
+        $this->assertSame(self::EXERCISE_COUNT, $celebration['total_exercises']);
+
+        global $wpdb;
+        $this->assertSame(
+            self::EXERCISE_COUNT - 1,
+            (int) $wpdb->get_var($wpdb->prepare(
+                "SELECT COUNT(*) FROM {$wpdb->prefix}fc_exercise_logs
+                  WHERE session_id = %d AND was_skipped = 1",
+                $session['id']
+            ))
+        );
+    }
+
     // ------------------------------------------------------------ single-session
 
     public function testASecondStartIsRefusedAndNamesTheOpenSession(): void

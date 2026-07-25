@@ -51,14 +51,21 @@ final class SessionController extends MemberController
     }
 
     /**
-     * GET /sessions/active — the open session, or null on boot.
+     * GET /sessions/active — the open session, or nothing.
+     *
+     * **204, not `200 null`.** A bare `null` body does not survive WordPress's
+     * REST serialisation: it emits a zero-byte 200, which any client parsing
+     * "empty means no content" turns into an empty *object* — truthy, with no
+     * fields, and every `session.exercises` downstream explodes. 204 says "no
+     * open session" unambiguously, and it is not a 404 either, because the
+     * question ("is one running?") was answered perfectly well.
      */
     public function active(): WP_REST_Response|WP_Error
     {
         return $this->asMember(function (int $wpUserId, int $fcUserId): WP_REST_Response {
-            // 200 with null, not 404: "no session running" is a normal answer to
-            // this question and should not read as an error in the client.
-            return $this->response($this->sessions->active($fcUserId));
+            $session = $this->sessions->active($fcUserId);
+
+            return null === $session ? $this->response(null, 204) : $this->response($session);
         });
     }
 

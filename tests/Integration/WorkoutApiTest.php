@@ -122,7 +122,8 @@ final class WorkoutApiTest extends WorkoutFixtureCase
         $fixture = $this->seedMemberWithWorkout();
         wp_set_current_user($fixture['wp_user_id']);
 
-        $this->assertNull($this->get('/sessions/active')->get_data(), 'Nothing running yet.');
+        $idle = $this->get('/sessions/active');
+        $this->assertSame(204, $idle->get_status(), 'No open session is 204, never a null body.');
 
         $started = $this->post('/sessions', ['workout_id' => $fixture['workout_id']]);
         $this->assertSame(201, $started->get_status());
@@ -225,6 +226,50 @@ final class WorkoutApiTest extends WorkoutFixtureCase
 
         $this->assertSame(400, $response->get_status());
         $this->assertSame('rest_invalid_param', $response->get_data()['code']);
+    }
+
+    public function testASetWithExplicitNullMeasuresIsAccepted(): void
+    {
+        $fixture = $this->seedMemberWithWorkout();
+        wp_set_current_user($fixture['wp_user_id']);
+
+        $sessionId = $this->post('/sessions', ['workout_id' => $fixture['workout_id']])->get_data()['id'];
+
+        // A timed hold has no reps, a bodyweight set has no weight, and the
+        // first set of a workout has no rest before it. Declaring those args as
+        // plain integers made WordPress reject an explicit null with 400 — and
+        // the player's queue treats 4xx as unretryable, so the set was lost
+        // while the UI reported it saved.
+        $response = $this->post("/sessions/{$sessionId}/sets", [
+            'exercise_id'        => $fixture['exercise_ids'][0],
+            'set_index'          => 0,
+            'reps'               => 10,
+            'weight_kg'          => 40,
+            'duration_seconds'   => null,
+            'rest_taken_seconds' => null,
+            'rpe'                => null,
+        ]);
+
+        $this->assertSame(200, $response->get_status());
+        $this->assertCount(1, $response->get_data()['exercises'][0]['sets']);
+    }
+
+    public function testActiveSessionAnswers204WhenNothingIsRunning(): void
+    {
+        $fixture = $this->seedMemberWithWorkout();
+        wp_set_current_user($fixture['wp_user_id']);
+
+        // A bare `null` body does not survive WP's REST serialisation — it goes
+        // out as a zero-byte 200, which a client reading "empty means no
+        // content" turns into an empty *object*. That crashed the player once;
+        // this test is why it cannot come back.
+        $this->assertSame(204, $this->get('/sessions/active')->get_status());
+
+        $this->post('/sessions', ['workout_id' => $fixture['workout_id']]);
+
+        $running = $this->get('/sessions/active');
+        $this->assertSame(200, $running->get_status());
+        $this->assertIsArray($running->get_data()['exercises']);
     }
 
     public function testAnAccountWithoutAMemberProfileIsToldSoPlainly(): void
