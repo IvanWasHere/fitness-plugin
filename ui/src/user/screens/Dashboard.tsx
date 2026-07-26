@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
-import { useSession } from '@shared/session-context';
 import { Icon } from '@shared/components/Icon';
+import { MiniBars } from '@shared/components/MiniBars';
 import {
   Button,
   Card,
@@ -11,96 +11,87 @@ import {
   Skeleton,
   StatCard,
 } from '@shared/components/ui';
-import { formatDuration } from '@shared/hooks/timers';
-import { useSessionHistory, useWorkouts } from '../api/queries';
-import type { Session, WorkoutSummary } from '../api/types';
+import { useDashboard } from '../api/queries';
+import type { ActivityEntry, Dashboard as DashboardPayload, WorkoutSummary } from '../api/types';
 import { usePlayer } from '../state/player-context';
 
 /**
  * The dashboard.
  *
- * **Composed client-side for now.** The contract's one-call aggregate
- * (`GET /user/dashboard`, plans/02-api-contract.md) is W1.6; until it lands this
- * screen derives what it can from the two endpoints that exist. Everything below
- * is therefore written as a single `useDashboard()` hook, so W1.6 replaces one
- * function rather than rewriting the screen — and the six-round-trip version the
- * prototype shipped never appears here at all.
+ * **One request** (`GET /user/dashboard`, W1.6). The client-side composition
+ * this screen shipped with in W1.5 is gone, and with it the second streak
+ * implementation that lived here: the number now comes from the server's
+ * StreakService, so the celebration screen and this screen can no longer
+ * disagree about what day it is. The member's timezone is the server's, too —
+ * `payload.date` is their today, not the browser's.
+ *
+ * Sections whose data lands in Phase 2 (nutrition, water, messages) are already
+ * in the payload and already honest about being empty, so each renders its real
+ * empty state rather than being commented out and forgotten.
  */
-function useDashboard() {
-  const workouts = useWorkouts();
-  const history = useSessionHistory(1);
-
-  const items = workouts.data?.items ?? [];
-  const sessions = history.data?.items ?? [];
-
-  const completed = sessions.filter((session) => session.status === 'completed');
-  const thisWeek = completed.filter((session) => isWithinDays(session.log_date, 7));
-
-  return {
-    isLoading: workouts.isLoading || history.isLoading,
-    error: workouts.error ?? history.error,
-    refetch: () => {
-      void workouts.refetch();
-      void history.refetch();
-    },
-    todaysWorkout: pickTodaysWorkout(items),
-    workoutCount: items.length,
-    recent: completed.slice(0, 5),
-    stats: {
-      streakDays: streakFrom(completed),
-      weeklyWorkouts: thisWeek.length,
-      weeklyMinutes: Math.round(thisWeek.reduce((sum, s) => sum + s.duration_seconds, 0) / 60),
-      weeklyCalories: thisWeek.reduce((sum, s) => sum + (s.calories_burned ?? 0), 0),
-    },
-  };
-}
-
 export function Dashboard() {
-  const { boot } = useSession();
   const player = usePlayer();
-  const { isLoading, error, refetch, todaysWorkout, recent, stats } = useDashboard();
+  const { data, isLoading, error, refetch } = useDashboard();
 
-  const firstName = (boot.user?.display_name ?? '').split(' ')[0] || 'there';
+  if (error) {
+    return (
+      <>
+        <PageHeader title="Dashboard" />
+        <ErrorState message={error.message} onRetry={() => void refetch()} />
+      </>
+    );
+  }
+
+  if (isLoading || !data) {
+    return (
+      <>
+        <PageHeader title="Dashboard" />
+        <div className="fc-grid fc-grid-4 fc-mb-24">
+          {[0, 1, 2, 3].map((key) => (
+            <Skeleton key={key} height={92} />
+          ))}
+        </div>
+        <Skeleton height={160} />
+      </>
+    );
+  }
+
+  const { greeting, stats, todays_workout: todays, upcoming_workout: upcoming } = data;
 
   return (
     <>
-      <PageHeader title={`Hey, ${firstName}`} subtitle="Here is where you stand today." />
-
-      {error && <ErrorState message={error.message} onRetry={refetch} />}
+      <PageHeader title={`Hey, ${greeting.name}`} subtitle="Here is where you stand today." />
 
       <div className="fc-welcome fc-mb-24">
-        <h2>
-          {stats.streakDays > 0 ? `${stats.streakDays}-day streak` : 'Start your streak today'}
-        </h2>
-        <p>
-          {stats.weeklyWorkouts > 0
-            ? `${stats.weeklyWorkouts} workout${stats.weeklyWorkouts === 1 ? '' : 's'} this week · ${stats.weeklyMinutes} minutes`
-            : 'No workouts logged this week yet.'}
-        </p>
+        <h2>{streakHeadline(greeting.streak_days)}</h2>
+        <p>{monthlySummary(data)}</p>
       </div>
 
       <div className="fc-grid fc-grid-4 fc-mb-24">
-        <StatCard icon="flame" value={stats.streakDays} label="Day streak" />
-        <StatCard
-          icon="dumbbell"
-          value={stats.weeklyWorkouts}
-          label="This week"
-          tone="var(--info)"
-        />
-        <StatCard icon="clock" value={stats.weeklyMinutes} label="Minutes" tone="var(--purple)" />
+        <StatCard icon="flame" value={stats.streak_days} label="Day streak" />
         <StatCard
           icon="activity"
-          value={stats.weeklyCalories}
-          label="Calories"
+          value={stats.calories_burned_today}
+          label="Calories today"
           tone="var(--accent2)"
+        />
+        <StatCard
+          icon="dumbbell"
+          value={data.monthly_stats.workouts_completed}
+          label={`Last ${data.monthly_stats.window_days} days`}
+          tone="var(--info)"
+        />
+        <StatCard
+          icon="clock"
+          value={data.monthly_stats.avg_hours_per_week}
+          label="Hours / week"
+          tone="var(--purple)"
         />
       </div>
 
       <h2 className="fc-text-lg fc-mb-16">Today&rsquo;s workout</h2>
 
-      {isLoading && <Skeleton height={160} />}
-
-      {!isLoading && !todaysWorkout && (
+      {!todays && (
         <EmptyState
           title="Nothing scheduled"
           action={
@@ -113,30 +104,182 @@ export function Dashboard() {
         </EmptyState>
       )}
 
-      {todaysWorkout && (
+      {todays && (
         <TodaysWorkout
-          workout={todaysWorkout}
-          onStart={() => player.start(todaysWorkout.id)}
+          workout={todays}
+          onStart={() => player.start(todays.id)}
           starting={player.starting}
         />
       )}
 
-      <h2 className="fc-text-lg fc-mt-24 fc-mb-16">Recent activity</h2>
-
-      {isLoading && <Skeleton height={120} />}
-
-      {!isLoading && recent.length === 0 && (
-        <EmptyState title="No workouts yet">Your finished workouts will appear here.</EmptyState>
+      {upcoming && (
+        <div className="fc-mt-16">
+          <Card>
+            <div className="fc-flex fc-flex-between fc-flex-c fc-gap-16 fc-flex-wrap">
+              <div style={{ minWidth: 0 }}>
+                <div className="fc-text-xs fc-text-muted">Up next</div>
+                <div className="fc-font-bold fc-truncate">{upcoming.workout_name}</div>
+                <div className="fc-text-xs fc-text-muted fc-mt-4">
+                  {upcoming.scheduled_for ?? 'Unscheduled'}
+                </div>
+              </div>
+              <Link to={`/workouts/${upcoming.id}`} className="fc-btn fc-btn--secondary fc-btn--sm">
+                Details
+              </Link>
+            </div>
+          </Card>
+        </div>
       )}
 
-      {recent.length > 0 && (
+      <div className="fc-grid fc-grid-2 fc-mt-24 fc-gap-16">
+        <ThisWeek data={data} />
+        <Nutrition data={data} />
+      </div>
+
+      <h2 className="fc-text-lg fc-mt-24 fc-mb-16">Recent activity</h2>
+
+      {data.recent_activity.length === 0 && (
+        <EmptyState title="Nothing yet">
+          Your finished workouts and milestones will appear here.
+        </EmptyState>
+      )}
+
+      {data.recent_activity.length > 0 && (
         <div className="fc-flex fc-flex-column fc-gap-8">
-          {recent.map((session) => (
-            <RecentRow key={session.id} session={session} />
+          {data.recent_activity.map((entry) => (
+            <ActivityRow
+              key={`${entry.type}-${entry.occurred_at}-${entry.subject_id}`}
+              entry={entry}
+            />
           ))}
         </div>
       )}
     </>
+  );
+}
+
+function ThisWeek({ data }: { data: DashboardPayload }) {
+  const { weekly_chart: chart, monthly_stats: monthly } = data;
+  const total = chart.calories.reduce((sum, value) => sum + value, 0);
+
+  return (
+    <Card>
+      <div className="fc-flex fc-flex-between fc-flex-c fc-mb-16">
+        <h3 className="fc-text-lg">Last 7 days</h3>
+        <span className="fc-text-xs fc-text-muted">{total} kcal</span>
+      </div>
+
+      <MiniBars
+        title="Calories burned per day"
+        labels={chart.labels}
+        values={chart.calories}
+        unit="kcal"
+      />
+
+      {monthly.consistency_percentage !== null && (
+        <div className="fc-mt-16">
+          <div className="fc-flex fc-flex-between fc-text-xs fc-text-muted fc-mb-4">
+            <span>Plan adherence</span>
+            <span>{Math.round(monthly.consistency_percentage)}%</span>
+          </div>
+          <ProgressBar value={monthly.consistency_percentage} tone="var(--info)" />
+        </div>
+      )}
+    </Card>
+  );
+}
+
+/**
+ * Macros and water. Both are read-only here until W2.1 ships the logging
+ * screens — the card says where the numbers will come from rather than
+ * pretending the feature is missing.
+ */
+function Nutrition({ data }: { data: DashboardPayload }) {
+  const { nutrition, water } = data;
+  const hasGoals = nutrition.calories.goal !== null;
+  const logged = nutrition.calories.value > 0 || water.consumed_ml > 0;
+
+  return (
+    <Card>
+      <h3 className="fc-text-lg fc-mb-16">Today&rsquo;s intake</h3>
+
+      {!logged && !hasGoals && (
+        <p className="fc-text-sm fc-text-muted">
+          Meal and water logging arrives with the Nutrition screen. Anything a trainer records for
+          you shows up here in the meantime.
+        </p>
+      )}
+
+      {(logged || hasGoals) && (
+        <div className="fc-flex fc-flex-column fc-gap-12">
+          <MacroRow
+            label="Calories"
+            value={nutrition.calories.value}
+            goal={nutrition.calories.goal}
+            unit="kcal"
+          />
+          <MacroRow
+            label="Protein"
+            value={nutrition.protein_g.value}
+            goal={nutrition.protein_g.goal}
+            unit="g"
+          />
+          <MacroRow
+            label="Carbs"
+            value={nutrition.carbs_g.value}
+            goal={nutrition.carbs_g.goal}
+            unit="g"
+          />
+          <MacroRow
+            label="Fat"
+            value={nutrition.fat_g.value}
+            goal={nutrition.fat_g.goal}
+            unit="g"
+          />
+        </div>
+      )}
+
+      <div className="fc-mt-16">
+        <div className="fc-flex fc-flex-between fc-text-xs fc-text-muted fc-mb-4">
+          <span>
+            <Icon name="activity" size={12} /> Water
+          </span>
+          <span>
+            {water.consumed_ml} / {water.goal_ml} ml
+          </span>
+        </div>
+        <ProgressBar
+          value={water.goal_ml > 0 ? (water.consumed_ml / water.goal_ml) * 100 : 0}
+          tone="var(--info)"
+        />
+      </div>
+    </Card>
+  );
+}
+
+function MacroRow({
+  label,
+  value,
+  goal,
+  unit,
+}: {
+  label: string;
+  value: number;
+  goal: number | null;
+  unit: string;
+}) {
+  return (
+    <div>
+      <div className="fc-flex fc-flex-between fc-text-xs fc-text-muted fc-mb-4">
+        <span>{label}</span>
+        <span>
+          {value}
+          {goal === null ? '' : ` / ${goal}`} {unit}
+        </span>
+      </div>
+      {/* No goal, no bar: a progress bar without a target is a decoration. */}
+      {goal !== null && goal > 0 && <ProgressBar value={(value / goal) * 100} />}
+    </div>
   );
 }
 
@@ -197,20 +340,20 @@ function TodaysWorkout({
   );
 }
 
-function RecentRow({ session }: { session: Session }) {
+function ActivityRow({ entry }: { entry: ActivityEntry }) {
   return (
     <div className="fc-list-row">
       <div
         className="fc-stat__icon"
         style={{ background: 'var(--accent-d)', color: 'var(--accent)' }}
       >
-        <Icon name="check" />
+        <Icon name={activityIcon(entry.type)} />
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div className="fc-font-bold fc-truncate">{session.workout_name}</div>
-        <div className="fc-text-xs fc-text-muted">
-          {session.log_date} · {formatDuration(session.duration_seconds)} ·{' '}
-          {session.calories_burned ?? 0} kcal
+        <div className="fc-font-bold fc-truncate">{entry.title}</div>
+        <div className="fc-text-xs fc-text-muted fc-truncate">
+          {entry.detail ? `${entry.detail} · ` : ''}
+          {relativeTime(entry.occurred_at)}
         </div>
       </div>
     </div>
@@ -219,68 +362,60 @@ function RecentRow({ session }: { session: Session }) {
 
 // ------------------------------------------------------------------ helpers
 
-function pickTodaysWorkout(items: WorkoutSummary[]): WorkoutSummary | null {
-  if (items.length === 0) {
-    return null;
+function activityIcon(type: string) {
+  if (type.startsWith('record')) {
+    return 'flame' as const;
+  }
+  if (type.startsWith('message')) {
+    return 'activity' as const;
   }
 
-  const today = new Date().toISOString().slice(0, 10);
-
-  return (
-    items.find((item) => item.resumable_session_id !== null) ??
-    items.find((item) => item.scheduled_for === today) ??
-    items.find((item) => item.status !== 'completed') ??
-    items[0]
-  );
+  return 'check' as const;
 }
 
-function isWithinDays(date: string | null, days: number): boolean {
-  if (!date) {
-    return false;
+function streakHeadline(days: number): string {
+  return days > 0 ? `${days}-day streak` : 'Start your streak today';
+}
+
+function monthlySummary({ monthly_stats: monthly }: DashboardPayload): string {
+  if (monthly.workouts_completed === 0) {
+    return 'No workouts logged yet — the first one starts the streak.';
   }
 
-  const then = Date.parse(`${date}T00:00:00Z`);
+  const plural = monthly.workouts_completed === 1 ? '' : 's';
 
-  return Number.isFinite(then) && Date.now() - then <= days * 86_400_000;
+  return `${monthly.workouts_completed} workout${plural} and ${monthly.calories_burned} kcal in the last ${monthly.window_days} days.`;
 }
 
 /**
- * Consecutive-day streak from completed sessions.
+ * "3 hours ago" from an ISO timestamp.
  *
- * Deliberately the same rule as the server's StreakService — distinct days, live
- * if the last one is today or yesterday — because this is a stand-in until
- * `GET /user/dashboard` returns the authoritative number in W1.6, and two
- * different answers on two screens is worse than a temporary one.
+ * `Intl.RelativeTimeFormat` rather than a hand-rolled ladder, so a locale that
+ * does not say "3 h ago" gets its own phrasing for free.
  */
-function streakFrom(sessions: Session[]): number {
-  const days = [...new Set(sessions.map((session) => session.log_date).filter(Boolean))]
-    .sort()
-    .reverse();
+function relativeTime(iso: string): string {
+  const then = Date.parse(iso);
 
-  if (days.length === 0) {
-    return 0;
+  if (!Number.isFinite(then)) {
+    return '';
   }
 
-  const today = new Date().toISOString().slice(0, 10);
-  const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+  const seconds = Math.round((then - Date.now()) / 1000);
+  const format = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });
 
-  if (days[0] !== today && days[0] !== yesterday) {
-    return 0;
-  }
+  const units: [Intl.RelativeTimeFormatUnit, number][] = [
+    ['year', 31_536_000],
+    ['month', 2_592_000],
+    ['day', 86_400],
+    ['hour', 3_600],
+    ['minute', 60],
+  ];
 
-  let streak = 1;
-  let cursor = days[0] as string;
-
-  for (const day of days.slice(1)) {
-    const expected = new Date(Date.parse(`${cursor}T00:00:00Z`) - 86_400_000)
-      .toISOString()
-      .slice(0, 10);
-    if (day !== expected) {
-      break;
+  for (const [unit, size] of units) {
+    if (Math.abs(seconds) >= size) {
+      return format.format(Math.round(seconds / size), unit);
     }
-    streak += 1;
-    cursor = day as string;
   }
 
-  return streak;
+  return format.format(seconds, 'second');
 }

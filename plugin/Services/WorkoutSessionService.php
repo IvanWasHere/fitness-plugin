@@ -3,6 +3,7 @@
 namespace FitnessClub\Services;
 
 use FitnessClub\Support\DomainException;
+use FitnessClub\Support\UserClock;
 
 if (!defined('ABSPATH')) {
     exit();
@@ -117,7 +118,7 @@ final class WorkoutSessionService
                 'user_id'         => $fcUserId,
                 'workout_id'      => $workoutId,
                 'user_workout_id' => (int) $workout['assignment_id'],
-                'log_date'        => $this->todayForUser($fcUserId),
+                'log_date'        => UserClock::today($fcUserId),
                 'started_at'      => $now,
                 'last_resumed_at' => $now,
                 'duration_seconds' => 0,
@@ -158,6 +159,8 @@ final class WorkoutSessionService
             $wpdb->query('ROLLBACK');
             throw $e;
         }
+
+        $this->announce($fcUserId, 'session.started');
 
         return $this->rehydrate($fcUserId, $sessionId);
     }
@@ -488,6 +491,8 @@ final class WorkoutSessionService
             throw $e;
         }
 
+        $this->announce($fcUserId, 'session.completed');
+
         return $this->celebration($wpUserId, $fcUserId, $sessionId, $records);
     }
 
@@ -546,6 +551,8 @@ final class WorkoutSessionService
             $wpdb->query('ROLLBACK');
             throw $e;
         }
+
+        $this->announce($fcUserId, 'session.abandoned');
 
         return $this->rehydrate($fcUserId, $sessionId);
     }
@@ -656,6 +663,8 @@ final class WorkoutSessionService
             $wpdb->query('ROLLBACK');
             throw $e;
         }
+
+        $this->announce($fcUserId, 'session.reviewed');
 
         return $this->rehydrate($fcUserId, $sessionId);
     }
@@ -1236,27 +1245,24 @@ final class WorkoutSessionService
         return $grouped;
     }
 
-    private function todayForUser(int $fcUserId): string
-    {
-        global $wpdb;
-
-        $timezone = $wpdb->get_var($wpdb->prepare(
-            "SELECT timezone FROM {$wpdb->prefix}fc_users WHERE id = %d LIMIT 1",
-            $fcUserId
-        ));
-
-        try {
-            $zone = new \DateTimeZone((string) ($timezone ?: wp_timezone_string()));
-        } catch (\Exception) {
-            $zone = wp_timezone();
-        }
-
-        return (new \DateTimeImmutable('now', $zone))->format('Y-m-d');
-    }
-
     private function now(): string
     {
         return gmdate('Y-m-d H:i:s');
+    }
+
+    /**
+     * Say that this member's numbers moved, and let whoever cares react.
+     *
+     * Fired **after** the commit, never inside it: a listener that clears a
+     * cache before the transaction lands would repopulate it from the old rows,
+     * which is the one ordering guaranteed to produce a stale read.
+     *
+     * Today the only listener is the dashboard cache (Support\DashboardCache).
+     * Nutrition, health and messaging fire the same action in Phase 2.
+     */
+    private function announce(int $fcUserId, string $reason): void
+    {
+        do_action('fitnessclub/user_data_changed', $fcUserId, $reason);
     }
 
     private function toTimestamp(string $mysqlUtc): int

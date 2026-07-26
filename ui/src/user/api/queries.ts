@@ -1,7 +1,14 @@
 import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 import { ApiError } from '@shared/api';
 import { useSession } from '@shared/session-context';
-import type { Celebration, Collection, Session, WorkoutDetail, WorkoutSummary } from './types';
+import type {
+  Celebration,
+  Collection,
+  Dashboard,
+  Session,
+  WorkoutDetail,
+  WorkoutSummary,
+} from './types';
 
 /**
  * Server state, one hook per endpoint (plans/04-user-app.md#state-ownership).
@@ -14,11 +21,30 @@ import type { Celebration, Collection, Session, WorkoutDetail, WorkoutSummary } 
  */
 
 export const queryKeys = {
+  dashboard: ['dashboard'] as const,
   workouts: (filters: Record<string, unknown>) => ['workouts', filters] as const,
   workout: (id: number) => ['workout', id] as const,
   activeSession: ['session', 'active'] as const,
   sessionHistory: (page: number) => ['sessions', page] as const,
 };
+
+/**
+ * The dashboard aggregate — one request for the whole screen.
+ *
+ * `staleTime` matches the server's 60-second cache: refetching sooner can only
+ * return the same cached bytes, so the shorter default would spend a request to
+ * learn nothing. After a write the server *drops* its cache and this query is
+ * invalidated, so freshness comes from invalidation, not from polling.
+ */
+export function useDashboard(): UseQueryResult<Dashboard, ApiError> {
+  const { api } = useSession();
+
+  return useQuery({
+    queryKey: queryKeys.dashboard,
+    queryFn: () => api.get<Dashboard>('user/dashboard'),
+    staleTime: 60_000,
+  });
+}
 
 export interface WorkoutFilters {
   q?: string;
@@ -96,6 +122,11 @@ export function useSessionActions() {
   const adopt = (session: Session | null) => {
     queryClient.setQueryData(queryKeys.activeSession, session);
     void queryClient.invalidateQueries({ queryKey: ['workouts'] });
+    // Starting, finishing or stopping a workout all move a number on the
+    // dashboard — and the server has already dropped its own cache for the same
+    // event, so this refetch reads fresh figures rather than the ones the
+    // member just invalidated.
+    void queryClient.invalidateQueries({ queryKey: queryKeys.dashboard });
   };
 
   const start = useMutation<Session, ApiError, number>({

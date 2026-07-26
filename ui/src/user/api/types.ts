@@ -147,3 +147,84 @@ export interface SetPayload {
   rest_taken_seconds?: number | null;
   rpe?: number | null;
 }
+
+// ------------------------------------------------------------ the dashboard
+
+/** A value against its goal. `goal` is null when the member has not set one. */
+export interface MacroTarget {
+  value: number;
+  goal: number | null;
+}
+
+export interface WeeklyChart {
+  /** Localised weekday initials, oldest first; the last bucket is today. */
+  labels: string[];
+  /** ISO dates matching `labels`, so a tooltip never has to guess the year. */
+  dates: string[];
+  calories: number[];
+  workouts: number[];
+  minutes: number[];
+}
+
+export interface MonthlyStats {
+  workouts_completed: number;
+  calories_burned: number;
+  total_minutes: number;
+  active_days: number;
+  avg_hours_per_week: number;
+  /** Adherence to what was scheduled; null when nothing was. */
+  consistency_percentage: number | null;
+  window_days: number;
+}
+
+export interface ActivityEntry {
+  type: string;
+  title: string;
+  detail: string;
+  subject_type: string | null;
+  subject_id: number | null;
+  meta: Record<string, unknown>;
+  occurred_at: string;
+}
+
+export interface MessagePreview {
+  thread_id: number;
+  trainer_name: string | null;
+  avatar_url: string | null;
+  preview: string | null;
+  unread_count: number;
+  last_message_at: string;
+}
+
+/**
+ * `GET /user/dashboard` — every section of the screen in one response.
+ *
+ * Sections whose services arrive in Phase 2 (nutrition, water, messaging) are
+ * already present and already honest: they report zeros and nulls rather than
+ * placeholder numbers, so the screen can render its real empty states now.
+ */
+export interface Dashboard {
+  generated_at: string;
+  /** Today in the member's own timezone — not the browser's. */
+  date: string;
+  greeting: { name: string; streak_days: number };
+  stats: {
+    streak_days: number;
+    calories_burned_today: number;
+    current_weight_kg: number | null;
+    goal_progress_percentage: number | null;
+  };
+  todays_workout: WorkoutSummary | null;
+  upcoming_workout: WorkoutSummary | null;
+  water: { consumed_ml: number; goal_ml: number; glass_ml: number };
+  nutrition: {
+    calories: MacroTarget;
+    protein_g: MacroTarget;
+    carbs_g: MacroTarget;
+    fat_g: MacroTarget;
+  };
+  weekly_chart: WeeklyChart;
+  monthly_stats: MonthlyStats;
+  recent_activity: ActivityEntry[];
+  message_previews: MessagePreview[];
+}

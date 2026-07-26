@@ -385,9 +385,79 @@ tests / 456 assertions, `ui/` typecheck + lint + format + build green.**
 Mobile layout is verified by the responsive CSS and the fixed hamburger path, not
 on a physical device — the wake lock in particular cannot be exercised here.
 
-### W1.6 Dashboard aggregate (2 d)
+### W1.6 Dashboard aggregate (2 d) — ✅ **complete 2026-07-27**
 `GET /user/dashboard`, transient caching + invalidation, streak calculation,
 `ProgressService` weekly series.
+
+**Build notes.**
+
+- **The payload is contract-complete now, not in Phase 2.** Nutrition, water and
+  messaging have no services yet, but they do have **rollup tables** —
+  `fc_nutrition_days` carries the day's totals and goals, `fc_message_threads`
+  the preview and unread count. `DashboardService` reads those rollups. That is
+  not pre-empting W2.1/W2.4: those packages own *recomputing* the rows on write,
+  and this only reads them, so the wire shape stops moving today and the screen
+  gets its real sections rather than four commented-out placeholders.
+- **Empty means empty.** Every section that has no data returns its zero-state —
+  `consumed_ml: 0`, a `null` goal, `[]` — and never a plausible-looking number.
+  `goal_progress_percentage` is null without a target weight *and* a starting
+  weight to measure from; `consistency_percentage` is null when nothing was
+  scheduled. The client renders "set a goal" instead of a ring against an
+  imaginary 2 000 kcal, and no card draws a bar it cannot justify.
+- **Consistency is adherence, not attendance.** Completed sessions ÷ workouts
+  *scheduled* in the 30-day window, capped at 100. The obvious alternative —
+  active days ÷ days in the window — reports 13 % to somebody who did every
+  session they were given, which is the opposite of what the number is for.
+- **Invalidation is an announcement, not a cleanup call.** Writers fire
+  `do_action('fitnessclub/user_data_changed', $fcUserId, $reason)` after the
+  commit; `Support\DashboardCache` subscribes at boot. Six subsystems feed this
+  screen and four of them do not exist yet — a cache that every future write site
+  has to *remember* to clear is a cache that goes stale, and that exact symptom
+  is already sitting in the demo fixtures as a support ticket ("my last two
+  sessions did not appear until I refreshed"). Firing after the commit, never
+  inside it, is the other half: a listener that clears early repopulates from the
+  pre-transaction rows.
+- **The second streak implementation is gone.** W1.5 carried a deliberate
+  stand-in copy of the streak rule in `Dashboard.tsx`; the screen now takes the
+  server's number, so the celebration screen and the dashboard can no longer
+  disagree. `todayForUser()` — which had been private in `StreakService` and
+  again in `WorkoutSessionService`, and which `ProgressService` needed a third
+  copy of — is now `Support\UserClock`. It also fixed a latent DST bug in
+  passing: the streak walked days with `strtotime('-1 day')` on a timestamp,
+  which is wrong twice a year in any zone that shifts, so a streak would break
+  every spring in a way nobody could reproduce in July.
+- **Empty buckets are drawn.** `GROUP BY log_date` only returns days that have
+  sessions; the series is built by walking the window and reading that map, so a
+  rest day is a zero bar rather than a missing one. A chart that drops empty days
+  draws a line through the gap and turns three workouts in a fortnight into a
+  plausible-looking habit.
+- **No charting library.** `MiniBars` is ~60 lines of flexbox for one seven-bar
+  series. A library costs 40–150 kB on the screen whose entire point is first
+  paint; W2.3's four real charts with axes and ranges are where one earns its
+  weight, and this component is explicitly not the foundation for them.
+
+**A pre-existing flaky gate, found and fixed here.** The suite failed roughly
+one run in five, on W1.4's `WorkoutSessionTest` and never on the same assertion
+twice: `1501 is not 1500`, then `421 is not 420`. Not a W1.6 regression and not a
+service bug — the running leg of a session is measured against the **real**
+clock, and real time passes while a test logs 24 sets between `resume()` and
+`complete()`. Whenever that stretch crossed a second boundary the exact
+`assertSame(1500, …)` was simply wrong about what it could know. Every duration
+assertion that spans a real-clock leg now carries ±1 s (the exact ones that do
+not — `0` for a stale-abandoned session — are unchanged, because zero is a claim
+about the code, not about the clock). Verified with 14 consecutive green runs.
+Worth catching before 0.6: the first thing a flaky suite costs is the habit of
+believing CI.
+
+*Exit criterion met.* Driven against the seeded dev site as Alex Morgan: one
+request returns all ten contract sections — a 3-day streak, `Upper Body Power`
+scheduled today with `Leg Day Destroyer` up next, 1 250/2 000 ml water,
+1 650/2 400 kcal, three workouts and 888 kcal over 30 days, both trainer threads
+with unread counts, and a seven-day chart whose three active days sit in the
+right buckets. Gate: **phpcs 0 errors, phpunit 117 tests / 516 assertions,
+`ui/` typecheck + lint + format + build green.** The member SPA has not been
+eyeballed in a browser for this package — the dev session is signed in as an
+administrator, which by D9 precedence routes to the admin SPA.
 
 **Phase 1 exit:** the core loop — sign in, see today's workout, do it, see it
 counted — works end to end on a real device.

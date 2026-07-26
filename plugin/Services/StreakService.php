@@ -2,6 +2,8 @@
 
 namespace FitnessClub\Services;
 
+use FitnessClub\Support\UserClock;
+
 if (!defined('ABSPATH')) {
     exit();
 }
@@ -44,8 +46,8 @@ final class StreakService
             return 0;
         }
 
-        $today     = $today ?? $this->todayForUser($fcUserId);
-        $yesterday = gmdate('Y-m-d', strtotime($today . ' -1 day'));
+        $today     = $today ?? UserClock::today($fcUserId);
+        $yesterday = UserClock::shift($today, -1);
 
         $cursor = $days[0];
         if ($cursor !== $today && $cursor !== $yesterday) {
@@ -54,7 +56,7 @@ final class StreakService
 
         $streak = 1;
         foreach (array_slice($days, 1) as $day) {
-            if ($day !== gmdate('Y-m-d', strtotime($cursor . ' -1 day'))) {
+            if ($day !== UserClock::shift($cursor, -1)) {
                 break;
             }
             $streak++;
@@ -107,26 +109,5 @@ final class StreakService
         ));
 
         return array_map('strval', $rows ?: []);
-    }
-
-    /**
-     * Today in the user's timezone, falling back to the site's.
-     */
-    private function todayForUser(int $fcUserId): string
-    {
-        global $wpdb;
-
-        $timezone = $wpdb->get_var($wpdb->prepare(
-            "SELECT timezone FROM {$wpdb->prefix}fc_users WHERE id = %d LIMIT 1",
-            $fcUserId
-        ));
-
-        try {
-            $zone = new \DateTimeZone((string) ($timezone ?: wp_timezone_string()));
-        } catch (\Exception) {
-            $zone = wp_timezone();
-        }
-
-        return (new \DateTimeImmutable('now', $zone))->format('Y-m-d');
     }
 }

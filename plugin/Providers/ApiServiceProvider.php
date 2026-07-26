@@ -2,6 +2,7 @@
 
 namespace FitnessClub\Providers;
 
+use FitnessClub\Support\DashboardCache;
 use FitnessClub\Support\RateLimitException;
 use FitnessClub\Support\RateLimiter;
 use FitnessClub\WPBones\Support\ServiceProvider;
@@ -20,6 +21,8 @@ if (!defined('ABSPATH')) {
  *     Per-endpoint buckets (login, password reset, messaging) are tighter and
  *     live in their own controllers; this is the backstop.
  *   - `Retry-After` on every 429, whichever bucket produced it.
+ *   - The cache-invalidation subscription for cached aggregates, so a service
+ *     announcing a change does not need to know who caches what.
  *
  * The blanket limit only engages on installs with a persistent object cache —
  * see RateLimiter for why running it on a `wp_options`-backed transient store
@@ -33,6 +36,10 @@ class ApiServiceProvider extends ServiceProvider
     {
         add_filter('rest_pre_dispatch', [$this, 'throttle'], 10, 3);
         add_filter('rest_post_dispatch', [$this, 'addRetryAfter'], 10, 3);
+
+        // Cached responses invalidate themselves off `fitnessclub/user_data_changed`
+        // rather than every writer knowing what to clear — see DashboardCache.
+        DashboardCache::listen();
     }
 
     /**

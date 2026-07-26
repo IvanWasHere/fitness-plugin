@@ -1291,3 +1291,44 @@
   border-radius: 6px;
   border: 1px solid var(--border);
 }
+
+/* ------------------------------------------------------- mini bar chart ---- */
+/* The dashboard's seven-day series (W1.6). Flex columns rather than SVG: the
+   bars are one dimension and CSS already knows how to lay that out. */
+
+.fc-bars__track {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  height: 120px;
+}
+
+.fc-bars__col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  height: 100%;
+  min-width: 0;
+}
+
+.fc-bars__bar {
+  width: 100%;
+  max-width: 34px;
+  border-radius: 6px 6px 2px 2px;
+  transition: height 0.3s ease;
+}
+
+.fc-bars__label {
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--text2);
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fc-bars__bar {
+    transition: none;
+  }
+}

@@ -2,6 +2,7 @@
 
 use FitnessClub\Http\Controllers\Api\AuthController;
 use FitnessClub\Http\Controllers\Api\SessionController;
+use FitnessClub\Http\Controllers\Api\UserController;
 use FitnessClub\Http\Controllers\Api\WorkoutController;
 use FitnessClub\WPBones\Routing\API\Route;
 
@@ -133,6 +134,30 @@ Route::post('/auth/password/reset', AuthController::class . '@resetPassword', [
         'password' => [
             'required' => true,
             'type'     => 'string',
+        ],
+    ],
+]);
+
+/*
+|--------------------------------------------------------------------------
+| The member's own record — /user/*
+|--------------------------------------------------------------------------
+|
+| No id in any of these paths, by design: the subject is always the caller,
+| resolved from the session. An endpoint that takes the user id as a parameter
+| is an endpoint that will eventually be handed someone else's.
+|
+*/
+
+Route::get('/user/dashboard', UserController::class . '@dashboard', [
+    'permission_callback' => [UserController::class, 'canRead'],
+    'args'                => [
+        // Skip the 60-second cache. The client sends it after finishing a
+        // workout, where "your numbers update within a minute" is not an
+        // acceptable answer to "did that count?".
+        'refresh' => [
+            'type'    => 'boolean',
+            'default' => false,
         ],
     ],
 ]);

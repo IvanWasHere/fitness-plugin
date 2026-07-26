@@ -62,7 +62,7 @@ final class WorkoutSessionTest extends WorkoutFixtureCase
         $paused = $this->sessions->pause($fcUserId, $sessionId);
 
         $this->assertSame('paused', $paused['status']);
-        $this->assertSame(600, $paused['duration_seconds']);
+        $this->assertEqualsWithDelta(600, $paused['duration_seconds'], 1);
         $this->assertNull($paused['last_resumed_at'], 'A paused session has no running leg.');
 
         // --- a 20-minute gap, then resume ------------------------------------
@@ -70,8 +70,8 @@ final class WorkoutSessionTest extends WorkoutFixtureCase
         $resumed = $this->sessions->resume($fcUserId, $sessionId);
 
         $this->assertSame('in_progress', $resumed['status']);
-        $this->assertSame(600, $resumed['duration_seconds'], 'Paused time is not active time.');
-        $this->assertSame(1200, $resumed['paused_seconds'], 'The whole gap is accounted for as paused.');
+        $this->assertEqualsWithDelta(600, $resumed['duration_seconds'], 1, 'Paused time is not active time.');
+        $this->assertEqualsWithDelta(1200, $resumed['paused_seconds'], 1, 'The whole gap is accounted for as paused.');
 
         // --- 24 sets ---------------------------------------------------------
         foreach ($fixture['exercise_ids'] as $index => $exerciseId) {
@@ -98,8 +98,18 @@ final class WorkoutSessionTest extends WorkoutFixtureCase
 
         // Duration: 10 min before the pause + 15 min after. The 20-minute gap is
         // paused time and must not be in it.
-        $this->assertSame(1500, $celebration['duration_seconds']);
-        $this->assertSame(1200, (int) $this->sessionRow($sessionId)['paused_seconds']);
+        //
+        // Asserted to the second **with a second of slack**, and that is not
+        // sloppiness: the running leg is measured against the real clock, and
+        // real time genuinely passes between `resume()` and `complete()` while
+        // the 24 sets are logged. An exact `assertSame(1500, …)` fails whenever
+        // that stretch happens to cross a second boundary — roughly one run in
+        // five here, which is a gate nobody trusts by the third red CI build.
+        // The claim under test is that the 20-minute gap is *excluded*, and a
+        // one-second tolerance states it without lying about the precision the
+        // harness can deliver.
+        $this->assertEqualsWithDelta(1500, $celebration['duration_seconds'], 1);
+        $this->assertEqualsWithDelta(1200, (int) $this->sessionRow($sessionId)['paused_seconds'], 1);
         $this->assertSame(100.0, $celebration['completion_percentage']);
         $this->assertSame(self::EXERCISE_COUNT, $celebration['exercises_completed']);
         $this->assertSame(self::EXERCISE_COUNT, $celebration['total_exercises']);
@@ -386,7 +396,10 @@ final class WorkoutSessionTest extends WorkoutFixtureCase
         $abandoned = $this->sessions->abandon($fixture['fc_user_id'], $session['id']);
 
         $this->assertSame('abandoned', $abandoned['status']);
-        $this->assertSame(420, $abandoned['duration_seconds'], 'Time spent is still time spent (§8.1).');
+        // ±1 s for the same reason as the full-session duration above: the leg
+        // is measured against the real clock, which keeps running while the
+        // three sets are logged.
+        $this->assertEqualsWithDelta(420, $abandoned['duration_seconds'], 1, 'Time spent is still time spent (§8.1).');
         $this->assertSame(12.5, $abandoned['completion_percentage'], '3 of 24 planned sets.');
 
         // The card keeps the partial credit rather than resetting to zero.
