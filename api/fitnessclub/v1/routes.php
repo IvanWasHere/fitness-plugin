@@ -10,6 +10,7 @@ use FitnessClub\Http\Controllers\Api\NutritionController;
 use FitnessClub\Http\Controllers\Api\ProgressController;
 use FitnessClub\Http\Controllers\Api\SessionController;
 use FitnessClub\Http\Controllers\Api\SupportController;
+use FitnessClub\Http\Controllers\Api\TrainerController;
 use FitnessClub\Http\Controllers\Api\UserController;
 use FitnessClub\Http\Controllers\Api\WorkoutController;
 use FitnessClub\WPBones\Routing\API\Route;
@@ -1171,6 +1172,272 @@ Route::patch('/support/tickets/(?P<id>\d+)', SupportController::class . '@update
         'priority' => ['type' => 'string', 'sanitize_callback' => 'sanitize_key'],
         'assigned_to_account_id' => ['type' => 'integer', 'minimum' => 0],
     ],
+]);
+
+/*
+|--------------------------------------------------------------------------
+| Trainer — /trainer/*
+|--------------------------------------------------------------------------
+|
+| Gated on `fc_manage_clients`. **No route here accepts a client id without the
+| roster check**: every service method begins with Guard::trainerCoachesClient,
+| and a client who is not on the caller's roster answers 404 rather than 403 —
+| a trainer must not be able to enumerate the platform's membership by probing
+| ids.
+|
+| Two guards, and Q13 is the line between them:
+|
+|   - **Read is shared.** Any actively assigned trainer sees the whole client
+|     record, including every other trainer's assignments — two coaches
+|     independently programming heavy compounds in the same week is a real
+|     injury risk, and this is what catches it. Every assignment carries
+|     `assigned_by` so the reader never mistakes a co-trainer's work for theirs.
+|   - **Write is the assigner's alone.** Guard::trainerMadeAssignment for
+|     assignments, Guard::trainerAssignedResource for authored workouts and
+|     plans. Seeing another trainer's work is not permission to undo it.
+|
+| Notes are neither (Q15): private to the trainer who wrote them, invisible to
+| a co-trainer and to the client, and a co-trainer's note id answers 404 so its
+| existence is not confirmed.
+|
+*/
+
+$userIdArg = [
+    'userId' => [
+        'required'          => true,
+        'type'              => 'integer',
+        'minimum'           => 1,
+        'sanitize_callback' => 'absint',
+    ],
+];
+
+Route::get('/trainer/dashboard', TrainerController::class . '@dashboard', [
+    'permission_callback' => [TrainerController::class, 'canAccess'],
+]);
+
+Route::get('/trainer/requests', TrainerController::class . '@requests', [
+    'permission_callback' => [TrainerController::class, 'canAccess'],
+    'args'                => [
+        'status' => ['type' => 'string', 'enum' => ['pending', 'active', 'declined', 'ended']],
+    ],
+]);
+
+Route::post('/trainer/requests/(?P<id>\d+)/accept', TrainerController::class . '@acceptRequest', [
+    'permission_callback' => [TrainerController::class, 'canAccess'],
+    'args'                => $idArg,
+]);
+
+Route::post('/trainer/requests/(?P<id>\d+)/decline', TrainerController::class . '@declineRequest', [
+    'permission_callback' => [TrainerController::class, 'canAccess'],
+    'args'                => $idArg + [
+        'reason' => ['type' => 'string', 'sanitize_callback' => 'sanitize_textarea_field'],
+    ],
+]);
+
+Route::get('/trainer/clients', TrainerController::class . '@clients', [
+    'permission_callback' => [TrainerController::class, 'canAccess'],
+    'args'                => [
+        'status' => ['type' => 'string', 'enum' => ['active', 'pending', 'declined', 'ended']],
+        'q'      => ['type' => 'string', 'sanitize_callback' => 'sanitize_text_field'],
+    ],
+]);
+
+// Registered before the generic client routes so the literal segments below
+// cannot be shadowed. `\d+` could not match them anyway; the ordering states it.
+Route::get('/trainer/clients/(?P<userId>\d+)/progress', TrainerController::class . '@clientProgress', [
+    'permission_callback' => [TrainerController::class, 'canAccess'],
+    'args'                => $userIdArg + [
+        'range' => ['type' => 'string', 'enum' => ['week', 'month', 'quarter', 'year'], 'default' => 'month'],
+    ],
+]);
+
+Route::get('/trainer/clients/(?P<userId>\d+)/sessions', TrainerController::class . '@clientSessions', [
+    'permission_callback' => [TrainerController::class, 'canAccess'],
+    'args'                => $userIdArg + $pagingArgs,
+]);
+
+Route::get('/trainer/clients/(?P<userId>\d+)/nutrition', TrainerController::class . '@clientNutrition', [
+    'permission_callback' => [TrainerController::class, 'canAccess'],
+    'args'                => $userIdArg + [
+        'from' => ['type' => 'string', 'sanitize_callback' => 'sanitize_text_field'],
+        'to'   => ['type' => 'string', 'sanitize_callback' => 'sanitize_text_field'],
+    ],
+]);
+
+Route::post('/trainer/clients/(?P<userId>\d+)/workouts', TrainerController::class . '@assignWorkout', [
+    'permission_callback' => [TrainerController::class, 'canAccess'],
+    'args'                => $userIdArg + [
+        'workout_id' => [
+            'required'          => true,
+            'type'              => 'integer',
+            'minimum'           => 1,
+            'sanitize_callback' => 'absint',
+        ],
+        'scheduled_for' => ['type' => 'string', 'sanitize_callback' => 'sanitize_text_field'],
+    ],
+]);
+
+Route::delete(
+    '/trainer/clients/(?P<userId>\d+)/workouts/(?P<id>\d+)',
+    TrainerController::class . '@unassignWorkout',
+    [
+        'permission_callback' => [TrainerController::class, 'canAccess'],
+        'args'                => $userIdArg + $idArg,
+    ]
+);
+
+Route::post('/trainer/clients/(?P<userId>\d+)/food-plans', TrainerController::class . '@assignFoodPlan', [
+    'permission_callback' => [TrainerController::class, 'canAccess'],
+    'args'                => $userIdArg + [
+        'food_plan_id' => [
+            'required'          => true,
+            'type'              => 'integer',
+            'minimum'           => 1,
+            'sanitize_callback' => 'absint',
+        ],
+        'start_date' => ['type' => 'string', 'sanitize_callback' => 'sanitize_text_field'],
+    ],
+]);
+
+Route::get('/trainer/clients/(?P<userId>\d+)/notes', TrainerController::class . '@notes', [
+    'permission_callback' => [TrainerController::class, 'canAccess'],
+    'args'                => $userIdArg,
+]);
+
+Route::post('/trainer/clients/(?P<userId>\d+)/notes', TrainerController::class . '@createNote', [
+    'permission_callback' => [TrainerController::class, 'canAccess'],
+    'args'                => $userIdArg + [
+        'body' => [
+            'required'          => true,
+            'type'              => 'string',
+            'sanitize_callback' => 'sanitize_textarea_field',
+        ],
+        'pinned' => ['type' => 'boolean', 'default' => false],
+    ],
+]);
+
+// Note routes carry no userId: the note id plus the owner check is the whole
+// authorisation, and taking a client id here would invite trusting it.
+Route::put('/trainer/notes/(?P<id>\d+)', TrainerController::class . '@updateNote', [
+    'permission_callback' => [TrainerController::class, 'canAccess'],
+    'args'                => $idArg + [
+        'body'   => ['type' => 'string', 'sanitize_callback' => 'sanitize_textarea_field'],
+        'pinned' => ['type' => 'boolean'],
+    ],
+]);
+
+Route::delete('/trainer/notes/(?P<id>\d+)', TrainerController::class . '@deleteNote', [
+    'permission_callback' => [TrainerController::class, 'canAccess'],
+    'args'                => $idArg,
+]);
+
+Route::get('/trainer/clients/(?P<userId>\d+)', TrainerController::class . '@client', [
+    'permission_callback' => [TrainerController::class, 'canAccess'],
+    'args'                => $userIdArg,
+]);
+
+/*
+| The trainer's own library. Authorship is the whole rule: lists are scoped by
+| trainer_id, writes go through Guard::trainerAssignedResource. The one
+| exception is reading a *platform* workout (trainer_id IS NULL) — assignable by
+| anyone, editable by nobody but an administrator.
+*/
+
+Route::get('/trainer/workouts', TrainerController::class . '@workouts', [
+    'permission_callback' => [TrainerController::class, 'canAccess'],
+    'args'                => ['mine' => ['type' => 'boolean', 'default' => false]],
+]);
+
+Route::post('/trainer/workouts', TrainerController::class . '@createWorkout', [
+    'permission_callback' => [TrainerController::class, 'canAccess'],
+    'args'                => [
+        'workout_name' => [
+            'required'          => true,
+            'type'              => 'string',
+            'sanitize_callback' => 'sanitize_text_field',
+        ],
+    ],
+]);
+
+// The whole ordered collection in one call rather than per-exercise CRUD: it
+// matches the builder (drag, then save) and avoids the partial-save corruption
+// a sequence of individual writes produces when one fails.
+Route::put('/trainer/workouts/(?P<id>\d+)/exercises', TrainerController::class . '@replaceExercises', [
+    'permission_callback' => [TrainerController::class, 'canAccess'],
+    'args'                => $idArg + ['exercises' => ['required' => true, 'type' => 'array']],
+]);
+
+Route::get('/trainer/workouts/(?P<id>\d+)', TrainerController::class . '@workout', [
+    'permission_callback' => [TrainerController::class, 'canAccess'],
+    'args'                => $idArg,
+]);
+
+Route::put('/trainer/workouts/(?P<id>\d+)', TrainerController::class . '@updateWorkout', [
+    'permission_callback' => [TrainerController::class, 'canAccess'],
+    'args'                => $idArg,
+]);
+
+Route::delete('/trainer/workouts/(?P<id>\d+)', TrainerController::class . '@deleteWorkout', [
+    'permission_callback' => [TrainerController::class, 'canAccess'],
+    'args'                => $idArg,
+]);
+
+Route::get('/trainer/plans', TrainerController::class . '@plans', [
+    'permission_callback' => [TrainerController::class, 'canAccess'],
+]);
+
+Route::post('/trainer/plans', TrainerController::class . '@createPlan', [
+    'permission_callback' => [TrainerController::class, 'canAccess'],
+    'args'                => [
+        'plan_name' => [
+            'required'          => true,
+            'type'              => 'string',
+            'sanitize_callback' => 'sanitize_text_field',
+        ],
+    ],
+]);
+
+Route::put('/trainer/plans/(?P<id>\d+)', TrainerController::class . '@updatePlan', [
+    'permission_callback' => [TrainerController::class, 'canAccess'],
+    'args'                => $idArg,
+]);
+
+Route::delete('/trainer/plans/(?P<id>\d+)', TrainerController::class . '@deletePlan', [
+    'permission_callback' => [TrainerController::class, 'canAccess'],
+    'args'                => $idArg,
+]);
+
+Route::get('/trainer/food-plans', TrainerController::class . '@foodPlans', [
+    'permission_callback' => [TrainerController::class, 'canAccess'],
+]);
+
+Route::post('/trainer/food-plans', TrainerController::class . '@createFoodPlan', [
+    'permission_callback' => [TrainerController::class, 'canAccess'],
+    'args'                => [
+        'plan_name' => [
+            'required'          => true,
+            'type'              => 'string',
+            'sanitize_callback' => 'sanitize_text_field',
+        ],
+    ],
+]);
+
+Route::put('/trainer/food-plans/(?P<id>\d+)', TrainerController::class . '@updateFoodPlan', [
+    'permission_callback' => [TrainerController::class, 'canAccess'],
+    'args'                => $idArg,
+]);
+
+Route::delete('/trainer/food-plans/(?P<id>\d+)', TrainerController::class . '@deleteFoodPlan', [
+    'permission_callback' => [TrainerController::class, 'canAccess'],
+    'args'                => $idArg,
+]);
+
+Route::get('/trainer/profile', TrainerController::class . '@profile', [
+    'permission_callback' => [TrainerController::class, 'canAccess'],
+]);
+
+Route::put('/trainer/profile', TrainerController::class . '@updateProfile', [
+    'permission_callback' => [TrainerController::class, 'canAccess'],
 ]);
 
 Route::post('/foods', NutritionController::class . '@createFood', [

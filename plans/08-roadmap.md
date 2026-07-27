@@ -1128,6 +1128,76 @@ picker; a directory of assignable staff arrives with the trainer app, which is
 where the list of who exists comes from.
 
 ### W3.4 Trainer app (31 d, see [06](06-trainer-app.md))
+
+#### Slice 1 — endpoints and guards ✅ **complete 2026-07-27**
+
+Split at the owner's direction: 31 d is roughly the whole rest of the project in
+one package, so it is being taken in slices. This one is the **API and its
+authorisation model** — every `/trainer/*` route from
+[02](02-api-contract.md#trainer--trainer-cap-fc_manage_clients), no screens.
+
+**Build notes.**
+
+- **Q13's line runs through two different guards, and they ask different
+  questions of different columns.** `Guard::trainerAssignedResource` asks "did
+  you *author* this", keyed on `trainer_id`. Assignments needed a new one —
+  `Guard::trainerMadeAssignment`, keyed on `assigned_by_account_id`, because the
+  assignment tables record the *account* that handed something over, not the
+  trainer profile. The distinction is load-bearing: two trainers may both assign
+  the same shared workout to the same client, and only the one who assigned it
+  may take it back.
+- **Read is shared, and every assignment is attributed.** Any actively assigned
+  trainer sees the whole client record including co-trainers' work, with
+  `assigned_by: {trainer_id, display_name, assigned_at}` on each row so a reader
+  never mistakes another coach's programming for their own.
+- **The conflict warning is non-blocking**, and that is the point. Assigning
+  into a week another trainer has already programmed returns
+  `warnings: [fc_assignment_conflict]` with who, what and when — refusing would
+  make one coach's programme silently constrain another's, which is the
+  paternalism shared visibility replaces. Your *own* prior assignment is not a
+  conflict: a trainer programming twice in a week is programming.
+- **Three different "no" codes, chosen deliberately.** A client not on your
+  roster is **404** — a trainer must not be able to enumerate the platform's
+  membership by probing ids. A co-trainer's assignment is **403**, because
+  shared read already told you it exists and pretending otherwise would be
+  theatre. A co-trainer's *note* is **404** again (Q15), because its existence is
+  itself the private thing.
+- **Authorship is stamped from the session, never taken from the payload.** A
+  `trainer_id` in a create body is ignored, so a trainer cannot plant work in
+  somebody else's library — asserted directly against the stored row.
+- **The platform library is assignable but not editable.** Workouts with
+  `trainer_id IS NULL` are readable and assignable by every trainer (otherwise
+  the builder looks empty on day one) and writable by none of them.
+- **`features` and `max_trainers` are absent from the trainer plan builder.**
+  Those decide platform-wide entitlements; a trainer granting themselves
+  `has_video_workouts` by editing their own plan would be selling something the
+  platform never agreed to. `owner_type` is forced to `trainer` for the same
+  reason — it decides who collects the money (Q2).
+- **A trainer cannot set their own rating or account status.** Both are absent
+  from the profile update: a rating you can set is not a rating.
+- **Capacity is checked at accept, not at request** — it can fill between
+  somebody asking and the trainer answering. And `max_clients = 0` reads as
+  *unconfigured*, not as "cannot take anybody", or a fresh trainer would be
+  locked out of accepting their first client.
+- **The exercise list is replaced whole**, reusing the admin editor's
+  upsert-by-id rather than a second copy: the rule that keeps
+  `fc_exercise_logs` pointing at the right movements is subtle enough that two
+  implementations would eventually drift.
+
+*Exit criterion for this slice met by test*: 16 tests, almost all of them about
+what one trainer must not be able to do to another's work. Gate: **phpcs 0
+errors, phpunit 269 tests / 1555 assertions.** No browser pass — there are no
+screens in this slice.
+
+**Remaining slices**, unstarted: the trainer SPA shell and client-facing screens
+(dashboard, client list, the seven-tab client detail, request queue); then the
+builders (workout, plan, food plan) and the trainer profile; then trainer
+messaging, which reuses W3.1's API unchanged. `/trainer/clients/{id}/food-plans`
+assigns an existing plan but the **food-plan builder's meal editor** is not
+built, and [06](06-trainer-app.md) marks it deferrable to Phase 4 (−10 d) along
+with the exercise library.
+
+#### Full package scope
 All `/trainer/*` endpoints with **both** ownership guards — shared read across
 trainers (Q13), private write to your own assignments — then dashboard, client
 list, client detail (7 tabs, every assignment attributed), workout builder, plan

@@ -102,6 +102,44 @@ final class Guard
     }
 
     /**
+     * Did this trainer make this *assignment*? (W3.4)
+     *
+     * Separate from {@see trainerAssignedResource} because the two ask different
+     * questions of different columns. That one asks "did you author this
+     * workout/plan", keyed on `trainer_id`. This asks "did you hand it to this
+     * client", keyed on `assigned_by_account_id` — the assignment tables record
+     * the *account* that made the assignment, not the trainer profile.
+     *
+     * The distinction matters: two trainers may both assign the same shared
+     * workout to the same client, and only the one who assigned it may take it
+     * back. Q13 gives every assigned trainer sight of both; it gives neither the
+     * right to undo the other's work.
+     *
+     * @param string $table One of `user_workouts` or `user_food_plans`.
+     */
+    public static function trainerMadeAssignment(int $trainerAccountId, string $table, int $assignmentId): bool
+    {
+        global $wpdb;
+
+        // Fixed allow-list, never the caller's string: this value is
+        // interpolated into the query because a table name cannot be bound.
+        if (!in_array($table, ['user_workouts', 'user_food_plans'], true)) {
+            return false;
+        }
+
+        if ($trainerAccountId <= 0 || $assignmentId <= 0) {
+            return false;
+        }
+
+        // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table from the allow-list above.
+        $sql = "SELECT id FROM {$wpdb->prefix}fc_{$table}
+                 WHERE id = %d AND assigned_by_account_id = %d LIMIT 1";
+
+        // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- prepared on this line.
+        return null !== $wpdb->get_var($wpdb->prepare($sql, $assignmentId, $trainerAccountId));
+    }
+
+    /**
      * Does this account own this workout session?
      */
     public static function ownsSession(int $accountId, int $sessionId): bool
