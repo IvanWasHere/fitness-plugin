@@ -11,6 +11,7 @@ import { Dashboard } from './screens/Dashboard';
 import { WorkoutDetail } from './screens/WorkoutDetail';
 import { Health } from './screens/Health';
 import { Nutrition } from './screens/Nutrition';
+import { Progress } from './screens/Progress';
 import { Workouts } from './screens/Workouts';
 import { PlayerProvider } from './state/PlayerProvider';
 import { usePlayer } from './state/player-context';
@@ -37,6 +38,7 @@ const NAV: NavItem[] = [
   { to: '/workouts', label: 'Workouts', icon: 'dumbbell' },
   { to: '/nutrition', label: 'Nutrition', icon: 'flame' },
   { to: '/health', label: 'Health', icon: 'heart' },
+  { to: '/progress', label: 'Progress', icon: 'activity' },
 ];
 
 export function App() {
@@ -94,6 +96,7 @@ function Chrome() {
           <Route path="/workouts/:id" element={<WorkoutDetail />} />
           <Route path="/nutrition" element={<Nutrition />} />
           <Route path="/health" element={<Health />} />
+          <Route path="/progress" element={<Progress />} />
           {/* Auth routes are rendered by the panel above when signed out; a
               signed-in user landing on one belongs on the dashboard. */}
           <Route path="*" element={<Navigate to="/" replace />} />

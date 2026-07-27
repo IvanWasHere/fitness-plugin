@@ -1687,3 +1687,45 @@
     transition: none;
   }
 }
+
+/* ---------------------------------------------------------------- progress */
+
+/* Chart.js measures its parent on first paint; inside a grid child with no
+   resolved height it measures zero and draws nothing, which looks exactly like
+   a data problem and is not one. */
+.fc-chart-frame {
+  position: relative;
+  height: 240px;
+}
+
+.fc-chart-frame--empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  text-align: center;
+  padding: 0 24px;
+  color: var(--text3);
+  border: 1px dashed var(--border);
+  border-radius: var(--rs);
+}
+
+/* The previous range stays legible while the next loads. Unmounting four charts
+   on every filter click reads as the page breaking, not as data arriving. */
+.fc-refreshing {
+  opacity: 0.6;
+  transition: opacity 0.15s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fc-refreshing {
+    transition: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .fc-chart-frame {
+    height: 200px;
+  }
+}

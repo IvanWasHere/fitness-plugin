@@ -3,6 +3,7 @@
 use FitnessClub\Http\Controllers\Api\AuthController;
 use FitnessClub\Http\Controllers\Api\HealthController;
 use FitnessClub\Http\Controllers\Api\NutritionController;
+use FitnessClub\Http\Controllers\Api\ProgressController;
 use FitnessClub\Http\Controllers\Api\SessionController;
 use FitnessClub\Http\Controllers\Api\UserController;
 use FitnessClub\Http\Controllers\Api\WorkoutController;
@@ -675,6 +676,62 @@ Route::post('/health/measurements', HealthController::class . '@storeMeasurement
         'notes'        => [
             'type'              => ['string', 'null'],
             'sanitize_callback' => 'sanitize_textarea_field',
+        ],
+    ],
+]);
+
+/*
+|--------------------------------------------------------------------------
+| Progress — /progress/*
+|--------------------------------------------------------------------------
+|
+| Read-only, and everything is bucketed server-side. `range` is a real
+| parameter here, not decoration: the prototype's week/month/3M/year toggle set
+| state and re-rendered identical data (gap §2, line 993). The server changes
+| the *granularity* with the span — days close up, weeks at a quarter, months
+| across a year — because a year of daily points is 365 values a chart of this
+| size cannot draw.
+|
+*/
+
+$rangeArg = [
+    'range' => [
+        'type'    => 'string',
+        'enum'    => ['week', 'month', 'quarter', 'year'],
+        'default' => 'month',
+    ],
+];
+
+Route::get('/progress', ProgressController::class . '@index', [
+    'permission_callback' => [ProgressController::class, 'canRead'],
+    'args'                => $rangeArg,
+]);
+
+// The name is matched loosely and decoded in the controller: exercise names
+// carry spaces, hyphens and parentheses ("Bench Press (Incline)"), and a
+// stricter pattern here would 404 half the library rather than answer it.
+Route::get('/progress/exercises/(?P<name>[^/]+)', ProgressController::class . '@exercise', [
+    'permission_callback' => [ProgressController::class, 'canRead'],
+    'args'                => $rangeArg + [
+        'name' => [
+            'required'          => true,
+            'type'              => 'string',
+            'sanitize_callback' => 'sanitize_text_field',
+        ],
+    ],
+]);
+
+Route::get('/progress/records', ProgressController::class . '@records', [
+    'permission_callback' => [ProgressController::class, 'canRead'],
+]);
+
+Route::get('/progress/consistency', ProgressController::class . '@consistency', [
+    'permission_callback' => [ProgressController::class, 'canRead'],
+    'args'                => [
+        'year' => [
+            'type'    => 'integer',
+            'minimum' => 2000,
+            'maximum' => 2100,
         ],
     ],
 ]);

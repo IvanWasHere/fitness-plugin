@@ -617,10 +617,98 @@ arrives with W2.3, which owns the chart library decision) and `muscle_mass_kg` /
 `stress_score`, which the API accepts and stores but no card displays — the
 prototype has eight cards and these are not among them.
 
-### W2.3 Progress & charts (4 d)
+### W2.3 Progress & charts (4 d) — ✅ **complete 2026-07-27**
 `ProgressService` range bucketing (week/month/quarter/year — **make the filter
 real**), strength progression, consistency, records. Progress screen, all four
 charts, empty states, computed axis domains.
+
+**Build notes.**
+
+- **The filter is real, and "real" means the granularity changes, not just the
+  window.** The obvious reading of "make the filter work" is to fetch 365 points
+  for a year — but that is 365 values a 300-pixel chart cannot draw, and drawing
+  them produces noise that hides the trend the member came for. So: days close
+  up, weeks at a quarter, calendar months across a year, every range landing
+  between 7 and 30 buckets. The response carries `bucket` and the screen prints
+  it ("monthly averages"), because a chart of monthly means labelled like daily
+  readings misrepresents its own points.
+- **Two kinds of empty, and they are not interchangeable.** Reading series
+  (weight, body fat, strength) use **null** for a bucket with no reading — a gap.
+  Consistency uses **zero**, because a week with no workouts is a fact rather
+  than missing data. Getting this backwards draws a weight line plunging to the
+  axis every week the member skipped the scale.
+- **`spanGaps` was wrong on the first pass, and only the browser showed it.**
+  Reasoning from principle — "connecting across a null invents a trend out of
+  missing data" — gave `spanGaps: false`, which passes every test, because no
+  test asserts what a line looks like. Rendered, it was a scatter of isolated
+  dots: nobody weighs in daily, so on a 30-day chart *every* reading is
+  surrounded by nulls and there were no segments left to draw. Now `true`; the
+  points still mark real readings, so the line never claims a measurement that
+  was not taken. This is the argument for eyeballing a chart rather than
+  asserting its data.
+- **Strength lines are chosen, not hardcoded.** The prototype fixed Bench, Squat
+  and Deadlift — the wrong chart for anyone whose programme is not that
+  programme. The three most-performed lifts in the window are picked by set
+  count, and the plotted value is the **heaviest set in the bucket**, not the
+  average: averaging warm-ups in makes a personal best look like a bad week.
+- **Axis domains are computed, with the two degenerate cases handled.** The
+  prototype pinned the weight axis to `min: 76, max: 82`, so anyone outside that
+  band got a blank chart (gap §2, line 955). `computeDomain` pads from the data
+  and handles both *one point / all-identical points* (zero spread would draw the
+  line on the axis) and *no points at all* (`Math.min()` of nothing is `Infinity`,
+  which poisons the scale silently).
+- **Chart.js is registered by hand and loaded lazily.** Only the controllers,
+  scales and elements these four charts use, so the bundler drops the rest; the
+  screen `lazy()`-imports it, and — because the *empty* states live outside the
+  boundary — a member with no data never downloads it either. Result: a 185 kB
+  chunk that is entirely separate from the 150 kB member bundle. Colours are read
+  off the live themed element with `getComputedStyle`, never hardcoded, so the
+  charts follow a light theme; a `MutationObserver` on `#fc-app`'s style
+  attribute re-reads them when the theme changes.
+- **`fc_view_own_stats`, not an invented capability.** The first draft gated on
+  `fc_view_stats`, which does not exist — `Capabilities::USER_CAPS` has
+  `fc_view_own_stats`. The `can_view_stats` entitlement is checked on top.
+- **`personal_records` counts PRs set inside the window**, not lifetime: on a
+  screen where every other number is range-scoped, a lifetime count that never
+  moves reads as a broken filter.
+
+*Exit criterion met*, and verified in a real browser rather than only over the
+API — the first time on this project, and it earned its keep by catching the
+`spanGaps` defect. As the generated "Example Member" (who has no data) all four
+cards render their empty states, which is exactly the case that threw in the
+prototype. Seeded with temporary data, all four charts drew: weight declining
+79.5 → 77.9 with a filled area and a computed 76.9–80.5 domain, three strength
+progressions climbing, daily consistency bars, and a radar. Switching to **Year**
+re-labelled the subtitle to "monthly averages", rescaled the weight axis to
+77.7–84.8, collapsed consistency to monthly counts (Jun 2, Jul 5), and brought
+the second measurement session into the radar as an oldest-vs-newest overlay. No
+console errors. The temporary data was removed afterwards and the cascade
+verified. Gate: **phpcs 0 errors, phpunit 183 tests / 954 assertions, `ui/`
+typecheck + lint + format + build green.**
+
+**Two things found on the way, neither introduced here.**
+
+1. **`react-router-dom` carries 2 high-severity advisories** (GHSA-qwww-vcr4-c8h2,
+   RSC-mode CSRF bypass, affecting 7.12.0–8.2.0). 7.18.1 is the newest 7.x, so
+   there is no patched release to move to — `npm audit fix` downgrades to 7.11.0,
+   a breaking change. The app uses client-side `BrowserRouter` with no RSC and no
+   server actions, so the advisory does not describe a reachable path here.
+   Pre-existing; chart.js and react-chartjs-2 added **zero** vulnerabilities.
+2. **476 orphaned `fc_exercise_logs` rows in the dev database**, referencing
+   session ids that no longer exist, in groups of seven — the shape the volume
+   seeder produces. The `ON DELETE CASCADE` is present and works (verified by
+   creating and deleting a session), and `fc_set_logs` has no orphans, so these
+   predate the constraint or were removed with checks disabled. **No effect on
+   this package**: every progress query inner-joins through `fc_workout_sessions`,
+   so unreachable logs are excluded. Left in place rather than deleted — clearing
+   someone's dev data is their call.
+
+**Deferred from this package:** the consistency **calendar heatmap**
+(`GET /progress/consistency` is built and tested, but §9.3's year grid is a
+screen of its own and the prototype has no design for it) and the
+`/progress/exercises/{name}` **drill-down UI** — the endpoint and its query hook
+exist, but the chart-click interaction that opens it belongs with the exercise
+library in W2.5.
 
 ### W2.4 Notifications & activity (2 d)
 `NotificationService` respecting preference toggles, notification screen,

@@ -450,3 +450,80 @@ export type MeasurementsInput = Partial<Record<MeasurementField, number | null>>
   record_date?: string;
   notes?: string | null;
 };
+
+// ---------------------------------------------------------------- progress
+
+export type ProgressRange = 'week' | 'month' | 'quarter' | 'year';
+
+export interface StrengthSeries {
+  exercise_name: string;
+  /** One entry per label. Null where the lift was not trained in that bucket. */
+  points: Array<number | null>;
+  sets: number;
+}
+
+export type MeasurementPoint = { date: string } & Partial<Record<MeasurementField, number | null>>;
+
+/**
+ * `GET /progress?range=` — every series the screen charts, already bucketed.
+ *
+ * `bucket` says how: the client must not relabel or re-aggregate, because a
+ * tooltip reading "12 Jun" over a chart of monthly averages is a lie about what
+ * the point represents.
+ *
+ * The two kinds of empty are different and both are load-bearing. Reading
+ * series (`weight`, `body_fat`, `strength[].points`) use **null** for a bucket
+ * with no reading — a gap in the line. `consistency` uses **zero**, because a
+ * week with no workouts is a fact rather than missing data.
+ */
+export interface Progress {
+  range: ProgressRange;
+  from: string;
+  to: string;
+  bucket: 'day' | 'week' | 'month';
+  labels: string[];
+  /** ISO date of each bucket's start, so a tooltip never has to guess the year. */
+  dates: string[];
+  weight: Array<number | null>;
+  body_fat: Array<number | null>;
+  strength: StrengthSeries[];
+  consistency: number[];
+  measurements: MeasurementPoint[];
+  totals: {
+    workouts_completed: number;
+    calories_burned: number;
+    total_minutes: number;
+    personal_records: number;
+  };
+}
+
+export interface ProgressRecord {
+  exercise_name: string;
+  record_type: 'max_weight' | 'max_reps' | 'max_volume' | 'best_time';
+  value: number;
+  unit: string;
+  achieved_at: string | null;
+}
+
+export interface ExerciseProgression {
+  exercise_name: string;
+  range: ProgressRange;
+  from: string;
+  to: string;
+  points: Array<{
+    date: string;
+    top_weight: number | null;
+    top_reps: number | null;
+    volume_kg: number;
+    sets: number;
+  }>;
+}
+
+export interface ConsistencyCalendar {
+  year: number;
+  /** Every day of the year, including the zeros. */
+  days: Record<string, number>;
+  total: number;
+  active_days: number;
+  best_day: number;
+}

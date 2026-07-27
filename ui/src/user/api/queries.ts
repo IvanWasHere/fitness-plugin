@@ -4,7 +4,9 @@ import { useSession } from '@shared/session-context';
 import type {
   Celebration,
   Collection,
+  ConsistencyCalendar,
   Dashboard,
+  ExerciseProgression,
   Food,
   HealthInput,
   HealthStat,
@@ -16,6 +18,9 @@ import type {
   MeasurementsInput,
   NutritionDay,
   NutritionGoals,
+  Progress,
+  ProgressRange,
+  ProgressRecord,
   Session,
   WaterState,
   WorkoutDetail,
@@ -43,6 +48,9 @@ export const queryKeys = {
   healthSummary: ['health', 'summary'] as const,
   healthStats: (metrics?: string) => ['health', 'stats', metrics ?? 'all'] as const,
   measurements: ['health', 'measurements'] as const,
+  progress: (range: string) => ['progress', range] as const,
+  progressRecords: ['progress', 'records'] as const,
+  consistency: (year?: number) => ['progress', 'consistency', year ?? 'current'] as const,
 };
 
 /**
@@ -368,4 +376,69 @@ export function useHealthActions() {
   });
 
   return { saveStat, updateStat, deleteStat, saveMeasurements };
+}
+
+// ---------------------------------------------------------------- progress
+
+/**
+ * The Progress screen for one range (W2.3).
+ *
+ * Keyed on the range, so flipping between week and year caches each rather than
+ * refetching the one just left. `placeholderData` keeps the previous range's
+ * charts on screen while the new one loads — the alternative is four charts
+ * unmounting and remounting on every click of the filter, which reads as the
+ * page breaking rather than as data arriving.
+ */
+export function useProgress(range: ProgressRange): UseQueryResult<Progress, ApiError> {
+  const { api } = useSession();
+
+  return useQuery({
+    queryKey: queryKeys.progress(range),
+    queryFn: () => api.get<Progress>('progress', { range }),
+    placeholderData: (previous) => previous,
+    staleTime: 60_000,
+  });
+}
+
+export function useProgressRecords(): UseQueryResult<{ items: ProgressRecord[] }, ApiError> {
+  const { api } = useSession();
+
+  return useQuery({
+    queryKey: queryKeys.progressRecords,
+    queryFn: () => api.get<{ items: ProgressRecord[] }>('progress/records'),
+  });
+}
+
+/**
+ * One lift's session-by-session history — the detail behind a line on the
+ * strength chart. Idle until a lift is actually chosen.
+ */
+export function useExerciseProgression(
+  exerciseName: string | null,
+  range: ProgressRange = 'quarter',
+): UseQueryResult<ExerciseProgression, ApiError> {
+  const { api } = useSession();
+
+  return useQuery({
+    queryKey: ['progress', 'exercise', exerciseName, range],
+    queryFn: () =>
+      api.get<ExerciseProgression>(`progress/exercises/${encodeURIComponent(exerciseName ?? '')}`, {
+        range,
+      }),
+    enabled: exerciseName !== null && exerciseName !== '',
+  });
+}
+
+export function useConsistencyCalendar(
+  year?: number,
+  enabled = true,
+): UseQueryResult<ConsistencyCalendar, ApiError> {
+  const { api } = useSession();
+
+  return useQuery({
+    queryKey: queryKeys.consistency(year),
+    queryFn: () =>
+      api.get<ConsistencyCalendar>('progress/consistency', year ? { year } : undefined),
+    enabled,
+  });
 }

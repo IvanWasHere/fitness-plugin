@@ -1,49 +1,61 @@
 {
-  "_AppShell-D_QjRvs6.js": {
-    "file": "assets/AppShell-D_QjRvs6.js",
+  "_AppShell-B3dxKufj.js": {
+    "file": "assets/AppShell-B3dxKufj.js",
     "name": "AppShell",
     "imports": [
-      "_AuthPanel-DRJYaGzT.js"
+      "_AuthPanel-B4Piu3Dz.js"
     ]
   },
-  "_AuthPanel-Bx2PoEjm.css": {
-    "file": "assets/AuthPanel-Bx2PoEjm.css",
-    "src": "_AuthPanel-Bx2PoEjm.css"
-  },
-  "_AuthPanel-DRJYaGzT.js": {
-    "file": "assets/AuthPanel-DRJYaGzT.js",
+  "_AuthPanel-B4Piu3Dz.js": {
+    "file": "assets/AuthPanel-B4Piu3Dz.js",
     "name": "AuthPanel",
     "css": [
-      "assets/AuthPanel-Bx2PoEjm.css"
+      "assets/AuthPanel-CjbE6SWv.css"
     ]
   },
+  "_AuthPanel-CjbE6SWv.css": {
+    "file": "assets/AuthPanel-CjbE6SWv.css",
+    "src": "_AuthPanel-CjbE6SWv.css"
+  },
   "src/admin/main.tsx": {
-    "file": "assets/admin-DZYMkPSX.js",
+    "file": "assets/admin-Btupgn8h.js",
     "name": "admin",
     "src": "src/admin/main.tsx",
     "isEntry": true,
     "imports": [
-      "_AuthPanel-DRJYaGzT.js",
-      "_AppShell-D_QjRvs6.js"
+      "_AuthPanel-B4Piu3Dz.js",
+      "_AppShell-B3dxKufj.js"
+    ]
+  },
+  "src/shared/components/charts/ProgressCharts.tsx": {
+    "file": "assets/ProgressCharts-C8HrBP25.js",
+    "name": "ProgressCharts",
+    "src": "src/shared/components/charts/ProgressCharts.tsx",
+    "isDynamicEntry": true,
+    "imports": [
+      "_AuthPanel-B4Piu3Dz.js"
     ]
   },
   "src/trainer/main.tsx": {
-    "file": "assets/trainer-ByYUqYc3.js",
+    "file": "assets/trainer-CpXXBKLw.js",
     "name": "trainer",
     "src": "src/trainer/main.tsx",
     "isEntry": true,
     "imports": [
-      "_AuthPanel-DRJYaGzT.js",
-      "_AppShell-D_QjRvs6.js"
+      "_AuthPanel-B4Piu3Dz.js",
+      "_AppShell-B3dxKufj.js"
     ]
   },
   "src/user/main.tsx": {
-    "file": "assets/user-BvyWfXVM.js",
+    "file": "assets/user-DY_10dqZ.js",
     "name": "user",
     "src": "src/user/main.tsx",
     "isEntry": true,
     "imports": [
-      "_AuthPanel-DRJYaGzT.js"
+      "_AuthPanel-B4Piu3Dz.js"
+    ],
+    "dynamicImports": [
+      "src/shared/components/charts/ProgressCharts.tsx"
     ]
   }
 }
