@@ -9,6 +9,7 @@ import { Celebration } from './features/player/Celebration';
 import { Player } from './features/player/Player';
 import { Dashboard } from './screens/Dashboard';
 import { WorkoutDetail } from './screens/WorkoutDetail';
+import { Nutrition } from './screens/Nutrition';
 import { Workouts } from './screens/Workouts';
 import { PlayerProvider } from './state/PlayerProvider';
 import { usePlayer } from './state/player-context';
@@ -33,6 +34,7 @@ interface NavItem {
 const NAV: NavItem[] = [
   { to: '/', label: 'Home', icon: 'home' },
   { to: '/workouts', label: 'Workouts', icon: 'dumbbell' },
+  { to: '/nutrition', label: 'Nutrition', icon: 'flame' },
 ];
 
 export function App() {
@@ -88,6 +90,7 @@ function Chrome() {
           <Route path="/" element={<Dashboard />} />
           <Route path="/workouts" element={<Workouts />} />
           <Route path="/workouts/:id" element={<WorkoutDetail />} />
+          <Route path="/nutrition" element={<Nutrition />} />
           {/* Auth routes are rendered by the panel above when signed out; a
               signed-in user landing on one belongs on the dashboard. */}
           <Route path="*" element={<Navigate to="/" replace />} />

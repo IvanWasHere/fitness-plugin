@@ -1,6 +1,7 @@
 <?php
 
 use FitnessClub\Http\Controllers\Api\AuthController;
+use FitnessClub\Http\Controllers\Api\NutritionController;
 use FitnessClub\Http\Controllers\Api\SessionController;
 use FitnessClub\Http\Controllers\Api\UserController;
 use FitnessClub\Http\Controllers\Api\WorkoutController;
@@ -388,5 +389,205 @@ Route::patch('/sessions/(?P<id>\d+)/review', SessionController::class . '@review
                 ],
             ],
         ],
+    ],
+]);
+
+/*
+|--------------------------------------------------------------------------
+| Nutrition — /nutrition/*, /foods/*
+|--------------------------------------------------------------------------
+|
+| Reads need app access. **Writes additionally need the `can_log_nutrition`
+| entitlement**, which the free tier does not grant — that check lives in the
+| controller rather than here, because it answers `fc_feature_unavailable` with
+| the feature name so the client can offer an upgrade instead of an error.
+|
+| Dates are `Y-m-d` in the *member's* timezone, resolved server-side: a client
+| that sends its own "today" gets a different answer at 00:30 than the server
+| would (see Support\UserClock).
+|
+*/
+
+$dateArg = [
+    'date' => [
+        'type'              => 'string',
+        'description'       => 'Y-m-d. Defaults to the member\'s today.',
+        'sanitize_callback' => 'sanitize_text_field',
+    ],
+];
+
+Route::get('/nutrition/day', NutritionController::class . '@day', [
+    'permission_callback' => [NutritionController::class, 'canRead'],
+    'args'                => $dateArg,
+]);
+
+Route::get('/nutrition/logs', NutritionController::class . '@history', [
+    'permission_callback' => [NutritionController::class, 'canRead'],
+    'args'                => [
+        'from' => [
+            'type'              => 'string',
+            'sanitize_callback' => 'sanitize_text_field',
+        ],
+        'to' => [
+            'type'              => 'string',
+            'sanitize_callback' => 'sanitize_text_field',
+        ],
+    ],
+]);
+
+// The item array is validated in NutritionService rather than by the args
+// schema: an item is either a food reference (nutrients copied from the food) or
+// a free-text entry (nutrients supplied), and expressing "exactly one of these
+// two shapes" in a JSON-schema `args` block is less readable than the code that
+// resolves it — which has to exist either way.
+Route::post('/nutrition/logs', NutritionController::class . '@store', [
+    'permission_callback' => [NutritionController::class, 'canLog'],
+    'args'                => [
+        'meal_type' => [
+            'type' => 'string',
+            'enum' => ['breakfast', 'lunch', 'dinner', 'snack', 'other'],
+        ],
+        'log_date' => [
+            'type'              => 'string',
+            'sanitize_callback' => 'sanitize_text_field',
+        ],
+        'logged_at' => [
+            'type'              => 'string',
+            'sanitize_callback' => 'sanitize_text_field',
+        ],
+        'notes' => [
+            'type'              => 'string',
+            'sanitize_callback' => 'sanitize_textarea_field',
+        ],
+        'items' => [
+            'required' => true,
+            'type'     => 'array',
+        ],
+    ],
+]);
+
+Route::put('/nutrition/logs/(?P<id>\d+)', NutritionController::class . '@update', [
+    'permission_callback' => [NutritionController::class, 'canLog'],
+    'args'                => $idArg + [
+        'meal_type' => [
+            'type' => 'string',
+            'enum' => ['breakfast', 'lunch', 'dinner', 'snack', 'other'],
+        ],
+        'log_date' => [
+            'type'              => 'string',
+            'sanitize_callback' => 'sanitize_text_field',
+        ],
+        'logged_at' => [
+            'type'              => 'string',
+            'sanitize_callback' => 'sanitize_text_field',
+        ],
+        'notes' => [
+            'type'              => 'string',
+            'sanitize_callback' => 'sanitize_textarea_field',
+        ],
+        'items' => [
+            'type' => 'array',
+        ],
+    ],
+]);
+
+Route::delete('/nutrition/logs/(?P<id>\d+)', NutritionController::class . '@destroy', [
+    'permission_callback' => [NutritionController::class, 'canLog'],
+    'args'                => $idArg,
+]);
+
+Route::post('/nutrition/water', NutritionController::class . '@water', [
+    'permission_callback' => [NutritionController::class, 'canLog'],
+    'args'                => $dateArg + [
+        // Signed on purpose: "-1 glass" is how a mis-tap is undone.
+        'delta_ml' => [
+            'type'    => ['integer', 'null'],
+            'minimum' => -5000,
+            'maximum' => 5000,
+        ],
+        'total_ml' => [
+            'type'    => ['integer', 'null'],
+            'minimum' => 0,
+            'maximum' => 20000,
+        ],
+    ],
+]);
+
+Route::put('/nutrition/goals', NutritionController::class . '@goals', [
+    'permission_callback' => [NutritionController::class, 'canLog'],
+    'args'                => $dateArg + [
+        // Every goal is nullable and optional: the editor submits only what the
+        // member changed, and a null clears one rather than zeroing it.
+        'calories'  => ['type' => ['integer', 'null'], 'minimum' => 0, 'maximum' => 20000],
+        'protein_g' => ['type' => ['number', 'null'], 'minimum' => 0, 'maximum' => 2000],
+        'carbs_g'   => ['type' => ['number', 'null'], 'minimum' => 0, 'maximum' => 2000],
+        'fat_g'     => ['type' => ['number', 'null'], 'minimum' => 0, 'maximum' => 2000],
+        'water_ml'  => ['type' => ['integer', 'null'], 'minimum' => 0, 'maximum' => 20000],
+    ],
+]);
+
+Route::get('/foods', NutritionController::class . '@foods', [
+    'permission_callback' => [NutritionController::class, 'canRead'],
+    'args'                => [
+        'q' => [
+            'type'              => 'string',
+            'description'       => 'Typeahead term. Prefix-matched.',
+            'sanitize_callback' => 'sanitize_text_field',
+        ],
+        'category' => [
+            'type' => 'string',
+            'enum' => [
+                'protein', 'grains', 'vegetables', 'fruit', 'dairy',
+                'nuts', 'fats', 'supplements', 'beverages', 'other',
+            ],
+        ],
+        'per_page' => [
+            'type'    => 'integer',
+            'minimum' => 1,
+            'maximum' => 50,
+            'default' => 20,
+        ],
+    ],
+]);
+
+Route::get('/foods/barcode/(?P<code>[A-Za-z0-9]+)', NutritionController::class . '@barcode', [
+    'permission_callback' => [NutritionController::class, 'canRead'],
+    'args'                => [
+        'code' => [
+            'required'          => true,
+            'type'              => 'string',
+            'sanitize_callback' => 'sanitize_text_field',
+        ],
+    ],
+]);
+
+Route::post('/foods', NutritionController::class . '@createFood', [
+    'permission_callback' => [NutritionController::class, 'canLog'],
+    'args'                => [
+        'name' => [
+            'required'          => true,
+            'type'              => 'string',
+            'sanitize_callback' => 'sanitize_text_field',
+        ],
+        'brand' => [
+            'type'              => 'string',
+            'sanitize_callback' => 'sanitize_text_field',
+        ],
+        'category' => [
+            'type' => 'string',
+            'enum' => [
+                'protein', 'grains', 'vegetables', 'fruit', 'dairy',
+                'nuts', 'fats', 'supplements', 'beverages', 'other',
+            ],
+        ],
+        'serving_size'  => ['type' => 'string', 'sanitize_callback' => 'sanitize_text_field'],
+        'serving_grams' => ['type' => ['number', 'null'], 'minimum' => 0],
+        'calories'      => ['type' => 'integer', 'minimum' => 0, 'maximum' => 10000],
+        'protein_g'     => ['type' => 'number', 'minimum' => 0, 'maximum' => 1000],
+        'carbs_g'       => ['type' => 'number', 'minimum' => 0, 'maximum' => 1000],
+        'fat_g'         => ['type' => 'number', 'minimum' => 0, 'maximum' => 1000],
+        'fiber_g'       => ['type' => ['number', 'null'], 'minimum' => 0],
+        'sugar_g'       => ['type' => ['number', 'null'], 'minimum' => 0],
+        'sodium_mg'     => ['type' => ['number', 'null'], 'minimum' => 0],
     ],
 ]);

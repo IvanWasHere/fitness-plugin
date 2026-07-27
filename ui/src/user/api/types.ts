@@ -228,3 +228,98 @@ export interface Dashboard {
   recent_activity: ActivityEntry[];
   message_previews: MessagePreview[];
 }
+
+// ------------------------------------------------------------- nutrition
+
+export interface Food {
+  id: number;
+  name: string;
+  brand: string | null;
+  category: string;
+  serving_size: string | null;
+  serving_grams: number | null;
+  calories: number;
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
+  fiber_g: number | null;
+  sugar_g: number | null;
+  sodium_mg: number | null;
+  source: string;
+  is_verified: boolean;
+}
+
+export interface MealItem {
+  id: number;
+  /** Null for a free-text entry; set when the item came from the food database. */
+  food_id: number | null;
+  name: string | null;
+  quantity: number;
+  unit: string | null;
+  calories: number;
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
+}
+
+export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack' | 'other';
+
+export interface Meal {
+  id: number;
+  date: string;
+  logged_at: string | null;
+  meal_type: MealType;
+  calories: number;
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
+  notes: string | null;
+  /** 'admin' when a trainer or administrator logged this for the member (Q10). */
+  source: string;
+  items: MealItem[];
+}
+
+export interface WaterState {
+  consumed_ml: number;
+  goal_ml: number;
+  glass_ml: number;
+  glasses: number;
+  glasses_goal: number;
+}
+
+/** Null means the member has not set this goal — not zero. */
+export interface NutritionGoals {
+  calories: number | null;
+  protein_g: number | null;
+  carbs_g: number | null;
+  fat_g: number | null;
+  water_ml: number | null;
+}
+
+/** `GET /nutrition/day` — the whole Nutrition screen in one call. */
+export interface NutritionDay {
+  date: string;
+  meals: Meal[];
+  totals: { calories: number; protein_g: number; carbs_g: number; fat_g: number };
+  goals: NutritionGoals;
+  water: WaterState;
+}
+
+/** One item as the client submits it: a food reference, or free text. */
+export interface MealItemInput {
+  food_id?: number;
+  custom_name?: string;
+  quantity?: number;
+  unit?: string;
+  calories?: number;
+  protein_g?: number;
+  carbs_g?: number;
+  fat_g?: number;
+}
+
+export interface MealInput {
+  meal_type: MealType;
+  log_date?: string;
+  notes?: string | null;
+  items: MealItemInput[];
+}

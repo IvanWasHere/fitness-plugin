@@ -1,49 +1,49 @@
 {
-  "_AppShell-DTn4jij1.js": {
-    "file": "assets/AppShell-DTn4jij1.js",
+  "_AppShell-B120t09S.js": {
+    "file": "assets/AppShell-B120t09S.js",
     "name": "AppShell",
     "imports": [
-      "_AuthPanel-ji9KMZsa.js"
+      "_AuthPanel-BlunRYUh.js"
     ]
   },
-  "_AuthPanel-Ds0SFI9O.css": {
-    "file": "assets/AuthPanel-Ds0SFI9O.css",
-    "src": "_AuthPanel-Ds0SFI9O.css"
-  },
-  "_AuthPanel-ji9KMZsa.js": {
-    "file": "assets/AuthPanel-ji9KMZsa.js",
+  "_AuthPanel-BlunRYUh.js": {
+    "file": "assets/AuthPanel-BlunRYUh.js",
     "name": "AuthPanel",
     "css": [
-      "assets/AuthPanel-Ds0SFI9O.css"
+      "assets/AuthPanel-DUbQM5dw.css"
     ]
   },
+  "_AuthPanel-DUbQM5dw.css": {
+    "file": "assets/AuthPanel-DUbQM5dw.css",
+    "src": "_AuthPanel-DUbQM5dw.css"
+  },
   "src/admin/main.tsx": {
-    "file": "assets/admin-CAjC1imE.js",
+    "file": "assets/admin-_YKQhrdN.js",
     "name": "admin",
     "src": "src/admin/main.tsx",
     "isEntry": true,
     "imports": [
-      "_AuthPanel-ji9KMZsa.js",
-      "_AppShell-DTn4jij1.js"
+      "_AuthPanel-BlunRYUh.js",
+      "_AppShell-B120t09S.js"
     ]
   },
   "src/trainer/main.tsx": {
-    "file": "assets/trainer-pycc3LJq.js",
+    "file": "assets/trainer-BCJUlbSO.js",
     "name": "trainer",
     "src": "src/trainer/main.tsx",
     "isEntry": true,
     "imports": [
-      "_AuthPanel-ji9KMZsa.js",
-      "_AppShell-DTn4jij1.js"
+      "_AuthPanel-BlunRYUh.js",
+      "_AppShell-B120t09S.js"
     ]
   },
   "src/user/main.tsx": {
-    "file": "assets/user-TJ8pvW5r.js",
+    "file": "assets/user-DPExQhhS.js",
     "name": "user",
     "src": "src/user/main.tsx",
     "isEntry": true,
     "imports": [
-      "_AuthPanel-ji9KMZsa.js"
+      "_AuthPanel-BlunRYUh.js"
     ]
   }
 }

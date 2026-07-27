@@ -481,10 +481,62 @@ counted — works end to end on a real device.
 
 ## Phase 2 — Tracking & Admin (18–22 d)
 
-### W2.1 Nutrition (4 d)
-`fc_foods` + FULLTEXT search, meal logging with items, day rollup, water, goals,
-food-plan read. Nutrition screen, Add Meal / Search Food modals, calorie ring,
-macro cards.
+### W2.1 Nutrition (4 d) — ✅ **complete 2026-07-27**
+`fc_foods` + FULLTEXT search, meal logging with items, day rollup, water, goals.
+Nutrition screen, Add Meal / Search Food modal, calorie ring, macro cards.
+
+**Build notes.**
+
+- **Three rules hold the domain up**, and each is invisible from outside until it
+  breaks, so each has a test named after it. *Nutrients are copied, never
+  joined* — an item stores the macros as they were when logged, so an
+  administrator correcting a food next month does not rewrite last month's
+  diary. *Totals are denormalised and recomputed on every write* — at the meal
+  and the day, because summing on read would put a two-table aggregate on the
+  dashboard's critical path. *Goals are snapshotted per day* — raising a target
+  today does not retroactively change whether yesterday was met.
+- **The client never sends a known food's nutrients.** Only `food_id` and
+  `quantity` go up; the server copies from the food row. Otherwise the
+  copied-not-joined rule would have two implementations, one of them in a place
+  anybody can edit with devtools.
+- **The typeahead is two queries, not one.** `MATCH … AGAINST` in *boolean* mode
+  with a trailing `*`, because natural-language mode has no prefix matching and
+  "chick" would find nothing; plus a `LIKE 'x%'` fallback under three
+  characters, because InnoDB ignores tokens below `innodb_ft_min_token_size` and
+  the contract fires the typeahead at two. Without the fallback a two-letter
+  query returns nothing on a stock MySQL, which reads as "we have no foods"
+  rather than "your server has a setting".
+- **A tokeniser bug the tests caught.** Splitting the query on whitespace and
+  then stripping boolean operators turns "low-fat" into `lowfat`, which matches
+  nothing — the row says "Low Fat". Leaving the hyphen in is worse: a bare `-`
+  means NOT, so the search would ask for rows containing "low" but *excluding*
+  "fat", hiding exactly what was being looked for. Punctuation now separates
+  words rather than being deleted from them.
+- **Water is per-day and takes both gestures.** `delta_ml` for the +/- buttons,
+  so two taps in flight add two glasses instead of racing to write the same
+  total; `total_ml` for tapping the n-th dot, because "I have had five" is an
+  absolute statement. Deltas apply in one SQL statement with a `GREATEST(0, …)`
+  floor.
+- **Nothing invents a goal.** A member who has not set a calorie target gets the
+  total and *no ring* — not a ring drawn against a plausible 2 000 they never
+  chose. The goal editor is new: the prototype displayed goals with no way to
+  change them.
+- `Modal` gained a `form` variant (unmuted body, wider panel, disableable
+  confirm) rather than a second dialog component.
+
+*Exit criterion met*, driven against the seeded dev site as Alex Morgan: logged
+a meal of 2 × Chicken Breast plus a free-text item → 420 kcal, day rollup 1 650 →
+2 070; water +250 and =1 000 both landed; goals merged without clobbering the
+untouched macros; deleting the meal recomputed the day back to 1 650. Gate:
+**phpcs 0 errors, phpunit 154 tests / 731 assertions, `ui/` typecheck + lint +
+format + build green.**
+
+**Deferred from this package:** the food-plan read endpoints
+(`/food-plans`, `/food-plans/{id}`, `/compliance`) and barcode *lookup against an
+external database* — the route exists and answers from `fc_foods`, but there is
+no third-party source behind it. The Nutrition screen has not been eyeballed in a
+browser: the dev browser session is a WordPress administrator, which by D4a sees
+only the login panel.
 
 ### W2.2 Health & measurements (3 d)
 Upsert-by-date health stats, BMI, `fc_users.weight_kg` sync, measurements. Health

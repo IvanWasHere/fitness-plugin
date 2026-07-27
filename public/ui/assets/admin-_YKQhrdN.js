@@ -1,0 +1,1 @@
+import{c as e,l as t,o as n,r,s as i,u as a}from"./AuthPanel-BlunRYUh.js";import{t as o}from"./AppShell-B120t09S.js";var s=a(t(),1),c=e(),l=i();(0,c.createRoot)(n()).render((0,l.jsx)(s.StrictMode,{children:(0,l.jsx)(r,{spa:`admin`,children:(0,l.jsx)(o,{role:`admin`})})}));

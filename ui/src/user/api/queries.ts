@@ -5,7 +5,13 @@ import type {
   Celebration,
   Collection,
   Dashboard,
+  Food,
+  Meal,
+  MealInput,
+  NutritionDay,
+  NutritionGoals,
   Session,
+  WaterState,
   WorkoutDetail,
   WorkoutSummary,
 } from './types';
@@ -26,6 +32,8 @@ export const queryKeys = {
   workout: (id: number) => ['workout', id] as const,
   activeSession: ['session', 'active'] as const,
   sessionHistory: (page: number) => ['sessions', page] as const,
+  nutritionDay: (date?: string) => ['nutrition', 'day', date ?? 'today'] as const,
+  foods: (query: string) => ['nutrition', 'foods', query] as const,
 };
 
 /**
@@ -173,4 +181,90 @@ export function useSessionActions() {
   });
 
   return { start, transition, cursor, complete, abandon };
+}
+
+// ------------------------------------------------------------- nutrition
+
+/**
+ * The Nutrition screen, one request per day (W2.1).
+ *
+ * Keyed on the date so paging back through the diary caches each day rather
+ * than refetching the same one. `date` is the *member's* day, decided
+ * server-side — the client never sends its own "today", because a browser at
+ * 00:30 in a different timezone would ask for a day the server does not think
+ * it is.
+ */
+export function useNutritionDay(date?: string): UseQueryResult<NutritionDay, ApiError> {
+  const { api } = useSession();
+
+  return useQuery({
+    queryKey: queryKeys.nutritionDay(date),
+    queryFn: () => api.get<NutritionDay>('nutrition/day', date ? { date } : undefined),
+  });
+}
+
+/**
+ * Food typeahead. Idle until two characters, which is where the server switches
+ * from the FULLTEXT index to a prefix LIKE.
+ */
+export function useFoodSearch(term: string): UseQueryResult<{ items: Food[] }, ApiError> {
+  const { api } = useSession();
+  const query = term.trim();
+
+  return useQuery({
+    queryKey: queryKeys.foods(query),
+    queryFn: () => api.get<{ items: Food[] }>('foods', query === '' ? {} : { q: query }),
+    enabled: query.length === 0 || query.length >= 2,
+    // A typeahead that refetches on every focus change flickers; the food
+    // database does not move minute to minute.
+    staleTime: 5 * 60_000,
+  });
+}
+
+/**
+ * Nutrition writes. Every one of them invalidates the day *and* the dashboard —
+ * the server has already dropped its own cached aggregate for the same event,
+ * so the refetch reads fresh figures rather than the ones just invalidated.
+ */
+export function useNutritionActions(date?: string) {
+  const { api } = useSession();
+  const queryClient = useQueryClient();
+
+  const settle = () => {
+    void queryClient.invalidateQueries({ queryKey: ['nutrition'] });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.dashboard });
+  };
+
+  const logMeal = useMutation<Meal, ApiError, MealInput>({
+    mutationFn: (meal) =>
+      api.post<Meal>('nutrition/logs', { ...meal, log_date: meal.log_date ?? date }),
+    onSuccess: settle,
+  });
+
+  const updateMeal = useMutation<Meal, ApiError, { id: number; meal: Partial<MealInput> }>({
+    mutationFn: ({ id, meal }) => api.put<Meal>(`nutrition/logs/${id}`, meal),
+    onSuccess: settle,
+  });
+
+  const deleteMeal = useMutation<{ ok: boolean }, ApiError, number>({
+    mutationFn: (id) => api.delete<{ ok: boolean }>(`nutrition/logs/${id}`),
+    onSuccess: settle,
+  });
+
+  /**
+   * `delta_ml` for the +/- buttons, `total_ml` for tapping the n-th dot
+   * directly. The server accepts either; sending a total for a direct tap is
+   * what keeps a double tap from racing itself.
+   */
+  const setWater = useMutation<WaterState, ApiError, { delta_ml?: number; total_ml?: number }>({
+    mutationFn: (body) => api.post<WaterState>('nutrition/water', { ...body, date }),
+    onSuccess: settle,
+  });
+
+  const setGoals = useMutation<NutritionGoals, ApiError, Partial<NutritionGoals>>({
+    mutationFn: (goals) => api.put<NutritionGoals>('nutrition/goals', { ...goals, date }),
+    onSuccess: settle,
+  });
+
+  return { logMeal, updateMeal, deleteMeal, setWater, setGoals };
 }

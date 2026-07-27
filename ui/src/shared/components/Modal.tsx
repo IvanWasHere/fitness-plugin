@@ -18,6 +18,8 @@ export function Modal({
   confirmLabel,
   cancelLabel = 'Cancel',
   tone = 'primary',
+  variant = 'confirm',
+  confirmDisabled = false,
   onConfirm,
   onCancel,
 }: {
@@ -26,9 +28,18 @@ export function Modal({
   confirmLabel: string;
   cancelLabel?: string;
   tone?: 'primary' | 'danger';
+  /**
+   * `confirm` is a question with a sentence in it — the body is muted and
+   * secondary. `form` is a panel the member fills in, so the body is not styled
+   * down and the dialog is wider. Same focus, escape and overlay behaviour
+   * either way; only the shape of the content differs.
+   */
+  variant?: 'confirm' | 'form';
+  confirmDisabled?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }) {
+  const isForm = 'form' === variant;
   const confirmRef = useRef<HTMLButtonElement>(null);
   const returnFocusTo = useRef<Element | null>(null);
 
@@ -59,14 +70,29 @@ export function Modal({
         }
       }}
     >
-      <div className="fc-modal" role="dialog" aria-modal="true" aria-label={title}>
+      <div
+        className={`fc-modal${isForm ? ' fc-modal--form' : ''}`}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+      >
         <h3>{title}</h3>
-        {children && <div className="fc-text-muted fc-text-sm fc-mb-24">{children}</div>}
+        {children && (
+          <div className={isForm ? 'fc-mb-16' : 'fc-text-muted fc-text-sm fc-mb-24'}>
+            {children}
+          </div>
+        )}
         <div className="fc-flex fc-gap-10">
           <Button variant="secondary" block onClick={onCancel}>
             {cancelLabel}
           </Button>
-          <Button ref={confirmRef} variant={tone} block onClick={onConfirm}>
+          <Button
+            ref={confirmRef}
+            variant={tone}
+            block
+            disabled={confirmDisabled}
+            onClick={onConfirm}
+          >
             {confirmLabel}
           </Button>
         </div>
