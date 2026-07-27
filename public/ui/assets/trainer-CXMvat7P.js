@@ -1,0 +1,1 @@
+import{c as e,l as t,o as n,r,s as i,u as a}from"./AuthPanel-gl__mIXk.js";import{t as o}from"./AppShell-IpPKJrXb.js";var s=a(t(),1),c=e(),l=i();(0,c.createRoot)(n()).render((0,l.jsx)(s.StrictMode,{children:(0,l.jsx)(r,{spa:`trainer`,children:(0,l.jsx)(o,{role:`trainer`})})}));

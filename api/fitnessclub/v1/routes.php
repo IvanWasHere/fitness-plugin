@@ -2,6 +2,7 @@
 
 use FitnessClub\Http\Controllers\Api\AuthController;
 use FitnessClub\Http\Controllers\Api\HealthController;
+use FitnessClub\Http\Controllers\Api\NotificationController;
 use FitnessClub\Http\Controllers\Api\NutritionController;
 use FitnessClub\Http\Controllers\Api\ProgressController;
 use FitnessClub\Http\Controllers\Api\SessionController;
@@ -732,6 +733,84 @@ Route::get('/progress/consistency', ProgressController::class . '@consistency', 
             'type'    => 'integer',
             'minimum' => 2000,
             'maximum' => 2100,
+        ],
+    ],
+]);
+
+/*
+|--------------------------------------------------------------------------
+| Notifications, activity and preferences
+|--------------------------------------------------------------------------
+|
+| Keyed on the **account**, not the member profile: a trainer and an
+| administrator each have an inbox and neither has an fc_users row. So these
+| are gated on "signed in and active" rather than on `fc_access_app`, and the
+| ownership scoping lives in every query — there is no user id in any of these
+| paths for a caller to swap.
+|
+| Preferences are the exception: they are stored on `fc_users.preferences` and
+| so do require a member profile.
+|
+| Every route that changes read state answers with the resulting `unread_count`,
+| so the nav badge never has to make a second request to learn what it should
+| say — and never renders the number the member has just cleared.
+|
+*/
+
+Route::get('/notifications', NotificationController::class . '@index', [
+    'permission_callback' => [NotificationController::class, 'canRead'],
+    'args'                => $pagingArgs + [
+        'unread_only' => [
+            'type'    => 'boolean',
+            'default' => false,
+        ],
+    ],
+]);
+
+Route::post('/notifications/read-all', NotificationController::class . '@readAll', [
+    'permission_callback' => [NotificationController::class, 'canRead'],
+]);
+
+// Registered after `read-all` deliberately. WordPress matches routes in
+// registration order, and `(?P<id>\d+)` cannot match "read-all" — but the two
+// are one path segment apart, and the ordering makes the intent explicit rather
+// than dependent on a regex that someone may later loosen.
+Route::post('/notifications/(?P<id>\d+)/read', NotificationController::class . '@read', [
+    'permission_callback' => [NotificationController::class, 'canRead'],
+    'args'                => $idArg,
+]);
+
+Route::delete('/notifications/(?P<id>\d+)', NotificationController::class . '@destroy', [
+    'permission_callback' => [NotificationController::class, 'canRead'],
+    'args'                => $idArg,
+]);
+
+Route::get('/activity', NotificationController::class . '@activity', [
+    'permission_callback' => [NotificationController::class, 'canRead'],
+    'args'                => $pagingArgs + [
+        'types' => [
+            'type'              => 'string',
+            'description'       => 'Comma-separated event types, e.g. workout.completed,nutrition.logged.',
+            'sanitize_callback' => 'sanitize_text_field',
+        ],
+    ],
+]);
+
+Route::get('/user/preferences', NotificationController::class . '@preferences', [
+    'permission_callback' => [NotificationController::class, 'canManagePreferences'],
+]);
+
+// The body is `{ notifications: { achievement: false, … } }` and is validated in
+// the service rather than by the args schema: the keys are the notification-type
+// enum, and expressing "an object whose keys are these seven strings and whose
+// values are booleans" in a JSON-schema `args` block is less readable than the
+// loop that has to exist anyway to merge them.
+Route::put('/user/preferences', NotificationController::class . '@updatePreferences', [
+    'permission_callback' => [NotificationController::class, 'canManagePreferences'],
+    'args'                => [
+        'notifications' => [
+            'required' => true,
+            'type'     => 'object',
         ],
     ],
 ]);

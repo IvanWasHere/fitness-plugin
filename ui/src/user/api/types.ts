@@ -519,6 +519,60 @@ export interface ExerciseProgression {
   }>;
 }
 
+// ----------------------------------------------------- notifications & activity
+
+export type NotificationType =
+  'workout' | 'message' | 'achievement' | 'subscription' | 'system' | 'progress' | 'support';
+
+export interface Notification {
+  id: number;
+  type: NotificationType;
+  title: string;
+  body: string | null;
+  icon: string | null;
+  color: string | null;
+  action_url: string | null;
+  meta: Record<string, unknown>;
+  is_read: boolean;
+  read_at: string | null;
+  created_at: string | null;
+}
+
+/**
+ * `GET /notifications`.
+ *
+ * `unread_count` is the whole inbox's count, not this page's — it is what the
+ * nav badge shows, and every mutation answers with it so the badge never has to
+ * make a second request to learn what it should say.
+ */
+export interface NotificationList {
+  items: Notification[];
+  total: number;
+  page: number;
+  per_page: number;
+  unread_count: number;
+}
+
+/** Every mutation that changes read state returns the resulting count. */
+export interface UnreadCount {
+  ok: boolean;
+  unread_count: number;
+  /** Only on read-all. */
+  marked?: number;
+}
+
+export interface ActivityFeed {
+  items: ActivityEntry[];
+  total: number;
+  page: number;
+  per_page: number;
+  /** Derived from what the member actually has, so the filter can't return nothing. */
+  available_types: string[];
+}
+
+/** Null means the member has no opinion, which the server reads as on. */
+export type NotificationPreferences = Record<NotificationType, boolean>;
+
 export interface ConsistencyCalendar {
   year: number;
   /** Every day of the year, including the zeros. */

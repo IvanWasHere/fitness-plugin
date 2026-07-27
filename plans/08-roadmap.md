@@ -710,9 +710,81 @@ screen of its own and the prototype has no design for it) and the
 exist, but the chart-click interaction that opens it belongs with the exercise
 library in W2.5.
 
-### W2.4 Notifications & activity (2 d)
+### W2.4 Notifications & activity (2 d) — ✅ **complete 2026-07-27**
 `NotificationService` respecting preference toggles, notification screen,
 nav badges, activity feed.
+
+**Build notes.**
+
+- **Preferences are honoured at the write, not at the read**, and that is the
+  whole design. Filtering muted categories out of the list would leave the rows
+  in the table and the unread count wrong — the badge would say 3 over an inbox
+  of 1. `notify()` returns 0 for a muted category and writes nothing. The screen
+  says so in as many words ("stops those notifications being created at all —
+  they will not be waiting for you later"), because a member who expects muted
+  notifications to pile up unseen and later finds them missing has been misled
+  by vaguer wording.
+- **Absent means on.** A category nobody has an opinion about is enabled, so one
+  added in a later release does not arrive silently muted for everyone who
+  already has a preferences blob.
+- **Preferences merge rather than replace.** `fc_users.preferences` is shared —
+  privacy settings will live beside these — so a wholesale write of the
+  `notifications` key would silently drop them. The screen sends only the switch
+  that was flipped, and a test asserts an unrelated key survives.
+- **The unread count travels with every mutation.** Each read/dismiss/read-all
+  endpoint answers with the resulting `unread_count`, and the client writes it
+  straight into the badge's cache entry rather than invalidating and refetching.
+  A client that had to make a second request would render the stale number in
+  between — the very number the member just cleared. The badge is seeded from
+  the boot payload so it is right on first paint, and opening the inbox corrects
+  it for anything raised on another device.
+- **An inbox belongs to an account, not to a member profile** — so these routes
+  do **not** go through `asMember()`, and are not gated on `fc_access_app`. A
+  trainer has notifications and no `fc_users` row; the first draft would have
+  answered 403 to a trainer reading their own inbox, and `asMember()` would have
+  answered `fc_no_member_profile`. Preferences are the exception and genuinely do
+  need a profile, so they keep the member gate. A test signs in as a trainer and
+  asserts both halves.
+- **Audit rows stay out of the feed.** `GET /activity` excludes `is_audit = 1`
+  as `feed()` does: those record what someone *else* did to the member's data and
+  carry before/after values. The member still sees staff edits — as the
+  `source: 'admin'` label on the affected record, where it means something —
+  rather than as a diff in a list of things they did.
+- **The activity filter offers only types the member actually has**, derived
+  from their own rows. Offering "nutrition.logged" to somebody who has never
+  logged a meal is a filter that can only return nothing.
+- **The feed lives on `/notifications` rather than getting its own nav entry**,
+  because [04](04-user-app.md) lists `/notifications` and no `/activity`. Three
+  panels — inbox, activity, settings — are the same question asked three ways.
+
+**Two CSS reuses that were wrong, both caught in the browser and neither
+catchable by a test.**
+
+1. `.fc-badge-dot` is `position: absolute` for a positioned ancestor the card
+   does not provide, so four unread dots escaped and stacked in the **top-right
+   corner of the page**. Removed: the unread state is carried by the row's left
+   accent border, plus visually-hidden text, since a border is still colour
+   alone.
+2. `.fc-tab` is the segmented control — `flex: 1`, active style keyed off
+   `aria-selected`. Reused for the activity filter it stretched four chips across
+   1 400 px with no highlight on the selected one. Replaced with a real
+   `.fc-chip`.
+
+*Exit criterion met*, verified in the browser as the generated "Example Member":
+four seeded notifications rendered with per-type icons and tones, the sidebar
+badge read **4**, tapping a row cleared its border and moved the badge to **3**
+without a refetch, a second tap took it to **2**, the activity panel listed three
+entries with chips derived from the member's own types, and all seven switches
+rendered on. Flipping "Personal records and milestones" off persisted as
+`{"notifications":{"achievement":false}}` and was then proven at the write:
+`notify(achievement)` returned 0 while `notify(workout)` created a row. All
+temporary data and the preferences blob were removed afterwards. Gate: **phpcs 0
+errors, phpunit 193 tests / 1026 assertions, `ui/` typecheck + lint + format +
+build green.**
+
+**Deferred from this package:** email and push fan-out and the digest schedule
+(Phase 4 — this writes the row the screen reads), and the **privacy** half of
+`PUT /user/preferences`, which belongs with the Profile screen rather than here.
 
 ### W2.5 Admin app (7 d)
 Menu registration, mount, style scoping (option A from [05](05-admin-app.md)).

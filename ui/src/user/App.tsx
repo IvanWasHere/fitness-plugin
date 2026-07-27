@@ -10,10 +10,12 @@ import { Player } from './features/player/Player';
 import { Dashboard } from './screens/Dashboard';
 import { WorkoutDetail } from './screens/WorkoutDetail';
 import { Health } from './screens/Health';
+import { Notifications } from './screens/Notifications';
 import { Nutrition } from './screens/Nutrition';
 import { Progress } from './screens/Progress';
 import { Workouts } from './screens/Workouts';
 import { PlayerProvider } from './state/PlayerProvider';
+import { useUnreadCount } from './api/queries';
 import { usePlayer } from './state/player-context';
 
 /**
@@ -31,6 +33,8 @@ interface NavItem {
   to: string;
   label: string;
   icon: IconName;
+  /** Which live counter, if any, decorates this destination. */
+  badge?: 'notifications';
 }
 
 const NAV: NavItem[] = [
@@ -39,6 +43,7 @@ const NAV: NavItem[] = [
   { to: '/nutrition', label: 'Nutrition', icon: 'flame' },
   { to: '/health', label: 'Health', icon: 'heart' },
   { to: '/progress', label: 'Progress', icon: 'activity' },
+  { to: '/notifications', label: 'Alerts', icon: 'bell', badge: 'notifications' },
 ];
 
 export function App() {
@@ -97,6 +102,7 @@ function Chrome() {
           <Route path="/nutrition" element={<Nutrition />} />
           <Route path="/health" element={<Health />} />
           <Route path="/progress" element={<Progress />} />
+          <Route path="/notifications" element={<Notifications />} />
           {/* Auth routes are rendered by the panel above when signed out; a
               signed-in user landing on one belongs on the dashboard. */}
           <Route path="*" element={<Navigate to="/" replace />} />
@@ -137,6 +143,7 @@ function Sidebar({
             onClick={onNavigate}
           >
             <Icon name={item.icon} size={20} title={item.label} />
+            <NavBadge item={item} />
           </NavLink>
         ))}
       </nav>
@@ -159,12 +166,38 @@ function BottomNav() {
       <div className="fc-bottom-nav__row">
         {NAV.map((item) => (
           <NavLink key={item.to} to={item.to} end={item.to === '/'} className="fc-bn-btn">
-            <Icon name={item.icon} size={18} />
+            <span className="fc-bn-btn__icon">
+              <Icon name={item.icon} size={18} />
+              <NavBadge item={item} />
+            </span>
             {item.label}
           </NavLink>
         ))}
       </div>
     </nav>
+  );
+}
+
+/**
+ * The unread count on a nav destination.
+ *
+ * Seeded from the boot payload so it is right on first paint, then kept current
+ * by the notification mutations writing the server's own count back into the
+ * cache — see `useUnreadCount`. Capped at "9+" because a three-digit number does
+ * not fit a 72px sidebar and, past a point, the exact figure stops being what
+ * the badge is for.
+ */
+function NavBadge({ item }: { item: NavItem }) {
+  const unread = useUnreadCount();
+
+  if (item.badge !== 'notifications' || unread === 0) {
+    return null;
+  }
+
+  return (
+    <span className="fc-nav-badge" aria-label={`${unread} unread`}>
+      {unread > 9 ? '9+' : unread}
+    </span>
   );
 }
 

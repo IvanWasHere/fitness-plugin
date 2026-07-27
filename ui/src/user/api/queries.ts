@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tan
 import { ApiError } from '@shared/api';
 import { useSession } from '@shared/session-context';
 import type {
+  ActivityFeed,
   Celebration,
   Collection,
   ConsistencyCalendar,
@@ -16,12 +17,15 @@ import type {
   MealInput,
   Measurements,
   MeasurementsInput,
+  NotificationList,
+  NotificationPreferences,
   NutritionDay,
   NutritionGoals,
   Progress,
   ProgressRange,
   ProgressRecord,
   Session,
+  UnreadCount,
   WaterState,
   WorkoutDetail,
   WorkoutSummary,
@@ -51,6 +55,11 @@ export const queryKeys = {
   progress: (range: string) => ['progress', range] as const,
   progressRecords: ['progress', 'records'] as const,
   consistency: (year?: number) => ['progress', 'consistency', year ?? 'current'] as const,
+  notifications: (unreadOnly: boolean, page: number) =>
+    ['notifications', 'list', unreadOnly, page] as const,
+  unreadCount: ['notifications', 'unread-count'] as const,
+  activity: (page: number, types: string) => ['activity', page, types] as const,
+  preferences: ['user', 'preferences'] as const,
 };
 
 /**
@@ -426,6 +435,129 @@ export function useExerciseProgression(
         range,
       }),
     enabled: exerciseName !== null && exerciseName !== '',
+  });
+}
+
+// --------------------------------------------------- notifications & activity
+
+/**
+ * The nav badge's count (W2.4).
+ *
+ * Seeded from the boot payload, so the badge is correct on first paint without
+ * a request. Every notification mutation writes the server's fresh count
+ * straight into this cache entry rather than invalidating it — the endpoints
+ * return `unread_count` precisely so the badge never renders the stale number
+ * in the gap before a refetch lands.
+ */
+export function useUnreadCount(): number {
+  const { boot } = useSession();
+  const queryClient = useQueryClient();
+
+  const { data } = useQuery({
+    queryKey: queryKeys.unreadCount,
+    // Never fetched on its own: the value arrives from boot and is then kept
+    // current by the mutations below and by opening the inbox.
+    queryFn: () => Promise.resolve(queryClient.getQueryData<number>(queryKeys.unreadCount) ?? 0),
+    initialData: boot.counts?.unread_notifications ?? 0,
+    staleTime: Infinity,
+  });
+
+  return data ?? 0;
+}
+
+export function useNotifications(
+  unreadOnly = false,
+  page = 1,
+): UseQueryResult<NotificationList, ApiError> {
+  const { api } = useSession();
+  const queryClient = useQueryClient();
+
+  return useQuery({
+    queryKey: queryKeys.notifications(unreadOnly, page),
+    queryFn: async () => {
+      const result = await api.get<NotificationList>('notifications', {
+        page,
+        per_page: 20,
+        ...(unreadOnly ? { unread_only: true } : {}),
+      });
+
+      // Opening the inbox is also the most reliable moment to correct the badge:
+      // a notification raised on another device has not passed through any
+      // mutation on this one.
+      queryClient.setQueryData(queryKeys.unreadCount, result.unread_count);
+
+      return result;
+    },
+  });
+}
+
+export function useActivity(page = 1, types = ''): UseQueryResult<ActivityFeed, ApiError> {
+  const { api } = useSession();
+
+  return useQuery({
+    queryKey: queryKeys.activity(page, types),
+    queryFn: () =>
+      api.get<ActivityFeed>('activity', { page, per_page: 20, ...(types ? { types } : {}) }),
+  });
+}
+
+export function useNotificationActions() {
+  const { api } = useSession();
+  const queryClient = useQueryClient();
+
+  const settle = (result: UnreadCount) => {
+    queryClient.setQueryData(queryKeys.unreadCount, result.unread_count);
+    void queryClient.invalidateQueries({ queryKey: ['notifications', 'list'] });
+  };
+
+  const markRead = useMutation<UnreadCount, ApiError, number>({
+    mutationFn: (id) => api.post<UnreadCount>(`notifications/${id}/read`),
+    onSuccess: settle,
+  });
+
+  const markAllRead = useMutation<UnreadCount, ApiError, void>({
+    mutationFn: () => api.post<UnreadCount>('notifications/read-all'),
+    onSuccess: settle,
+  });
+
+  const dismiss = useMutation<UnreadCount, ApiError, number>({
+    mutationFn: (id) => api.delete<UnreadCount>(`notifications/${id}`),
+    onSuccess: settle,
+  });
+
+  return { markRead, markAllRead, dismiss };
+}
+
+export function usePreferences(): UseQueryResult<
+  { notifications: NotificationPreferences },
+  ApiError
+> {
+  const { api } = useSession();
+
+  return useQuery({
+    queryKey: queryKeys.preferences,
+    queryFn: () => api.get<{ notifications: NotificationPreferences }>('user/preferences'),
+  });
+}
+
+/**
+ * Flip one switch.
+ *
+ * Sends only the toggle that changed, because the server merges: a wholesale
+ * write would drop the privacy settings that share `fc_users.preferences`.
+ */
+export function useUpdatePreferences() {
+  const { api } = useSession();
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    { notifications: NotificationPreferences },
+    ApiError,
+    Partial<NotificationPreferences>
+  >({
+    mutationFn: (notifications) =>
+      api.put<{ notifications: NotificationPreferences }>('user/preferences', { notifications }),
+    onSuccess: (result) => queryClient.setQueryData(queryKeys.preferences, result),
   });
 }
 

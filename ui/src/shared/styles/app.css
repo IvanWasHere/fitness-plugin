@@ -1729,3 +1729,139 @@
     height: 200px;
   }
 }
+
+/* ----------------------------------------------------------- notifications */
+
+/* The nav destinations are position:relative already for the badge to anchor
+   to; these two are the ones that carry a counter. */
+.fc-nav-btn,
+.fc-bn-btn__icon {
+  position: relative;
+}
+
+.fc-bn-btn__icon {
+  display: inline-flex;
+}
+
+.fc-nav-badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+  pointer-events: none;
+}
+
+/* Unread carries a left edge as well as the dot: colour alone is not a signal
+   for anyone who cannot distinguish it. */
+.fc-notif--unread {
+  border-left: 3px solid var(--accent);
+}
+
+.fc-notif__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  background: none;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.fc-notif__body:disabled {
+  cursor: default;
+}
+
+.fc-notif__body:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: var(--rs);
+}
+
+.fc-history-list--tall {
+  max-height: none;
+}
+
+.fc-switch-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.fc-switch-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.fc-switch-list li:last-child {
+  border-bottom: 0;
+}
+
+.fc-switch-list label {
+  font-size: 14px;
+}
+
+.fc-switch-list input[type='checkbox'] {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+/* A filter chip: sized to its label, unlike .fc-tab which is a segmented
+   control and stretches to fill its row. */
+.fc-chip {
+  flex: 0 0 auto;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg2);
+  color: var(--text2);
+  font-size: 13px;
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    color 0.15s;
+}
+
+.fc-chip:hover {
+  border-color: var(--accent);
+}
+
+.fc-chip--on {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.fc-chip:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fc-chip {
+    transition: none;
+  }
+}
