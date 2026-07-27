@@ -1865,3 +1865,312 @@
     transition: none;
   }
 }
+
+/* -------------------------------------------------------------- admin app */
+
+/* Standalone and full-page: the admin SPA renders at /{base} with no wp-admin
+   stylesheet to fight, which is why 05 retired the old scope-and-reset
+   decision. */
+.fc-admin {
+  display: flex;
+  min-height: 100vh;
+}
+
+.fc-admin-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 220px;
+  flex: 0 0 220px;
+  padding: 16px 12px;
+  background: var(--bg2);
+  border-right: 1px solid var(--border);
+}
+
+.fc-admin-nav nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 16px;
+  flex: 1;
+}
+
+.fc-admin-nav__link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: var(--rs);
+  color: var(--text2);
+  font-size: 14px;
+  text-decoration: none;
+}
+
+.fc-admin-nav__link:hover {
+  background: var(--card);
+  color: var(--text);
+}
+
+.fc-admin-nav__link.active {
+  background: var(--accent-d);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.fc-admin-nav__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.fc-admin-main {
+  flex: 1;
+  min-width: 0;
+  padding: 24px 28px 64px;
+}
+
+.fc-admin-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
+.fc-admin-head h1 {
+  font-size: 26px;
+  font-weight: 800;
+}
+
+.fc-admin-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.fc-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 12rem;
+  padding: 0 12px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--rs);
+  color: var(--text2);
+}
+
+.fc-search input {
+  flex: 1;
+  border: 0;
+  background: none;
+  padding: 9px 0;
+  color: var(--text);
+}
+
+.fc-search input:focus {
+  outline: none;
+}
+
+/* The base rule gives every select `width: 100%`, which in a flex toolbar puts
+   each one on a row of its own. Toolbar selects size to their content instead. */
+.fc-admin-toolbar select {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 9rem;
+  padding: 9px 12px;
+}
+
+.fc-per-page {
+  margin-left: auto;
+}
+
+/* The table scrolls inside its own container: an admin table is wide by nature
+   and the page body must never scroll sideways. */
+.fc-table-wrap {
+  overflow-x: auto;
+}
+
+.fc-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.fc-table th,
+.fc-table td {
+  padding: 10px 12px;
+  text-align: left;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--border);
+}
+
+.fc-table th {
+  color: var(--text2);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.fc-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.fc-table tbody tr:hover {
+  background: var(--card-h);
+}
+
+.fc-sort-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  cursor: pointer;
+}
+
+.fc-sort-btn:hover {
+  color: var(--accent);
+}
+
+.fc-row-actions {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.fc-admin-pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+}
+
+.fc-admin-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+/* Q10: an administrator editing a member's own health or nutrition record is
+   changing somebody else's record of their own body. The screen says so. */
+.fc-admin-notice {
+  display: block;
+  padding: 10px 12px;
+  margin-bottom: 16px;
+  background: color-mix(in srgb, var(--warning) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--warning) 30%, transparent);
+  border-radius: var(--rs);
+  color: var(--warning);
+  font-size: 13px;
+}
+
+.fc-slug-input {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.fc-slug-input input {
+  flex: 1;
+  min-width: 6rem;
+}
+
+.fc-exercise-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  counter-reset: exercise;
+}
+
+.fc-exercise-editor li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--rs);
+}
+
+.fc-exercise-editor li.fc-dragging {
+  opacity: 0.5;
+  border-color: var(--accent);
+}
+
+.fc-exercise-editor input:not(.fc-input-tiny) {
+  flex: 1;
+  min-width: 6rem;
+}
+
+.fc-drag-handle {
+  cursor: grab;
+  color: var(--text3);
+  flex: 0 0 auto;
+}
+
+@media (max-width: 900px) {
+  .fc-admin {
+    flex-direction: column;
+  }
+
+  .fc-admin-nav {
+    width: auto;
+    flex: 0 0 auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .fc-admin-nav nav {
+    flex-direction: row;
+    flex-wrap: wrap;
+    margin-top: 8px;
+  }
+
+  .fc-admin-main {
+    padding: 16px;
+  }
+}
+
+/* Admin forms are wider than the member app's confirm dialogs — an exercise row
+   carries six controls. Scoped by descendant rather than by a new Modal prop:
+   the dialog renders inline inside `.fc-admin`, so no shared API has to change
+   to make one app's forms roomier. */
+.fc-admin .fc-modal--form {
+  max-width: 56rem;
+}
+
+/* And the row still wraps, so the editor survives a narrow window instead of
+   pushing its remove button off the edge. */
+.fc-exercise-editor li {
+  flex-wrap: wrap;
+}
+
+.fc-exercise-editor select {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 7rem;
+  padding: 6px 8px;
+}
+
+.fc-exercise-editor input {
+  padding: 6px 8px;
+}

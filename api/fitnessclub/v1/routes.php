@@ -1,5 +1,6 @@
 <?php
 
+use FitnessClub\Http\Controllers\Api\AdminController;
 use FitnessClub\Http\Controllers\Api\AuthController;
 use FitnessClub\Http\Controllers\Api\HealthController;
 use FitnessClub\Http\Controllers\Api\NotificationController;
@@ -813,6 +814,92 @@ Route::put('/user/preferences', NotificationController::class . '@updatePreferen
             'type'     => 'object',
         ],
     ],
+]);
+
+/*
+|--------------------------------------------------------------------------
+| Admin — /admin/*
+|--------------------------------------------------------------------------
+|
+| Uniform CRUD over the resources in Services\Admin\ResourceRegistry, which is
+| also what decides the capability each one needs. The contract says these
+| require `manage_options`; that predates plugin-owned identity (W1.2R/W1.3R),
+| so the gate is the plugin's own `fc_*` capabilities — a WordPress
+| administrator with no fc_accounts row is anonymous to this API by design.
+|
+| `{resource}` is matched as a path segment and resolved against the registry,
+| so an unknown name is a 404 rather than a query against a table that does not
+| exist. The literal routes below are registered *before* the generic ones for
+| the same reason as `/notifications/read-all`: the patterns cannot collide, but
+| the ordering states the intent.
+|
+| These endpoints do no ownership scoping — acting on other people's records is
+| what an administrator is for. The audit trail replaces it (Q10).
+|
+*/
+
+Route::get('/admin/dashboard', AdminController::class . '@dashboard', [
+    'permission_callback' => [AdminController::class, 'canAccess'],
+]);
+
+Route::get('/admin/resources', AdminController::class . '@resources', [
+    'permission_callback' => [AdminController::class, 'canAccess'],
+]);
+
+Route::get('/admin/settings', AdminController::class . '@settings', [
+    'permission_callback' => [AdminController::class, 'canAccess'],
+]);
+
+// Groups are validated key-by-key in AdminSettingsService against a whitelist:
+// the options row is one JSON blob, and accepting arbitrary keys would let a
+// client typo write a permanent orphan into it.
+Route::put('/admin/settings', AdminController::class . '@updateSettings', [
+    'permission_callback' => [AdminController::class, 'canAccess'],
+    'args'                => [
+        'general'  => ['type' => 'object'],
+        'email'    => ['type' => 'object'],
+        'features' => ['type' => 'object'],
+    ],
+]);
+
+$resourceArg = [
+    'resource' => [
+        'required'          => true,
+        'type'              => 'string',
+        'sanitize_callback' => 'sanitize_text_field',
+    ],
+];
+
+// The filter names differ per resource, so they are not declared here — the
+// controller reads exactly the ones the registry names for the resource in
+// hand, and anything else in the query string is ignored rather than trusted.
+Route::get('/admin/(?P<resource>[a-z-]+)', AdminController::class . '@index', [
+    'permission_callback' => [AdminController::class, 'canAccess'],
+    'args'                => $resourceArg + $pagingArgs + [
+        'q'     => ['type' => 'string', 'sanitize_callback' => 'sanitize_text_field'],
+        'sort'  => ['type' => 'string', 'sanitize_callback' => 'sanitize_key'],
+        'order' => ['type' => 'string', 'enum' => ['asc', 'desc']],
+    ],
+]);
+
+Route::post('/admin/(?P<resource>[a-z-]+)', AdminController::class . '@store', [
+    'permission_callback' => [AdminController::class, 'canAccess'],
+    'args'                => $resourceArg,
+]);
+
+Route::get('/admin/(?P<resource>[a-z-]+)/(?P<id>\d+)', AdminController::class . '@show', [
+    'permission_callback' => [AdminController::class, 'canAccess'],
+    'args'                => $resourceArg + $idArg,
+]);
+
+Route::put('/admin/(?P<resource>[a-z-]+)/(?P<id>\d+)', AdminController::class . '@update', [
+    'permission_callback' => [AdminController::class, 'canAccess'],
+    'args'                => $resourceArg + $idArg,
+]);
+
+Route::delete('/admin/(?P<resource>[a-z-]+)/(?P<id>\d+)', AdminController::class . '@destroy', [
+    'permission_callback' => [AdminController::class, 'canAccess'],
+    'args'                => $resourceArg + $idArg,
 ]);
 
 Route::post('/foods', NutritionController::class . '@createFood', [

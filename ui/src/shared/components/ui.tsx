@@ -33,12 +33,28 @@ interface ButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'typ
   size?: 'sm' | 'md' | 'lg';
   block?: boolean;
   icon?: IconName;
+  /**
+   * Defaults to `button`, which is the safe default and why this was originally
+   * not settable: a bare `<button>` inside a form submits it, so every icon
+   * button in a form would have submitted on click. The admin forms need a real
+   * submit control, so it is now opt-in rather than unavailable.
+   */
+  type?: 'button' | 'submit';
 }
 
 // forwardRef because dialogs and the player need to move focus onto a specific
 // button — React 18 has no ref-as-prop.
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
-  { variant = 'secondary', size = 'md', block = false, icon, children, className = '', ...rest },
+  {
+    variant = 'secondary',
+    size = 'md',
+    block = false,
+    icon,
+    type = 'button',
+    children,
+    className = '',
+    ...rest
+  },
   ref,
 ) {
   const classes = [
@@ -52,7 +68,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
     .join(' ');
 
   return (
-    <button ref={ref} type="button" className={classes} {...rest}>
+    <button ref={ref} type={type} className={classes} {...rest}>
       {icon && <Icon name={icon} />}
       {children}
     </button>

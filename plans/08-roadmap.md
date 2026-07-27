@@ -786,15 +786,97 @@ build green.**
 (Phase 4 — this writes the row the screen reads), and the **privacy** half of
 `PUT /user/preferences`, which belongs with the Profile screen rather than here.
 
-### W2.5 Admin app (7 d)
-Menu registration, mount, style scoping (option A from [05](05-admin-app.md)).
+### W2.5 Admin app (7 d) — ✅ **complete 2026-07-27**
+~~Menu registration, mount, style scoping (option A from [05](05-admin-app.md)).~~
 Server-backed `CrudTable`. Resources: users, trainers, workouts (+ nested exercise
 editor with drag reorder), foods, meals, health entries. Admin dashboard.
 **Settings screen** (general, email, features) — a prerequisite for everything
 after this, despite not appearing in the prototype.
 
+> **Two lines of this package's own brief were stale, and both were followed to
+> the newer decision rather than the letter.** (a) "Menu registration, mount,
+> style scoping (option A)" predates the D9/D10 reset — [05](05-admin-app.md#mounting--front-end-spa-not-wp-admin)
+> says the A/B/C style decision is *moot*, because the admin UI is now a
+> standalone SPA at `/{base}` with no host CSS to fight, and wp-admin keeps only
+> the thin launcher already built in W1.3R. (b) [02](02-api-contract.md#admin--admin-cap-manage_options)
+> gates `/admin/*` on `manage_options`; that predates plugin-owned identity
+> (W1.2R/W1.3R), and `current_user_can()` now answers for a wp-admin session with
+> nothing to do with this app. Gated on the plugin's own `fc_*` capabilities
+> instead, with a test that signs in a **real WordPress administrator** and
+> asserts 401.
+
+**Build notes.**
+
+- **The declarative registry exists on both sides.** The prototype's one good
+  idea was `CrudTable(config)`; the server half is
+  `Services\Admin\ResourceRegistry`, so a resource is one config entry per side
+  and no new controller or component. `GET /admin/resources` serves the server's
+  own registry, which is what a test uses to catch the two drifting.
+- **Loading every row is the bug the port exists to fix.** 05 calls it "the
+  single most important change in the admin port": `db[table].toCollection()`
+  then filter-and-paginate in the browser is fine for six seeded users and fatal
+  at ten thousand. Search, filter, sort and paging are all SQL now.
+- **Identifiers come from the registry, values from the request.** Column names
+  cannot be bound as placeholders, so they are interpolated — safe only because
+  every one is a literal in the registry. A request names a *sort key*; the
+  registry decides what SQL that means and an unknown key falls back to the
+  default. A test posts `sort=id;DROP TABLE …` and asserts a 200 with rows.
+- **Saving a workout preserves exercise ids**, which is the prototype's worst
+  defect: `WorkoutForm` did `delete ex.id` and re-inserted every row, and
+  `fc_exercise_logs.exercise_id` points at those ids — so every past session
+  silently lost its link to the movement it recorded. Rows with an id are
+  updated, rows without are inserted, and only what the payload dropped is
+  deleted. **Order is the array order**, so drag-reorder needs no endpoint.
+- **Deletes that would orphan live data are refused with a reason** (409):
+  a trainer with active clients, a workout with logged sessions, a food that
+  appears in members' diaries. The prototype deleted unconditionally.
+- **Q10 is enforced in the service, not the screen.** Meal and health writes
+  stamp `source='admin'` and `last_edited_by_account_id`, write an audit row
+  carrying only the fields that actually moved, and re-run the same derivations a
+  member's own edit runs — BMI and the profile's cached weight both follow a
+  staff edit. Both screens carry an inline warning saying so.
+- **A member's name, not "User #1"** — the meal and health lists join
+  `fc_users`, which is what the prototype rendered instead.
+
+**Three defects found by opening it in a browser, none catchable by a test.**
+
+1. **The admin SPA had no `QueryClientProvider`.** Every screen uses TanStack
+   Query; without it the first render throws "No QueryClient set" and the page is
+   **blank**, with the error only in the console. Every test passed throughout —
+   they exercise the API, not the mount. This is the strongest argument yet for
+   the browser pass being part of the package rather than optional.
+2. `select` carries `width: 100%` from the base stylesheet, so every toolbar
+   filter took a row of its own. Scoped to `auto` inside `.fc-admin-toolbar`.
+3. `.fc-modal--form` maxes at 34rem — too narrow for an exercise row's six
+   controls, which pushed the remove button off the edge. Widened to 56rem via a
+   descendant selector under `.fc-admin`, so one app's forms get roomier without
+   changing the shared Modal's API, and the row now wraps as well.
+
+*Exit criterion met*, verified in the browser signed in as the administrator
+account: the dashboard renders in one request (7 members, 4 trainers, 6 workouts,
+12 foods, $59.97 MRR, a failed payment for Jordan Riley, five recent signups);
+`/foods?q=chicken&sort=calories&order=desc` restores search, sort and result from
+the URL alone; the workout editor loads all eight exercises with sets/reps/weight/
+rest/metric and reorder controls. Moving Bench Press down and saving left
+`id=1` and `id=2` **swapped in position but identical in identity**, with all
+**16 exercise logs still linked** and `MAX(id)` unmoved — the delete-and-reinsert
+bug demonstrably fixed. Typing `wp-admin` into the App URL field raised the
+reserved-slug error inline and disabled Save. The exercise order was restored and
+no setting was saved. Gate: **phpcs 0 errors, phpunit 210 tests / 1140
+assertions, `ui/` typecheck + lint + format + build green.**
+
+**Deferred, and all of it named as out of scope by the roadmap line rather than
+dropped:** the resources [05](05-admin-app.md#resources) lists that W2.5 does not
+— payments, plans, subscriptions, tickets, themes, the trainer report and the
+trainer-request queue — plus bulk actions, CSV import/export, column-visibility
+toggles and the row detail drawers. The `react-hook-form` + `zod` schemas shared
+with the server's `args` (05 §Forms) are also deferred: the six forms here are
+flat field lists, and generating both sides from one source is tooling in its own
+right. What the plan names as the *behaviour* — required marks,
+disabled-while-submitting, server errors surfaced on the field — is delivered.
+
 **Phase 2 exit:** every user-facing tracking feature works and an administrator
-can run the site without touching the database.
+can run the site without touching the database. ✅ **Met 2026-07-27.**
 
 ---
 

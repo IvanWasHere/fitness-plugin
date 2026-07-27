@@ -1,58 +1,58 @@
 {
-  "_AppShell-IpPKJrXb.js": {
-    "file": "assets/AppShell-IpPKJrXb.js",
-    "name": "AppShell",
-    "imports": [
-      "_AuthPanel-gl__mIXk.js"
-    ]
-  },
-  "_AuthPanel-AysEv7TH.css": {
-    "file": "assets/AuthPanel-AysEv7TH.css",
-    "src": "_AuthPanel-AysEv7TH.css"
-  },
-  "_AuthPanel-gl__mIXk.js": {
-    "file": "assets/AuthPanel-gl__mIXk.js",
+  "_AuthPanel-C6h98Pii.js": {
+    "file": "assets/AuthPanel-C6h98Pii.js",
     "name": "AuthPanel",
     "css": [
-      "assets/AuthPanel-AysEv7TH.css"
+      "assets/AuthPanel-cODPEr73.css"
+    ]
+  },
+  "_AuthPanel-cODPEr73.css": {
+    "file": "assets/AuthPanel-cODPEr73.css",
+    "src": "_AuthPanel-cODPEr73.css"
+  },
+  "_Modal-DqBwaqj8.js": {
+    "file": "assets/Modal-DqBwaqj8.js",
+    "name": "Modal",
+    "imports": [
+      "_AuthPanel-C6h98Pii.js"
     ]
   },
   "src/admin/main.tsx": {
-    "file": "assets/admin-BppZfBqZ.js",
+    "file": "assets/admin-VdBZed9a.js",
     "name": "admin",
     "src": "src/admin/main.tsx",
     "isEntry": true,
     "imports": [
-      "_AuthPanel-gl__mIXk.js",
-      "_AppShell-IpPKJrXb.js"
+      "_AuthPanel-C6h98Pii.js",
+      "_Modal-DqBwaqj8.js"
     ]
   },
   "src/shared/components/charts/ProgressCharts.tsx": {
-    "file": "assets/ProgressCharts-db75UTvY.js",
+    "file": "assets/ProgressCharts-DNKMBq9i.js",
     "name": "ProgressCharts",
     "src": "src/shared/components/charts/ProgressCharts.tsx",
     "isDynamicEntry": true,
     "imports": [
-      "_AuthPanel-gl__mIXk.js"
+      "_AuthPanel-C6h98Pii.js"
     ]
   },
   "src/trainer/main.tsx": {
-    "file": "assets/trainer-CXMvat7P.js",
+    "file": "assets/trainer-BJ7xjCqf.js",
     "name": "trainer",
     "src": "src/trainer/main.tsx",
     "isEntry": true,
     "imports": [
-      "_AuthPanel-gl__mIXk.js",
-      "_AppShell-IpPKJrXb.js"
+      "_AuthPanel-C6h98Pii.js"
     ]
   },
   "src/user/main.tsx": {
-    "file": "assets/user-BMX9E9cI.js",
+    "file": "assets/user-DHFvbcQE.js",
     "name": "user",
     "src": "src/user/main.tsx",
     "isEntry": true,
     "imports": [
-      "_AuthPanel-gl__mIXk.js"
+      "_AuthPanel-C6h98Pii.js",
+      "_Modal-DqBwaqj8.js"
     ],
     "dynamicImports": [
       "src/shared/components/charts/ProgressCharts.tsx"
