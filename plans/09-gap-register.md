@@ -77,6 +77,8 @@ assumes working code is wrong.
 | 825 | `calories = elapsedSeconds * 6.5` for every user, every workout |
 | 826 | Personal records are hardcoded strings |
 | 874 | Native `confirm()` blocks the JS thread and looks broken on mobile |
+| 1456 | **Blood pressure is fabricated.** `HealthDetailModal` takes one number and writes `{ systolic: val, diastolic: Math.round(val * 0.65) }` — a made-up reading stored beside a measured one and indistinguishable from it afterwards. This is health data. *Found during W2.2; the API now takes two inputs and refuses half a reading* |
+| 1073–1085 | The Health screen builds its eight cards in the render function, and each indexes the tail of an array (`d.weight[d.weight.length - 1].date`). **The whole screen throws for a member who has logged nothing** — which is every member on day one. Same class of defect as the fatal shadowing bugs above, but arising from empty data rather than from syntax |
 | 1128 | Message images render when `msg.text.includes('form')` — a placeholder heuristic |
 | 1131 | Typing indicator shows permanently whenever the trainer is "online" |
 | ~15 classes | `.text-center`, `.flex-column`, `.font-bold`, `.text-lg`, `.text-accent2`, `.text-info`, `.text-purple`, `.tag-accent`, `.mt-4/8/12`, `.mb-8/32`, `.gap-10/32` are used in markup but **never defined in the stylesheet** |

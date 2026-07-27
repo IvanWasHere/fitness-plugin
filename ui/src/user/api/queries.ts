@@ -6,8 +6,14 @@ import type {
   Collection,
   Dashboard,
   Food,
+  HealthInput,
+  HealthStat,
+  HealthStats,
+  HealthSummary,
   Meal,
   MealInput,
+  Measurements,
+  MeasurementsInput,
   NutritionDay,
   NutritionGoals,
   Session,
@@ -34,6 +40,9 @@ export const queryKeys = {
   sessionHistory: (page: number) => ['sessions', page] as const,
   nutritionDay: (date?: string) => ['nutrition', 'day', date ?? 'today'] as const,
   foods: (query: string) => ['nutrition', 'foods', query] as const,
+  healthSummary: ['health', 'summary'] as const,
+  healthStats: (metrics?: string) => ['health', 'stats', metrics ?? 'all'] as const,
+  measurements: ['health', 'measurements'] as const,
 };
 
 /**
@@ -267,4 +276,96 @@ export function useNutritionActions(date?: string) {
   });
 
   return { logMeal, updateMeal, deleteMeal, setWater, setGoals };
+}
+
+// ---------------------------------------------------------------- health
+
+/**
+ * The Health screen, one request (W2.2).
+ *
+ * The eight cards, BMI and the latest measurements together — the prototype
+ * read two stores and then indexed `d.weight[d.weight.length - 1]` on seven
+ * arrays, which throws for anyone who has logged nothing.
+ */
+export function useHealthSummary(): UseQueryResult<HealthSummary, ApiError> {
+  const { api } = useSession();
+
+  return useQuery({
+    queryKey: queryKeys.healthSummary,
+    queryFn: () => api.get<HealthSummary>('health/summary'),
+  });
+}
+
+/**
+ * The history behind a card.
+ *
+ * `enabled` gates it on the modal actually being open: the detail modal is the
+ * only thing that wants history, and fetching ninety days of readings for eight
+ * cards nobody has tapped is eight requests for nothing.
+ */
+export function useHealthStats(
+  metrics?: string,
+  enabled = true,
+): UseQueryResult<HealthStats, ApiError> {
+  const { api } = useSession();
+
+  return useQuery({
+    queryKey: queryKeys.healthStats(metrics),
+    queryFn: () => api.get<HealthStats>('health/stats', metrics ? { metrics } : undefined),
+    enabled,
+  });
+}
+
+export function useMeasurements(
+  enabled = true,
+): UseQueryResult<{ items: Measurements[]; from: string; to: string }, ApiError> {
+  const { api } = useSession();
+
+  return useQuery({
+    queryKey: queryKeys.measurements,
+    queryFn: () =>
+      api.get<{ items: Measurements[]; from: string; to: string }>('health/measurements'),
+    enabled,
+  });
+}
+
+/**
+ * Health writes.
+ *
+ * Every one invalidates the dashboard as well as the health queries: weight
+ * feeds `stats.current_weight_kg` and the goal-progress figure, and the server
+ * has already dropped its own cached aggregate for the same event.
+ */
+export function useHealthActions() {
+  const { api } = useSession();
+  const queryClient = useQueryClient();
+
+  const settle = () => {
+    void queryClient.invalidateQueries({ queryKey: ['health'] });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.dashboard });
+  };
+
+  // POST, not PUT, and it upserts on the date — a second entry the same day
+  // edits the day's record rather than adding a second one.
+  const saveStat = useMutation<HealthStat, ApiError, HealthInput>({
+    mutationFn: (entry) => api.post<HealthStat>('health/stats', entry),
+    onSuccess: settle,
+  });
+
+  const updateStat = useMutation<HealthStat, ApiError, { id: number; entry: HealthInput }>({
+    mutationFn: ({ id, entry }) => api.put<HealthStat>(`health/stats/${id}`, entry),
+    onSuccess: settle,
+  });
+
+  const deleteStat = useMutation<{ ok: boolean }, ApiError, number>({
+    mutationFn: (id) => api.delete<{ ok: boolean }>(`health/stats/${id}`),
+    onSuccess: settle,
+  });
+
+  const saveMeasurements = useMutation<Measurements, ApiError, MeasurementsInput>({
+    mutationFn: (entry) => api.post<Measurements>('health/measurements', entry),
+    onSuccess: settle,
+  });
+
+  return { saveStat, updateStat, deleteStat, saveMeasurements };
 }

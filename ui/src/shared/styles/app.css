@@ -1515,3 +1515,175 @@
     transition: none;
   }
 }
+
+/* ------------------------------------------------------------------ health */
+
+.fc-mb-12 {
+  margin-bottom: 12px;
+}
+
+.fc-uppercase {
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* The whole card is the button that opens the history. The prototype used a
+   `<div onclick>`, which is unfocusable and invisible to assistive tech. */
+.fc-health-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 0;
+  background: none;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.fc-health-card:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+  border-radius: var(--rs);
+}
+
+.fc-health-card__info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.fc-health-card__value {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  flex-shrink: 0;
+  font-family: var(--font-d, inherit);
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.fc-health-card__unit {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text2);
+}
+
+/* Neutral by design: no green for down, no red for up. Whether a direction is
+   good depends on what the member is training for, and the server does not
+   claim to know — so the UI must not imply it does either. */
+.fc-health-card__trend {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text2);
+}
+
+.fc-health-detail__value {
+  font-family: var(--font-d, inherit);
+  font-size: 28px;
+  font-weight: 900;
+  line-height: 1.1;
+}
+
+.fc-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 13rem;
+  overflow-y: auto;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.fc-history-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--bg2);
+  border-radius: var(--rs);
+  font-size: 13px;
+}
+
+.fc-history-list li > span:nth-child(2) {
+  flex: 1;
+  font-weight: 600;
+}
+
+.fc-measure-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(6.5rem, 1fr));
+  gap: 12px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.fc-measure-grid li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  background: var(--bg2);
+  border-radius: var(--rs);
+}
+
+/* A rating is picked, not typed: a number box happily accepts 7 on a
+   five-point scale, and the member then gets a validation error for something
+   the control should never have offered. */
+.fc-scale {
+  border: 0;
+  padding: 0;
+  margin: 0 0 14px;
+}
+
+.fc-scale__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.fc-scale__dot {
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--bg2);
+  color: var(--text2);
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    color 0.15s,
+    border-color 0.15s;
+}
+
+.fc-scale__dot:hover {
+  border-color: var(--accent);
+}
+
+.fc-scale__dot--on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--bg);
+}
+
+.fc-scale__dot:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fc-scale__dot {
+    transition: none;
+  }
+}

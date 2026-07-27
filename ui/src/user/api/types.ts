@@ -323,3 +323,130 @@ export interface MealInput {
   notes?: string | null;
   items: MealItemInput[];
 }
+
+// ---------------------------------------------------------------- health
+
+/** The writable metrics, matching HealthService::FIELDS. */
+export type HealthField =
+  | 'weight_kg'
+  | 'body_fat_percentage'
+  | 'muscle_mass_kg'
+  | 'systolic_pressure'
+  | 'diastolic_pressure'
+  | 'heart_rate_resting'
+  | 'sleep_hours'
+  | 'mood_score'
+  | 'energy_score'
+  | 'stress_score';
+
+/**
+ * Movement since the previous reading.
+ *
+ * `direction` and nothing else — the server deliberately does not say whether
+ * the direction is good, because whether falling weight is progress depends on
+ * what the member is training for. The UI draws a neutral arrow.
+ */
+export interface HealthTrend {
+  direction: 'up' | 'down' | 'flat';
+  delta: number;
+  previous: number;
+  previous_date: string | null;
+}
+
+/**
+ * One card on the Health screen, described by the server.
+ *
+ * The card list is data, not markup: the prototype hardcoded eight cards in the
+ * view, so adding a metric meant editing the screen. Here it is one entry in
+ * `HealthService::CARDS`.
+ */
+export interface HealthCard {
+  key: string;
+  /** Null for BMI, which is derived and has no input. */
+  field: HealthField | null;
+  label: string;
+  icon: string;
+  tone: string;
+  unit: string;
+  decimals: number;
+  /** Null when nothing has been logged, or the last reading is stale. */
+  value: number | null;
+  display: string | null;
+  recorded_on: string | null;
+  editable: boolean;
+  detail: string | null;
+  trend: HealthTrend | null;
+  /** Diastolic, on the blood-pressure card only. */
+  secondary_value?: number | null;
+}
+
+export type MeasurementField =
+  | 'chest_cm'
+  | 'waist_cm'
+  | 'hips_cm'
+  | 'arms_cm'
+  | 'thighs_cm'
+  | 'shoulders_cm'
+  | 'neck_cm'
+  | 'calves_cm';
+
+/** One stored measurement session. Every field is nullable. */
+export type Measurements = {
+  id: number;
+  date: string;
+  notes: string | null;
+} & Record<MeasurementField, number | null>;
+
+/**
+ * The latest value of each measurement, **per field rather than per session**.
+ *
+ * Each carries its own date: someone who measures chest monthly and calves
+ * twice a year should not see calves vanish the moment they record anything
+ * else, nor see a March reading presented as current.
+ */
+export interface LatestMeasurements {
+  last_recorded_on: string;
+  fields: Partial<Record<MeasurementField, { value: number; date: string }>>;
+}
+
+/** `GET /health/summary` — the whole Health screen in one call. */
+export interface HealthSummary {
+  date: string;
+  height_cm: number | null;
+  cards: HealthCard[];
+  measurements: LatestMeasurements | null;
+  target_weight_kg: number | null;
+}
+
+/** One stored day. Every metric is nullable — a day records what was measured. */
+export type HealthStat = {
+  id: number;
+  date: string;
+  recorded_at: string | null;
+  bmi: number | null;
+  notes: string | null;
+  /** 'admin' when a trainer or administrator entered this (Q10). */
+  source: string;
+} & Record<HealthField, number | null>;
+
+export interface HealthStats {
+  items: HealthStat[];
+  from: string;
+  to: string;
+}
+
+/**
+ * A health write. Only the keys present are sent, because the server treats an
+ * absent key as "leave it alone" and an explicit null as "clear it" — the rule
+ * that lets a member log weight in the morning and sleep at night without the
+ * second entry erasing the first.
+ */
+export type HealthInput = Partial<Record<HealthField, number | null>> & {
+  record_date?: string;
+  notes?: string | null;
+};
+
+export type MeasurementsInput = Partial<Record<MeasurementField, number | null>> & {
+  record_date?: string;
+  notes?: string | null;
+};

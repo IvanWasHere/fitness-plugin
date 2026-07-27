@@ -1,6 +1,7 @@
 <?php
 
 use FitnessClub\Http\Controllers\Api\AuthController;
+use FitnessClub\Http\Controllers\Api\HealthController;
 use FitnessClub\Http\Controllers\Api\NutritionController;
 use FitnessClub\Http\Controllers\Api\SessionController;
 use FitnessClub\Http\Controllers\Api\UserController;
@@ -557,6 +558,123 @@ Route::get('/foods/barcode/(?P<code>[A-Za-z0-9]+)', NutritionController::class .
             'required'          => true,
             'type'              => 'string',
             'sanitize_callback' => 'sanitize_text_field',
+        ],
+    ],
+]);
+
+/*
+|--------------------------------------------------------------------------
+| Health & measurements — /health/stats, /health/measurements, /health/summary
+|--------------------------------------------------------------------------
+|
+| Reads need app access; **writes additionally need the `can_log_health`
+| entitlement**, checked in the controller so the refusal names the feature.
+|
+| Note the neighbour: `GET /health` above is the API's liveness probe and has
+| nothing to do with the member's body metrics. The paths do not collide — the
+| probe's route is an exact match — but the two meanings of the word share a
+| prefix, so read the segment after it before assuming which one you are in.
+|
+| Every measurement is nullable in the schema, and has to be: an explicit null
+| *clears* a reading, which is how a mis-entered heart rate is removed without
+| deleting the whole day. Declaring these as plain `number` would make WordPress
+| reject the clear with 400 rest_invalid_param.
+|
+| The bounds live in HealthService::FIELDS as well as here. That duplication is
+| deliberate: the schema rejects nonsense at the edge with a machine-readable
+| error, and the service refuses it again for callers that are not HTTP — the
+| CLI seeder and the admin screens in W2.5 go straight to the service.
+|
+*/
+
+$healthStatArgs = [
+    'record_date' => [
+        'type'              => 'string',
+        'description'       => 'Y-m-d. Defaults to the member\'s today.',
+        'sanitize_callback' => 'sanitize_text_field',
+    ],
+    'weight_kg'           => ['type' => ['number', 'null'], 'minimum' => 20, 'maximum' => 500],
+    'body_fat_percentage' => ['type' => ['number', 'null'], 'minimum' => 1, 'maximum' => 70],
+    'muscle_mass_kg'      => ['type' => ['number', 'null'], 'minimum' => 5, 'maximum' => 200],
+    // Sent together or not at all — the service refuses half a reading rather
+    // than fabricating the other number, as the prototype did.
+    'systolic_pressure'   => ['type' => ['integer', 'null'], 'minimum' => 60, 'maximum' => 260],
+    'diastolic_pressure'  => ['type' => ['integer', 'null'], 'minimum' => 30, 'maximum' => 200],
+    'heart_rate_resting'  => ['type' => ['integer', 'null'], 'minimum' => 25, 'maximum' => 220],
+    'sleep_hours'         => ['type' => ['number', 'null'], 'minimum' => 0, 'maximum' => 24],
+    'mood_score'          => ['type' => ['integer', 'null'], 'minimum' => 1, 'maximum' => 5],
+    'energy_score'        => ['type' => ['integer', 'null'], 'minimum' => 1, 'maximum' => 10],
+    'stress_score'        => ['type' => ['integer', 'null'], 'minimum' => 1, 'maximum' => 5],
+    'notes'               => [
+        'type'              => ['string', 'null'],
+        'sanitize_callback' => 'sanitize_textarea_field',
+    ],
+];
+
+$rangeArgs = [
+    'from' => [
+        'type'              => 'string',
+        'sanitize_callback' => 'sanitize_text_field',
+    ],
+    'to' => [
+        'type'              => 'string',
+        'sanitize_callback' => 'sanitize_text_field',
+    ],
+];
+
+Route::get('/health/summary', HealthController::class . '@summary', [
+    'permission_callback' => [HealthController::class, 'canRead'],
+]);
+
+Route::get('/health/stats', HealthController::class . '@stats', [
+    'permission_callback' => [HealthController::class, 'canRead'],
+    'args'                => $rangeArgs + [
+        'metrics' => [
+            'type'              => 'string',
+            'description'       => 'Comma-separated field keys, e.g. weight_kg,sleep_hours.',
+            'sanitize_callback' => 'sanitize_text_field',
+        ],
+    ],
+]);
+
+Route::post('/health/stats', HealthController::class . '@store', [
+    'permission_callback' => [HealthController::class, 'canLog'],
+    'args'                => $healthStatArgs,
+]);
+
+Route::put('/health/stats/(?P<id>\d+)', HealthController::class . '@update', [
+    'permission_callback' => [HealthController::class, 'canLog'],
+    'args'                => $idArg + $healthStatArgs,
+]);
+
+Route::delete('/health/stats/(?P<id>\d+)', HealthController::class . '@destroy', [
+    'permission_callback' => [HealthController::class, 'canLog'],
+    'args'                => $idArg,
+]);
+
+Route::get('/health/measurements', HealthController::class . '@measurements', [
+    'permission_callback' => [HealthController::class, 'canRead'],
+    'args'                => $rangeArgs,
+]);
+
+Route::post('/health/measurements', HealthController::class . '@storeMeasurements', [
+    'permission_callback' => [HealthController::class, 'canLog'],
+    'args'                => [
+        'record_date' => [
+            'type'              => 'string',
+            'sanitize_callback' => 'sanitize_text_field',
+        ],
+        'chest_cm'     => ['type' => ['number', 'null'], 'minimum' => 30, 'maximum' => 250],
+        'waist_cm'     => ['type' => ['number', 'null'], 'minimum' => 30, 'maximum' => 250],
+        'hips_cm'      => ['type' => ['number', 'null'], 'minimum' => 30, 'maximum' => 250],
+        'arms_cm'      => ['type' => ['number', 'null'], 'minimum' => 10, 'maximum' => 100],
+        'thighs_cm'    => ['type' => ['number', 'null'], 'minimum' => 20, 'maximum' => 150],
+        'shoulders_cm' => ['type' => ['number', 'null'], 'minimum' => 40, 'maximum' => 250],
+        'neck_cm'      => ['type' => ['number', 'null'], 'minimum' => 20, 'maximum' => 100],
+        'calves_cm'    => ['type' => ['number', 'null'], 'minimum' => 15, 'maximum' => 100],
+        'notes'        => [
+            'type'              => ['string', 'null'],
+            'sanitize_callback' => 'sanitize_textarea_field',
         ],
     ],
 ]);

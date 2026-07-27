@@ -538,9 +538,84 @@ no third-party source behind it. The Nutrition screen has not been eyeballed in 
 browser: the dev browser session is a WordPress administrator, which by D4a sees
 only the login panel.
 
-### W2.2 Health & measurements (3 d)
+### W2.2 Health & measurements (3 d) — ✅ **complete 2026-07-27**
 Upsert-by-date health stats, BMI, `fc_users.weight_kg` sync, measurements. Health
 screen with 8 cards + detail modal + Add Weight modal.
+
+**Build notes.**
+
+- **Four rules hold this domain up**, and each has a test named after it.
+  *A day is a row and writing it is an upsert* — `UNIQUE (user_id, record_date)`
+  is the whole storage model. *A partial write never erases* — only the keys
+  present in the payload are written, so the evening's sleep entry leaves the
+  morning's weight alone; the alternative is a form that silently deletes what
+  it did not ask about. *BMI is derived, never accepted* — recomputed from the
+  weight the row **ends up** holding, not the weight in the payload, so an entry
+  recording only sleep still leaves the day's BMI consistent. *The profile's
+  cached weight is recomputed, not assigned.*
+- **That last rule is the one worth the tests.** Assigning
+  `fc_users.weight_kg` on write looks equivalent and is correct only on the happy
+  path: backdating last month's weigh-in would overwrite "current weight" with an
+  older number, and deleting today's entry would leave the profile quoting a
+  reading that no longer exists. Both are re-derived from the newest non-null row
+  on every write *and* every delete. Two tests exist purely to separate the two
+  implementations, since nothing else does.
+- **The prototype fabricated blood pressure and we do not.** `HealthDetailModal`
+  took one number and wrote `diastolic = systolic * 0.65` — a made-up value
+  stored beside a measured one and indistinguishable from it afterwards. This is
+  a defect that was **not** in [09 §2](09-gap-register.md#2-prototype-defects-do-not-port-these)
+  (line 1456); it has been added there, along with the Health screen's
+  throws-on-empty-data card list. Blood pressure is two inputs, and half a
+  reading is a 400 (`fc_blood_pressure_incomplete`), as is a diastolic above the
+  systolic.
+- **BMI has no input, and that is now the server's statement rather than the
+  view's.** The prototype got this right by hand (`d.id !== 'bmi' ? … : null` in
+  two places); `editable: false` moves the same rule to where the derivation
+  lives, so a second screen cannot reintroduce the box.
+- **Cards are described by the server, not built in the view.** The prototype
+  assembled its eight cards in the render function, and every one of them indexed
+  the tail of an array (`d.weight[d.weight.length - 1].date`), so the whole
+  screen threw for a member who had logged nothing — which is every member on day
+  one. `HealthService::CARDS` is now the single source of what a card is, and
+  adding a metric is one entry rather than an edit to the screen.
+- **A card stops quoting a reading after 90 days.** A resting heart rate from
+  March is not "your resting heart rate" in July, and a card that shows it
+  unqualified reads as current. Past the window the card goes empty; the reading
+  is still in the history behind it.
+- **Trends report direction, never a verdict.** Whether falling weight is
+  progress depends on what the member is training for and the server does not
+  know that, so there is no `is_good` field and the arrow is deliberately not
+  coloured. A test asserts the field's absence, because the obvious "improvement"
+  is to add it.
+- **Measurements are latest-per-field, not latest-per-row** — and this was a
+  bug I wrote before catching it. Taking the newest measurement *session* blanks
+  every measurement the member did not repeat: someone who measures chest monthly
+  and calves twice a year would watch calves vanish the moment they recorded
+  anything else. Each field now carries its own date, and the form **prefills
+  nothing** — prefilling would stamp today's date on a chest measurement taken a
+  month ago, putting a reading on the progress chart that was never taken.
+- `toIconName()` and the icon paths moved to `icon-paths.ts`: card icons are
+  named in PHP and arrive as `string`, and casting blindly renders
+  `<path d={undefined}>` — an invisible icon and no error. Splitting the file
+  also keeps Fast Refresh working, matching the existing
+  `session-context.ts` / `session.tsx` split.
+
+*Exit criterion met*, driven against the seeded dev site as Alex Morgan over a
+real session (the member SPA's own cookie + CSRF, not a test harness): all eight
+cards render from seed data — 78.5 kg, 18.2 %, BMI 25.6 "Overweight range",
+6.8 hrs, 60 bpm, 118/76, mood "Okay", energy 5/10 — plus five measurements dated
+2026-06-27. Logging 77.2 kg moved BMI to 25.2, set the weight trend to
+`down −1.3`, and propagated to the dashboard aggregate
+(`current_weight_kg` 77.2, goal progress 57.7 %); a follow-up sleep-only entry
+updated the same row id and left the weight intact; half a blood pressure and a
+5 000 kg weight were both refused. The row was restored to its seeded values
+afterwards. Gate: **phpcs 0 errors, phpunit 171 tests / 853 assertions, `ui/`
+typecheck + lint + format + build green.**
+
+**Deferred from this package:** the radar chart for measurements (charting
+arrives with W2.3, which owns the chart library decision) and `muscle_mass_kg` /
+`stress_score`, which the API accepts and stores but no card displays — the
+prototype has eight cards and these are not among them.
 
 ### W2.3 Progress & charts (4 d)
 `ProgressService` range bucketing (week/month/quarter/year — **make the filter
