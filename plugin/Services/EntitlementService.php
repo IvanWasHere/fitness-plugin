@@ -86,7 +86,16 @@ final class EntitlementService
             }
 
             if (null !== $row['trainer_id']) {
-                $quota = $features['max_messages_per_week'] ?? $row['max_messages_per_week'];
+                // `array_key_exists`, not `??`: an explicit null in the features
+                // JSON *is* the value — it means unlimited. With `??` a null
+                // override fell through to the column, and since
+                // `fc_plans.max_messages_per_week` is NOT NULL DEFAULT 10 there
+                // was then no way to express an unlimited plan at all. Found in
+                // W3.1, where the quota it feeds is enforced for the first time.
+                $quota = array_key_exists('max_messages_per_week', $features)
+                    ? $features['max_messages_per_week']
+                    : $row['max_messages_per_week'];
+
                 $quotaByTrainer[(string) $row['trainer_id']] = null === $quota ? null : (int) $quota;
             }
         }

@@ -10,12 +10,13 @@ import { Player } from './features/player/Player';
 import { Dashboard } from './screens/Dashboard';
 import { WorkoutDetail } from './screens/WorkoutDetail';
 import { Health } from './screens/Health';
+import { Messages } from './screens/Messages';
 import { Notifications } from './screens/Notifications';
 import { Nutrition } from './screens/Nutrition';
 import { Progress } from './screens/Progress';
 import { Workouts } from './screens/Workouts';
 import { PlayerProvider } from './state/PlayerProvider';
-import { useUnreadCount } from './api/queries';
+import { useUnreadCount, useUnreadMessages } from './api/queries';
 import { usePlayer } from './state/player-context';
 
 /**
@@ -34,7 +35,7 @@ interface NavItem {
   label: string;
   icon: IconName;
   /** Which live counter, if any, decorates this destination. */
-  badge?: 'notifications';
+  badge?: 'notifications' | 'messages';
 }
 
 const NAV: NavItem[] = [
@@ -43,6 +44,7 @@ const NAV: NavItem[] = [
   { to: '/nutrition', label: 'Nutrition', icon: 'flame' },
   { to: '/health', label: 'Health', icon: 'heart' },
   { to: '/progress', label: 'Progress', icon: 'activity' },
+  { to: '/messages', label: 'Messages', icon: 'mail', badge: 'messages' },
   { to: '/notifications', label: 'Alerts', icon: 'bell', badge: 'notifications' },
 ];
 
@@ -102,6 +104,7 @@ function Chrome() {
           <Route path="/nutrition" element={<Nutrition />} />
           <Route path="/health" element={<Health />} />
           <Route path="/progress" element={<Progress />} />
+          <Route path="/messages" element={<Messages />} />
           <Route path="/notifications" element={<Notifications />} />
           {/* Auth routes are rendered by the panel above when signed out; a
               signed-in user landing on one belongs on the dashboard. */}
@@ -188,9 +191,16 @@ function BottomNav() {
  * the badge is for.
  */
 function NavBadge({ item }: { item: NavItem }) {
-  const unread = useUnreadCount();
+  const notifications = useUnreadCount();
+  const messages = useUnreadMessages();
 
-  if (item.badge !== 'notifications' || unread === 0) {
+  if (!item.badge) {
+    return null;
+  }
+
+  const unread = item.badge === 'messages' ? messages : notifications;
+
+  if (unread === 0) {
     return null;
   }
 

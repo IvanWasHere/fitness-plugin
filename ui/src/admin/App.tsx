@@ -98,8 +98,16 @@ function SignOut() {
   return (
     <div className="fc-admin-nav__foot">
       <span className="fc-text-xs fc-text-muted fc-truncate">{boot.user?.display_name}</span>
-      <button type="button" className="fc-btn fc-btn--icon" onClick={() => void logout()}>
-        <Icon name="logOut" size={16} title="Sign out" />
+      {/* The label goes on the button, not only on the icon's <title>: an
+          icon-only control with no accessible name is unreachable by name for
+          anyone using assistive tech, which is how this was found. */}
+      <button
+        type="button"
+        className="fc-btn fc-btn--icon"
+        aria-label="Sign out"
+        onClick={() => void logout()}
+      >
+        <Icon name="logOut" size={16} />
       </button>
     </div>
   );

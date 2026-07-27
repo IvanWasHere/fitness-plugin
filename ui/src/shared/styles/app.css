@@ -2174,3 +2174,144 @@
 .fc-exercise-editor input {
   padding: 6px 8px;
 }
+
+/* ----------------------------------------------------------------- messages */
+
+.fc-msg {
+  display: grid;
+  grid-template-columns: minmax(14rem, 20rem) 1fr;
+  gap: 16px;
+  align-items: start;
+}
+
+.fc-msg__list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.fc-msg__thread {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--rs);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.fc-msg__thread:hover {
+  border-color: var(--accent);
+}
+
+.fc-msg__thread--on {
+  background: var(--accent-d);
+  border-color: var(--accent);
+}
+
+.fc-msg__thread-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.fc-msg__unread {
+  flex: 0 0 auto;
+  min-width: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 20px;
+  text-align: center;
+}
+
+.fc-avatar--sm {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--bg2);
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.fc-msg__log {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 26rem;
+  overflow-y: auto;
+  padding-right: 4px;
+  margin-bottom: 12px;
+}
+
+.fc-bubble {
+  max-width: 80%;
+  padding: 9px 12px;
+  border-radius: var(--r);
+  background: var(--bg2);
+  font-size: 14px;
+}
+
+.fc-bubble--mine {
+  align-self: flex-end;
+  background: var(--accent-d);
+}
+
+.fc-bubble time {
+  display: block;
+  margin-top: 4px;
+}
+
+.fc-bubble__image {
+  display: block;
+  max-width: 100%;
+  border-radius: var(--rs);
+  margin-top: 6px;
+}
+
+.fc-msg__composer {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.fc-msg__composer input {
+  flex: 1;
+}
+
+/* The back button only exists on a phone, where the pane replaces the list. */
+.fc-msg__back {
+  display: none;
+}
+
+@media (max-width: 780px) {
+  .fc-msg {
+    grid-template-columns: 1fr;
+  }
+
+  /* Once a conversation is open the list gets out of the way. */
+  .fc-msg--open .fc-msg__list {
+    display: none;
+  }
+
+  .fc-msg__back {
+    display: inline-flex;
+  }
+}

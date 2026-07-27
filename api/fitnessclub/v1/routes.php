@@ -3,6 +3,7 @@
 use FitnessClub\Http\Controllers\Api\AdminController;
 use FitnessClub\Http\Controllers\Api\AuthController;
 use FitnessClub\Http\Controllers\Api\HealthController;
+use FitnessClub\Http\Controllers\Api\MessageController;
 use FitnessClub\Http\Controllers\Api\NotificationController;
 use FitnessClub\Http\Controllers\Api\NutritionController;
 use FitnessClub\Http\Controllers\Api\ProgressController;
@@ -900,6 +901,81 @@ Route::put('/admin/(?P<resource>[a-z-]+)/(?P<id>\d+)', AdminController::class . 
 Route::delete('/admin/(?P<resource>[a-z-]+)/(?P<id>\d+)', AdminController::class . '@destroy', [
     'permission_callback' => [AdminController::class, 'canAccess'],
     'args'                => $resourceArg + $idArg,
+]);
+
+/*
+|--------------------------------------------------------------------------
+| Messaging — /messages/*
+|--------------------------------------------------------------------------
+|
+| Account-keyed, like notifications: both a member and a trainer hold
+| conversations and a trainer has no fc_users row. Access is not a capability
+| question — `Guard::participatesInThread()` decides, inside every service call,
+| because being a party to the thread is the only thing that grants it. A thread
+| you are not on answers 404, never 403: a 403 would confirm the conversation
+| exists, which for private messages is itself a disclosure.
+|
+| Sending is gated twice and for different reasons: `can_message` in the
+| controller, so the refusal names the feature and the client can offer an
+| upgrade; and the **per-thread** weekly quota in the service, which needs the
+| thread because a member coached by two trainers has a separate allowance for
+| each (Q3). The quota answers 429 with limit/used/resets_at.
+|
+| There is no typing endpoint. The prototype's indicator showed permanently
+| whenever the trainer was "online" and was tied to nothing; real typing state
+| costs a write per keystroke-burst for cosmetic value, and 02 recommends
+| dropping it at launch.
+|
+*/
+
+Route::get('/messages/threads', MessageController::class . '@threads', [
+    'permission_callback' => [MessageController::class, 'canAccess'],
+]);
+
+// Before the `{id}` routes: `unread-count` and `poll` are literal segments that
+// `\d+` cannot match, but the ordering states the intent rather than relying on
+// a pattern nobody may loosen later.
+Route::get('/messages/unread-count', MessageController::class . '@unreadCount', [
+    'permission_callback' => [MessageController::class, 'canAccess'],
+]);
+
+Route::get('/messages/poll', MessageController::class . '@poll', [
+    'permission_callback' => [MessageController::class, 'canAccess'],
+    'args'                => [
+        // The last id the client has seen, not a timestamp: ids are monotonic
+        // and immune to clock skew between the browser and the server.
+        'since' => ['type' => 'integer', 'minimum' => 0],
+    ],
+]);
+
+Route::get('/messages/threads/(?P<id>\d+)', MessageController::class . '@thread', [
+    'permission_callback' => [MessageController::class, 'canAccess'],
+    'args'                => $idArg + [
+        'before' => ['type' => 'integer', 'minimum' => 1],
+        'limit'  => ['type' => 'integer', 'minimum' => 1, 'maximum' => 100],
+    ],
+]);
+
+Route::post('/messages/threads/(?P<id>\d+)', MessageController::class . '@send', [
+    'permission_callback' => [MessageController::class, 'canAccess'],
+    'args'                => $idArg + [
+        'message' => [
+            'type'              => 'string',
+            'sanitize_callback' => 'sanitize_textarea_field',
+        ],
+        'attachments' => ['type' => 'array'],
+    ],
+]);
+
+Route::post('/messages/threads/(?P<id>\d+)/read', MessageController::class . '@read', [
+    'permission_callback' => [MessageController::class, 'canAccess'],
+    'args'                => $idArg,
+]);
+
+// Multipart: no args schema, because the payload is a file rather than JSON.
+// Type is checked by reading the bytes, not by trusting the filename.
+Route::post('/messages/attachments', MessageController::class . '@upload', [
+    'permission_callback' => [MessageController::class, 'canAccess'],
 ]);
 
 Route::post('/foods', NutritionController::class . '@createFood', [

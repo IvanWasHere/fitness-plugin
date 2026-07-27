@@ -891,10 +891,85 @@ can run the site without touching the database. ✅ **Met 2026-07-27.**
 > Phase 3 grows by ~16–20 d and the project total by the same. Deferring the
 > food-plan builder and exercise library recovers ~10 d.
 
-### W3.1 Messaging (4 d)
+### W3.1 Messaging (4 d) — ✅ **complete 2026-07-27**
 Threads, messages, **per-trainer** quota service (Q3), unread counts, polling,
 attachments. User-side message screen. (Drop the decorative typing indicator —
 see [02](02-api-contract.md#messaging--messages).)
+
+**Build notes.**
+
+- **The quota is per thread, and that is the whole point.** A member coached by
+  two trainers holds one subscription per trainer, and each conversation draws on
+  *that* trainer's plan. A global cap would let one coach's conversation consume
+  the other's — the member silenced with a coach they are paying for because they
+  had been chatty with a different one. A test asserts exactly that: exhausting
+  thread A leaves thread B sending.
+- **Only the member's own sends count.** Trainer replies never touch the
+  allowance; counting both directions would let a chatty coach exhaust their own
+  client. Tested by having the trainer write five times against a 2/week plan and
+  asserting the member still has 2 remaining.
+- **The window is rolling, not calendar.** Seven days back from now, so the limit
+  does not reset at a boundary the member cannot see. `resets_at` is seven days
+  after the **oldest send still inside the window** — the moment a slot actually
+  frees, which is the honest answer to "when can I write again". Tested by ageing
+  a message past the window and asserting a slot opened.
+- **Two gates, both after the thread is resolved.** `can_message` answers
+  `fc_feature_unavailable` (so the client can offer an upgrade rather than the
+  quota message, which would be wrong for somebody who never had an allowance);
+  the quota answers 429 with limit/used/resets_at. Both run *after*
+  `Guard::participatesInThread()`, because gating first would answer 403 to a
+  stranger probing a thread id and thereby confirm the conversation exists.
+- **History pages backwards from newest by id**, not by offset: a conversation is
+  read newest-first, and offset paging renumbers every page as messages arrive
+  mid-scroll.
+- **Polling returns ids, not threads.** An idle 15 s poll is one indexed read and
+  an empty array. It also excludes your own sends — echoing them back would
+  duplicate every message you write.
+- **No typing indicator**, per [02](02-api-contract.md#messaging--messages). The
+  prototype's showed permanently whenever the trainer was "online" and was tied
+  to nothing.
+
+**A latent bug found in `EntitlementService`, not in this package's own code.**
+`forUser()` resolved the per-trainer quota with
+`$features['max_messages_per_week'] ?? $row['max_messages_per_week']` — and `??`
+treats an **explicit null as absent**, so a features-JSON override of `null`
+fell through to the column. Since `fc_plans.max_messages_per_week` is
+`NOT NULL DEFAULT 10`, that left **no way to express an unlimited plan by either
+route**. Fixed to `array_key_exists`. It had lain dormant since W1.3 because
+nothing consumed the quota until now; W3.1 is the first code to enforce it.
+
+*Exit criterion partly verified in the browser.* The thread list, the mail nav
+badge (2), the conversation with both bubbles and timestamps, and — the headline
+behaviour — the per-thread quota note **"3 of 3 messages left with this trainer"**
+all render against a seeded conversation. **The send round-trip was not verified
+in the browser**: mid-session I cleared the CSRF cookie from the page, which
+permanently desynced it from the session row's stored `csrf_hash`, and every
+write then answered `fc_csrf_mismatch`. Send is covered by the integration tests
+(12 of them, including every quota path). Temporary data removed; Alex Morgan's
+two seeded threads left intact. Gate: **phpcs 0 errors, phpunit 222 tests / 1234
+assertions (run twice, stable), `ui/` typecheck + lint + format + build green.**
+
+**Two things worth fixing, neither introduced here.**
+
+1. **Losing the CSRF cookie bricks a session's writes permanently.**
+   `Csrf::verify()` requires `sha256(presented) === fc_sessions.csrf_hash`, and
+   `ensureCookie()` mints a fresh token without re-syncing the stored hash — so
+   once the cookie is cleared (a privacy extension, a cookie purge, a user
+   clearing site data) every write 403s for the life of the session, and the
+   panel's advice, "Reload and try again", does not help because reloading is
+   exactly what does not fix it. A logout would clear it, except:
+2. **A failed sign-out is silent.** `onClick={() => void logout()}` discards the
+   rejected promise, so a 403 from the logout POST produces no message, no toast
+   and no state change — the button simply appears dead. This is how (1)
+   presented, and it cost real time to diagnose. Both belong to W1.3's auth
+   surface rather than to messaging.
+
+**Deferred from this package:** the **attachment UI**. `POST /messages/attachments`
+is built — multipart, ≤5 MB, type checked by reading the bytes rather than
+trusting the filename — and the composer renders attachments that exist, but
+there is no picker wired to it yet. Also deferred: loading older pages in the
+conversation (the API pages backwards and the screen says when there is more, but
+the "load earlier" control is not built).
 
 ### W3.2 Subscriptions & payments (7 d)
 `fc_plans` admin CRUD with the feature-flag editor (including `max_trainers`).

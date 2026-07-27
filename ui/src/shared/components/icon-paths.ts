@@ -46,6 +46,7 @@ export const ICON_PATHS = {
   zap: 'M13 2 4.5 13.5H11l-1 8.5L19 10.5h-6.5z',
   gauge: 'M12 14.5 16 9M4.6 18a9 9 0 1 1 14.8 0M12 14.5a1 1 0 1 0 0-2 1 1 0 0 0 0 2z',
   ruler: 'M3 15.5 8.5 21 21 8.5 15.5 3zM7.5 11l2 2M11 7.5l2 2M14.5 4l2 2',
+  mail: 'M3.5 6.5h17v11h-17zM3.5 7l8.5 6 8.5-6',
   arrowUp: 'M12 19V5M6 11l6-6 6 6',
   arrowDown: 'M12 5v14M6 13l6 6 6-6',
 } as const;
