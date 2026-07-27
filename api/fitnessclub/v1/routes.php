@@ -9,6 +9,7 @@ use FitnessClub\Http\Controllers\Api\NotificationController;
 use FitnessClub\Http\Controllers\Api\NutritionController;
 use FitnessClub\Http\Controllers\Api\ProgressController;
 use FitnessClub\Http\Controllers\Api\SessionController;
+use FitnessClub\Http\Controllers\Api\SupportController;
 use FitnessClub\Http\Controllers\Api\UserController;
 use FitnessClub\Http\Controllers\Api\WorkoutController;
 use FitnessClub\WPBones\Routing\API\Route;
@@ -1088,6 +1089,87 @@ Route::post('/billing/webhook/(?P<gateway>[a-z0-9_-]+)', BillingController::clas
             'type'              => 'string',
             'sanitize_callback' => 'sanitize_key',
         ],
+    ],
+]);
+
+/*
+|--------------------------------------------------------------------------
+| Support — /support/*
+|--------------------------------------------------------------------------
+|
+| One set of endpoints for members and staff: which you are decides whether
+| `GET /support/tickets` is your own tickets or the whole queue, and whether a
+| ticket's internal notes come back with it. That branch lives in TicketService,
+| because two parallel route trees would mean two places for the internal-note
+| filter to be forgotten — and an internal note leaking is showing a customer
+| what staff said about them.
+|
+| Gated only on "signed in and active". Raising a ticket is how somebody reports
+| that the rest of the app is refusing them, so gating it on a feature
+| capability would lock the door and post the key inside.
+|
+*/
+
+Route::get('/support/faq', SupportController::class . '@faq', [
+    'permission_callback' => [SupportController::class, 'canAccess'],
+]);
+
+Route::get('/support/tickets', SupportController::class . '@index', [
+    'permission_callback' => [SupportController::class, 'canAccess'],
+    'args'                => $pagingArgs + [
+        'status'      => ['type' => 'string', 'sanitize_callback' => 'sanitize_key'],
+        'priority'    => ['type' => 'string', 'sanitize_callback' => 'sanitize_key'],
+        'category'    => ['type' => 'string', 'sanitize_callback' => 'sanitize_key'],
+        // Honoured for staff only; the service ignores it for a member, whose
+        // list is already scoped to themselves.
+        'assigned_to' => ['type' => 'integer', 'minimum' => 1],
+        'q'           => ['type' => 'string', 'sanitize_callback' => 'sanitize_text_field'],
+    ],
+]);
+
+Route::post('/support/tickets', SupportController::class . '@store', [
+    'permission_callback' => [SupportController::class, 'canAccess'],
+    'args'                => [
+        'subject' => [
+            'required'          => true,
+            'type'              => 'string',
+            'sanitize_callback' => 'sanitize_text_field',
+        ],
+        'message' => [
+            'required'          => true,
+            'type'              => 'string',
+            'sanitize_callback' => 'sanitize_textarea_field',
+        ],
+        'category' => ['type' => 'string', 'sanitize_callback' => 'sanitize_key'],
+        // A request, not a promise: staff reset it from the queue, or every
+        // ticket would arrive urgent.
+        'priority' => ['type' => 'string', 'sanitize_callback' => 'sanitize_key'],
+    ],
+]);
+
+Route::get('/support/tickets/(?P<id>\d+)', SupportController::class . '@show', [
+    'permission_callback' => [SupportController::class, 'canAccess'],
+    'args'                => $idArg,
+]);
+
+Route::post('/support/tickets/(?P<id>\d+)/replies', SupportController::class . '@reply', [
+    'permission_callback' => [SupportController::class, 'canAccess'],
+    'args'                => $idArg + [
+        'message' => [
+            'required'          => true,
+            'type'              => 'string',
+            'sanitize_callback' => 'sanitize_textarea_field',
+        ],
+        'is_internal_note' => ['type' => 'boolean', 'default' => false],
+    ],
+]);
+
+Route::patch('/support/tickets/(?P<id>\d+)', SupportController::class . '@update', [
+    'permission_callback' => [SupportController::class, 'canAccess'],
+    'args'                => $idArg + [
+        'status'   => ['type' => 'string', 'sanitize_callback' => 'sanitize_key'],
+        'priority' => ['type' => 'string', 'sanitize_callback' => 'sanitize_key'],
+        'assigned_to_account_id' => ['type' => 'integer', 'minimum' => 0],
     ],
 ]);
 

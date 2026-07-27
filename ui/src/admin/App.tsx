@@ -31,6 +31,7 @@ const NAV_ICONS: Record<string, IconName> = {
   plans: 'target',
   subscriptions: 'refresh',
   payments: 'weight',
+  tickets: 'bell',
 };
 
 export function App() {

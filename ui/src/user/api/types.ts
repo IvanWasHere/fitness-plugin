@@ -718,3 +718,51 @@ export interface CheckoutResult {
   redirect_url?: string;
   subscription?: Subscription;
 }
+
+// ----------------------------------------------------------------- support
+
+export interface TicketReply {
+  id: number;
+  author_name: string | null;
+  author_role: string;
+  message: string | null;
+  attachments: string[];
+  /** Always false in a member's payload — the server filters notes out. */
+  is_internal_note: boolean;
+  created_at: string;
+}
+
+export interface Ticket {
+  id: number;
+  subject: string;
+  category: string;
+  priority: string;
+  status: string;
+  author_name: string | null;
+  reply_count: number | null;
+  created_at: string;
+  updated_at: string;
+  resolved_at: string | null;
+  /** Present on the detail view only. */
+  message?: string;
+  replies?: TicketReply[];
+  /** Staff-only fields; absent entirely from a member's payload. */
+  author_email?: string | null;
+  assigned_to_account_id?: number | null;
+  assignee_name?: string | null;
+  first_response_at?: string | null;
+}
+
+export interface TicketList {
+  items: Ticket[];
+  total: number;
+  page: number;
+  per_page: number;
+  /** The same endpoint serves both; this says which view came back. */
+  is_staff: boolean;
+}
+
+export interface FaqEntry {
+  q: string;
+  a: string;
+}

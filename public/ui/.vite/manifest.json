@@ -1,58 +1,58 @@
 {
-  "_AuthPanel-C68HnN1z.js": {
-    "file": "assets/AuthPanel-C68HnN1z.js",
+  "_AuthPanel-gE0q9Ja8.css": {
+    "file": "assets/AuthPanel-gE0q9Ja8.css",
+    "src": "_AuthPanel-gE0q9Ja8.css"
+  },
+  "_AuthPanel-twBQOj4Y.js": {
+    "file": "assets/AuthPanel-twBQOj4Y.js",
     "name": "AuthPanel",
     "css": [
-      "assets/AuthPanel-CgEsFre2.css"
+      "assets/AuthPanel-gE0q9Ja8.css"
     ]
   },
-  "_AuthPanel-CgEsFre2.css": {
-    "file": "assets/AuthPanel-CgEsFre2.css",
-    "src": "_AuthPanel-CgEsFre2.css"
-  },
-  "_Modal-LArSUqQ3.js": {
-    "file": "assets/Modal-LArSUqQ3.js",
+  "_Modal-CdYYtFhm.js": {
+    "file": "assets/Modal-CdYYtFhm.js",
     "name": "Modal",
     "imports": [
-      "_AuthPanel-C68HnN1z.js"
+      "_AuthPanel-twBQOj4Y.js"
     ]
   },
   "src/admin/main.tsx": {
-    "file": "assets/admin-B4M71fbu.js",
+    "file": "assets/admin-CFzobWEO.js",
     "name": "admin",
     "src": "src/admin/main.tsx",
     "isEntry": true,
     "imports": [
-      "_AuthPanel-C68HnN1z.js",
-      "_Modal-LArSUqQ3.js"
+      "_AuthPanel-twBQOj4Y.js",
+      "_Modal-CdYYtFhm.js"
     ]
   },
   "src/shared/components/charts/ProgressCharts.tsx": {
-    "file": "assets/ProgressCharts-Ai3Zed_y.js",
+    "file": "assets/ProgressCharts-BR0lfOZu.js",
     "name": "ProgressCharts",
     "src": "src/shared/components/charts/ProgressCharts.tsx",
     "isDynamicEntry": true,
     "imports": [
-      "_AuthPanel-C68HnN1z.js"
+      "_AuthPanel-twBQOj4Y.js"
     ]
   },
   "src/trainer/main.tsx": {
-    "file": "assets/trainer-BuFXlsYL.js",
+    "file": "assets/trainer-Dp9_iLu0.js",
     "name": "trainer",
     "src": "src/trainer/main.tsx",
     "isEntry": true,
     "imports": [
-      "_AuthPanel-C68HnN1z.js"
+      "_AuthPanel-twBQOj4Y.js"
     ]
   },
   "src/user/main.tsx": {
-    "file": "assets/user-D6iTEPCy.js",
+    "file": "assets/user-CTnIFCpd.js",
     "name": "user",
     "src": "src/user/main.tsx",
     "isEntry": true,
     "imports": [
-      "_AuthPanel-C68HnN1z.js",
-      "_Modal-LArSUqQ3.js"
+      "_AuthPanel-twBQOj4Y.js",
+      "_Modal-CdYYtFhm.js"
     ],
     "dynamicImports": [
       "src/shared/components/charts/ProgressCharts.tsx"

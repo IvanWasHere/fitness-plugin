@@ -1065,9 +1065,67 @@ currently cancel-and-restart rather than a credited swap; invoice PDFs
 `/admin/reports/trainers`, the Q2 attribution report — its data is all present in
 `fc_subscriptions.trainer_id` but the report itself is unbuilt.
 
-### W3.3 Support tickets (3 d)
+### W3.3 Support tickets (3 d) — ✅ **complete 2026-07-27**
 Tickets + replies + internal notes, user ticket screens, admin ticket queue with
 assignment, trainer ticket view. FAQ from settings rather than hardcoded JS.
+
+**Build notes.**
+
+- **Internal notes are the rule everything else is arranged around.**
+  `is_internal_note` marks staff-only commentary written on the *same ticket the
+  member reads*, and the only thing keeping the two apart is a WHERE clause. So
+  the filter lives in one method every read path goes through, and there is one
+  set of endpoints rather than a member tree and a staff tree — two route trees
+  would be two places to forget it. Asserted three ways: the detail view, the
+  reply count (a member seeing "3 replies" on a thread with one has been told
+  staff are talking about them), and a member's attempt to write one, which is
+  dropped rather than refused.
+- **A member's payload omits the operational fields entirely** — assignee, first
+  response time, the reporter's email. Not hidden in the UI: absent from the
+  response, so nothing downstream can render them by accident. They say more
+  about staffing than about the member's problem.
+- **`resolved` and `closed` are not the same status**, and my first pass
+  conflated them — a member replying to a *resolved* ticket got a 409. Resolved
+  is staff's opinion that it is fixed, and the member gets to disagree by
+  replying, which reopens it. Closed is the end. Two constants now, `SETTLED` and
+  `FINAL`, because one list could not express both.
+- **First response is recorded once and never moved**, and an internal note does
+  not count as one — it is staff talking to each other, and stamping it would
+  tell the member something happened when nothing they can see did. A note also
+  does not move the status, for the same reason.
+- **Priority is a request, not a promise.** The member's ticket form does not
+  offer it at all and the server floors it to `medium`; staff triage from the
+  queue. A picker would mean every ticket arrives urgent.
+- **A bad enum falls back rather than failing.** Category and priority arrive
+  from a `<select>`; a value outside the list is a client bug or a probe, and
+  neither deserves a 400 that blocks somebody's genuine support request.
+- **The FAQ comes from the options model.** The prototype shipped five answers
+  inline in the JS bundle, so correcting a wrong one meant a rebuild and a
+  deploy. Bundled defaults are the same five, so an install that never touches
+  the setting still has an FAQ.
+- **Gated only on "signed in and active"** — not on a feature capability.
+  Raising a ticket is how somebody reports that the rest of the app is refusing
+  them; gating it behind a plan would lock the door and post the key inside.
+
+**A wpBones options quirk worth recording.** The FAQ was first stored at
+`support.faq`. The options model resolves a dotted path by walking the stored
+blob, and on this install — whose row predates the key — that walk hit a value it
+could not index and threw from inside the framework. Moved to a **flat**
+`support_faq` key: one level has nothing to walk. Worth knowing before adding any
+other nested option to an existing install.
+
+*Exit criterion met by test*, not in a browser: 14 new tests, most of them about
+what a member must not be able to see. Gate: **phpcs 0 errors, phpunit 253 tests
+/ 1446 assertions, `ui/` typecheck + lint + format + build green.** The screens
+were not eyeballed — the dev browser's CSRF desync recorded under W3.1 still
+blocks writes there.
+
+**Deferred:** ticket **attachments** (the column and the reply shape carry them;
+no upload is wired — `POST /messages/attachments` from W3.1 is the endpoint it
+would reuse), and the **trainer** ticket view, which belongs with the trainer app
+in W3.4. Staff assignment is by account id in the admin form rather than a
+picker; a directory of assignable staff arrives with the trainer app, which is
+where the list of who exists comes from.
 
 ### W3.4 Trainer app (31 d, see [06](06-trainer-app.md))
 All `/trainer/*` endpoints with **both** ownership guards — shared read across

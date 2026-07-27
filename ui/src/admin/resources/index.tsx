@@ -592,6 +592,88 @@ export const paymentsConfig: ResourceConfig = {
   ),
 };
 
+const PRIORITY_TONE: Record<string, string> = {
+  urgent: 'red',
+  high: 'orange',
+  medium: 'blue',
+  low: 'green',
+};
+
+/**
+ * The support queue (W3.3).
+ *
+ * Triage only. The conversation — replies, and the internal notes staff write on
+ * it — lives behind `/support/tickets/{id}`, because that is the single place
+ * the internal-note filter is applied and it should stay single.
+ */
+export const ticketsConfig: ResourceConfig = {
+  resource: 'tickets',
+  title: 'Support',
+  singular: 'ticket',
+  creatable: false,
+  defaultSort: 'id',
+  columns: [
+    { key: 'id', label: 'ID', sort: 'id' },
+    { key: 'subject', label: 'Subject', sort: 'subject' },
+    { key: 'author_name', label: 'From' },
+    { key: 'category', label: 'Category' },
+    {
+      key: 'priority',
+      label: 'Priority',
+      sort: 'priority',
+      render: (r) => (
+        <Tag tone={PRIORITY_TONE[String(r.priority)] ?? 'blue'}>{String(r.priority)}</Tag>
+      ),
+    },
+    { key: 'status', label: 'Status', sort: 'status', render: (r) => statusTag(r.status) },
+    { key: 'assignee_name', label: 'Assigned to' },
+    { key: 'reply_count', label: 'Replies', align: 'right' },
+    { key: 'created_at', label: 'Opened', sort: 'created', render: (r) => date(r.created_at) },
+  ],
+  filters: [
+    {
+      name: 'status',
+      label: 'Status',
+      options: ['open', 'in_progress', 'waiting_user', 'resolved', 'closed'].map((v) => ({
+        value: v,
+        label: v,
+      })),
+    },
+    {
+      name: 'priority',
+      label: 'Priority',
+      options: ['urgent', 'high', 'medium', 'low'].map((v) => ({ value: v, label: v })),
+    },
+  ],
+  describe: (row) => String(row.subject ?? `#${row.id}`),
+  form: (props) => (
+    <SimpleForm
+      {...props}
+      fields={[
+        {
+          name: 'status',
+          label: 'Status',
+          type: 'select',
+          options: ['open', 'in_progress', 'waiting_user', 'resolved', 'closed'],
+        },
+        {
+          name: 'priority',
+          label: 'Priority',
+          type: 'select',
+          options: ['urgent', 'high', 'medium', 'low'],
+        },
+        {
+          name: 'category',
+          label: 'Category',
+          type: 'select',
+          options: ['general', 'billing', 'technical', 'training', 'other'],
+        },
+        { name: 'assigned_to_account_id', label: 'Assign to (account id)', type: 'number' },
+      ]}
+    />
+  ),
+};
+
 export const RESOURCES: ResourceConfig[] = [
   usersConfig,
   trainersConfig,
@@ -602,4 +684,5 @@ export const RESOURCES: ResourceConfig[] = [
   plansConfig,
   subscriptionsConfig,
   paymentsConfig,
+  ticketsConfig,
 ];

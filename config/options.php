@@ -59,6 +59,19 @@ return [
         'stripe_publishable_key' => '',
     ],
 
+    /*
+    | Support FAQ, as a JSON array of {q, a}. The prototype hardcoded five
+    | answers into the JS bundle, so correcting a wrong one meant a rebuild.
+    | Empty means "use the bundled defaults" — see TicketService::defaultFaq() —
+    | so an install that never touches this still has an FAQ (W3.3).
+    |
+    | Deliberately a **flat** key rather than `support.faq`: the options model
+    | resolves a dotted path by walking the stored blob, and on an install whose
+    | row predates the key that walk hits a value it cannot index. One level has
+    | nothing to walk.
+    */
+    'support_faq' => '',
+
     'email' => [
         'from_name'    => '',
         'from_address' => '',

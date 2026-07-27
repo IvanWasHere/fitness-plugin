@@ -462,6 +462,57 @@ final class ResourceRegistry
                 'audit'      => false,
             ],
 
+            /*
+             * The support queue (W3.3). Listing and triage live here so staff
+             * get search, filters and sorting for free; the *conversation* —
+             * replies and internal notes — stays on `/support/tickets/{id}`,
+             * which is the one place the internal-note filter is applied.
+             */
+            'tickets' => [
+                'table'  => 'fc_tickets',
+                'alias'  => 'tk',
+                'select' => [
+                    'tk.id', 'tk.user_account_id', 'tk.subject', 'tk.category', 'tk.priority',
+                    'tk.status', 'tk.assigned_to_account_id', 'tk.first_response_at',
+                    'tk.resolved_at', 'tk.created_at', 'tk.updated_at',
+                    'a.display_name AS author_name', 'a.email AS author_email',
+                    'asg.display_name AS assignee_name',
+                    '(SELECT COUNT(*) FROM {p}fc_ticket_replies r WHERE r.ticket_id = tk.id) AS reply_count',
+                ],
+                'joins' => [
+                    'INNER JOIN {p}fc_accounts a ON a.id = tk.user_account_id',
+                    'LEFT JOIN {p}fc_accounts asg ON asg.id = tk.assigned_to_account_id',
+                ],
+                'search' => ['tk.subject', 'tk.message', 'a.display_name'],
+                'sort'   => [
+                    'id'       => 'tk.id',
+                    'subject'  => 'tk.subject',
+                    'status'   => 'tk.status',
+                    'priority' => 'tk.priority',
+                    'created'  => 'tk.created_at',
+                ],
+                'filters' => [
+                    'status'      => ['expr' => 'tk.status', 'op' => 'exact'],
+                    'priority'    => ['expr' => 'tk.priority', 'op' => 'exact'],
+                    'category'    => ['expr' => 'tk.category', 'op' => 'exact'],
+                    'assigned_to' => ['expr' => 'tk.assigned_to_account_id', 'op' => 'exact'],
+                ],
+                'default_sort' => ['id', 'desc'],
+                'writable' => [
+                    'status'   => 'text',
+                    'priority' => 'text',
+                    'category' => 'text',
+                    'assigned_to_account_id' => 'int_or_null',
+                ],
+                'required'   => [],
+                'capability' => 'fc_handle_tickets',
+                // A ticket is raised by the person with the problem. Staff
+                // opening one on somebody's behalf would file it under the wrong
+                // account and answer the wrong inbox.
+                'creatable'  => false,
+                'audit'      => false,
+            ],
+
             'health-entries' => [
                 'table'  => 'fc_health_stats',
                 'alias'  => 'h',

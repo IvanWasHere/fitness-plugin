@@ -27,11 +27,14 @@ import type {
   ProgressRecord,
   BillingState,
   CheckoutResult,
+  FaqEntry,
   PaymentRecord,
   Plan,
   Session,
   Subscription,
   ThreadDetail,
+  Ticket,
+  TicketList,
   ThreadSummary,
   UnreadCount,
   WaterState,
@@ -69,6 +72,9 @@ export const queryKeys = {
   activity: (page: number, types: string) => ['activity', page, types] as const,
   preferences: ['user', 'preferences'] as const,
   threads: ['messages', 'threads'] as const,
+  tickets: (filters: string) => ['support', 'tickets', filters] as const,
+  ticket: (id: number) => ['support', 'ticket', id] as const,
+  faq: ['support', 'faq'] as const,
   billing: ['billing', 'subscription'] as const,
   plans: (trainerId?: number) => ['billing', 'plans', trainerId ?? 'all'] as const,
   paymentHistory: (page: number) => ['billing', 'payments', page] as const,
@@ -768,4 +774,67 @@ export function useBillingActions() {
   });
 
   return { checkout, cancel, resume };
+}
+
+// ----------------------------------------------------------------- support
+
+export function useTickets(status = ''): UseQueryResult<TicketList, ApiError> {
+  const { api } = useSession();
+
+  return useQuery({
+    queryKey: queryKeys.tickets(status),
+    queryFn: () => api.get<TicketList>('support/tickets', status ? { status } : undefined),
+  });
+}
+
+export function useTicket(id: number | null): UseQueryResult<Ticket, ApiError> {
+  const { api } = useSession();
+
+  return useQuery({
+    queryKey: queryKeys.ticket(id ?? 0),
+    queryFn: () => api.get<Ticket>(`support/tickets/${id}`),
+    enabled: id !== null && id > 0,
+  });
+}
+
+export function useFaq(): UseQueryResult<{ items: FaqEntry[] }, ApiError> {
+  const { api } = useSession();
+
+  return useQuery({
+    queryKey: queryKeys.faq,
+    queryFn: () => api.get<{ items: FaqEntry[] }>('support/faq'),
+    // Answers change when an administrator edits them, which is rare.
+    staleTime: 10 * 60_000,
+  });
+}
+
+export function useTicketActions() {
+  const { api } = useSession();
+  const queryClient = useQueryClient();
+
+  const settle = () => {
+    void queryClient.invalidateQueries({ queryKey: ['support'] });
+  };
+
+  const create = useMutation<
+    Ticket,
+    ApiError,
+    { subject: string; message: string; category?: string; priority?: string }
+  >({
+    mutationFn: (body) => api.post<Ticket>('support/tickets', body),
+    onSuccess: settle,
+  });
+
+  const reply = useMutation<Ticket, ApiError, { id: number; message: string }>({
+    mutationFn: ({ id, message }) => api.post<Ticket>(`support/tickets/${id}/replies`, { message }),
+    onSuccess: settle,
+  });
+
+  /** A member's whole vocabulary: close it, or reopen it. */
+  const setStatus = useMutation<Ticket, ApiError, { id: number; status: 'closed' | 'open' }>({
+    mutationFn: ({ id, status }) => api.patch<Ticket>(`support/tickets/${id}`, { status }),
+    onSuccess: settle,
+  });
+
+  return { create, reply, setStatus };
 }

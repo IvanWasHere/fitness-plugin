@@ -13,6 +13,7 @@ import { Health } from './screens/Health';
 import { Messages } from './screens/Messages';
 import { Notifications } from './screens/Notifications';
 import { Subscription } from './screens/Subscription';
+import { Support } from './screens/Support';
 import { Nutrition } from './screens/Nutrition';
 import { Progress } from './screens/Progress';
 import { Workouts } from './screens/Workouts';
@@ -48,6 +49,7 @@ const NAV: NavItem[] = [
   { to: '/messages', label: 'Messages', icon: 'mail', badge: 'messages' },
   { to: '/notifications', label: 'Alerts', icon: 'bell', badge: 'notifications' },
   { to: '/subscription', label: 'Plan', icon: 'target' },
+  { to: '/support', label: 'Support', icon: 'bell' },
 ];
 
 export function App() {
@@ -109,6 +111,7 @@ function Chrome() {
           <Route path="/messages" element={<Messages />} />
           <Route path="/notifications" element={<Notifications />} />
           <Route path="/subscription" element={<Subscription />} />
+          <Route path="/support" element={<Support />} />
           {/* Auth routes are rendered by the panel above when signed out; a
               signed-in user landing on one belongs on the dashboard. */}
           <Route path="*" element={<Navigate to="/" replace />} />
