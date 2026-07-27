@@ -40,16 +40,40 @@ export function Modal({
   onCancel: () => void;
 }) {
   const isForm = 'form' === variant;
+  const bodyRef = useRef<HTMLDivElement>(null);
   const confirmRef = useRef<HTMLButtonElement>(null);
   const returnFocusTo = useRef<Element | null>(null);
 
+  /**
+   * Escape reads the *current* handler through a ref rather than closing over it.
+   *
+   * This effect must run **once**, on mount. It used to depend on `onCancel`,
+   * and every caller passes an inline arrow — so the identity changed on every
+   * render, the effect re-ran, and it moved focus again. In a form dialog that
+   * was a live bug: type one character, state changes, focus jumps from the
+   * field to the confirm button, and the next space bar press activates it. A
+   * trainer writing "My schedule is full" declined the request on the space
+   * after "My".
+   */
+  const cancelRef = useRef(onCancel);
+  cancelRef.current = onCancel;
+
   useEffect(() => {
     returnFocusTo.current = document.activeElement;
-    confirmRef.current?.focus();
+
+    // A form dialog opens on its first field. Landing on the confirm button
+    // instead makes the member tab backwards to reach the thing they opened the
+    // dialog to fill in — and when that button is destructive, one stray space
+    // is enough to do the destructive thing.
+    const firstField = isForm
+      ? bodyRef.current?.querySelector<HTMLElement>('input:not([type="hidden"]), textarea, select')
+      : null;
+
+    (firstField ?? confirmRef.current)?.focus();
 
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        onCancel();
+        cancelRef.current();
       }
     };
 
@@ -59,7 +83,7 @@ export function Modal({
       document.removeEventListener('keydown', onKey);
       (returnFocusTo.current as HTMLElement | null)?.focus?.();
     };
-  }, [onCancel]);
+  }, [isForm]);
 
   return (
     <div
@@ -78,7 +102,7 @@ export function Modal({
       >
         <h3>{title}</h3>
         {children && (
-          <div className={isForm ? 'fc-mb-16' : 'fc-text-muted fc-text-sm fc-mb-24'}>
+          <div ref={bodyRef} className={isForm ? 'fc-mb-16' : 'fc-text-muted fc-text-sm fc-mb-24'}>
             {children}
           </div>
         )}

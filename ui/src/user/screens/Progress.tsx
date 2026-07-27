@@ -1,5 +1,5 @@
-import { Suspense, lazy, useState, type ReactNode } from 'react';
-import { Icon } from '@shared/components/Icon';
+import { useState } from 'react';
+import { LazyProgressCharts } from '@shared/components/charts/ProgressChartGrid';
 import {
   Card,
   EmptyState,
@@ -21,18 +21,10 @@ import type { Progress as ProgressData, ProgressRange } from '../api/types';
  * which, because a chart of monthly averages labelled like daily readings
  * misrepresents its own points.
  *
- * Chart.js arrives via `lazy()`, so a member who never opens this screen never
- * downloads it — and because the *empty* states live out here rather than
- * behind the boundary, a member with no data yet never downloads it either.
- * All four resolve to the same chunk; the import promise is shared.
+ * The charts themselves live in `@shared/components/charts/ProgressChartGrid`,
+ * because the trainer looking at this member's progress reads the same payload
+ * from the same endpoint and must not get a second, drifting rendering of it.
  */
-const CHARTS = () => import('@shared/components/charts/ProgressCharts');
-
-const ReadingChart = lazy(() => CHARTS().then((m) => ({ default: m.ReadingChart })));
-const StrengthChart = lazy(() => CHARTS().then((m) => ({ default: m.StrengthChart })));
-const ConsistencyChart = lazy(() => CHARTS().then((m) => ({ default: m.ConsistencyChart })));
-const MeasurementsChart = lazy(() => CHARTS().then((m) => ({ default: m.MeasurementsChart })));
-
 const RANGES: Array<{ value: ProgressRange; label: string }> = [
   { value: 'week', label: 'Week' },
   { value: 'month', label: 'Month' },
@@ -92,9 +84,7 @@ export function Progress() {
         // charts for four spinners on every filter click reads as the page
         // breaking, not as data arriving.
         <div className={isFetching ? 'fc-refreshing' : undefined}>
-          <Suspense fallback={<ChartSkeletons />}>
-            <ChartGrid data={data} />
-          </Suspense>
+          <LazyProgressCharts data={data} />
 
           <div className="fc-grid fc-grid-3 fc-gap-16 fc-mb-24">
             <StatCard
@@ -119,61 +109,6 @@ export function Progress() {
           <Records />
         </div>
       )}
-    </>
-  );
-}
-
-function ChartGrid({ data }: { data: ProgressData }) {
-  const hasWeight = data.weight.some((value) => value !== null);
-  const hasWorkouts = data.consistency.some((value) => value > 0);
-
-  return (
-    <>
-      <div className="fc-grid fc-grid-2 fc-gap-16 fc-mb-24">
-        <ChartCard title="Weight history">
-          {hasWeight ? (
-            <ReadingChart labels={data.labels} values={data.weight} label="Weight" unit="kg" />
-          ) : (
-            <ChartEmpty>
-              Log a weight on the Health screen and it appears here. Two readings make a trend.
-            </ChartEmpty>
-          )}
-        </ChartCard>
-
-        <ChartCard title="Strength improvements">
-          {data.strength.length > 0 ? (
-            <StrengthChart labels={data.labels} series={data.strength} />
-          ) : (
-            <ChartEmpty>
-              Your three most-trained lifts appear here once you have logged sets with a weight
-              against them.
-            </ChartEmpty>
-          )}
-        </ChartCard>
-      </div>
-
-      <div className="fc-grid fc-grid-2 fc-gap-16 fc-mb-24">
-        <ChartCard title="Workout consistency">
-          {hasWorkouts ? (
-            <ConsistencyChart labels={data.labels} values={data.consistency} />
-          ) : (
-            <ChartEmpty>No workouts completed in this range yet.</ChartEmpty>
-          )}
-        </ChartCard>
-
-        <ChartCard title="Body measurements">
-          {/* A radar needs at least three axes to be a shape rather than a line,
-              and a single session has nothing to compare against. */}
-          {data.measurements.length > 0 ? (
-            <MeasurementsChart points={data.measurements} />
-          ) : (
-            <ChartEmpty>
-              Record measurements on the Health screen. Two sets let you see the shape change, not
-              just the numbers.
-            </ChartEmpty>
-          )}
-        </ChartCard>
-      </div>
     </>
   );
 }
@@ -222,37 +157,3 @@ const RECORD_LABELS: Record<string, string> = {
   max_volume: 'Most volume',
   best_time: 'Best time',
 };
-
-function ChartCard({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <Card>
-      <h3 className="fc-text-sm fc-text-muted fc-uppercase fc-mb-16">{title}</h3>
-      {children}
-    </Card>
-  );
-}
-
-/**
- * The empty state a chart gets instead of axes drawn around no data.
- *
- * The prototype had none anywhere, so a new member — one weight reading, zero
- * sessions — met four charts that looked broken rather than four that said what
- * to do next.
- */
-function ChartEmpty({ children }: { children: ReactNode }) {
-  return (
-    <div className="fc-chart-frame fc-chart-frame--empty">
-      <Icon name="activity" size={24} />
-      <p className="fc-text-sm fc-text-muted">{children}</p>
-    </div>
-  );
-}
-
-function ChartSkeletons() {
-  return (
-    <div className="fc-grid fc-grid-2 fc-gap-16 fc-mb-24" aria-busy="true">
-      <Skeleton height={260} />
-      <Skeleton height={260} />
-    </div>
-  );
-}

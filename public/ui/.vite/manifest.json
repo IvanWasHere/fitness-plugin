@@ -1,61 +1,61 @@
 {
-  "_AuthPanel-gE0q9Ja8.css": {
-    "file": "assets/AuthPanel-gE0q9Ja8.css",
-    "src": "_AuthPanel-gE0q9Ja8.css"
+  "_Modal-DUOYf37c.css": {
+    "file": "assets/Modal-DUOYf37c.css",
+    "src": "_Modal-DUOYf37c.css"
   },
-  "_AuthPanel-twBQOj4Y.js": {
-    "file": "assets/AuthPanel-twBQOj4Y.js",
-    "name": "AuthPanel",
+  "_Modal-DbFILSXU.js": {
+    "file": "assets/Modal-DbFILSXU.js",
+    "name": "Modal",
     "css": [
-      "assets/AuthPanel-gE0q9Ja8.css"
+      "assets/Modal-DUOYf37c.css"
     ]
   },
-  "_Modal-CdYYtFhm.js": {
-    "file": "assets/Modal-CdYYtFhm.js",
-    "name": "Modal",
+  "_ProgressChartGrid-DBOEmadx.js": {
+    "file": "assets/ProgressChartGrid-DBOEmadx.js",
+    "name": "ProgressChartGrid",
     "imports": [
-      "_AuthPanel-twBQOj4Y.js"
+      "_Modal-DbFILSXU.js"
+    ],
+    "dynamicImports": [
+      "src/shared/components/charts/ProgressCharts.tsx"
     ]
   },
   "src/admin/main.tsx": {
-    "file": "assets/admin-CFzobWEO.js",
+    "file": "assets/admin-DPDVda6M.js",
     "name": "admin",
     "src": "src/admin/main.tsx",
     "isEntry": true,
     "imports": [
-      "_AuthPanel-twBQOj4Y.js",
-      "_Modal-CdYYtFhm.js"
+      "_Modal-DbFILSXU.js"
     ]
   },
   "src/shared/components/charts/ProgressCharts.tsx": {
-    "file": "assets/ProgressCharts-BR0lfOZu.js",
+    "file": "assets/ProgressCharts-9O5y4fkh.js",
     "name": "ProgressCharts",
     "src": "src/shared/components/charts/ProgressCharts.tsx",
     "isDynamicEntry": true,
     "imports": [
-      "_AuthPanel-twBQOj4Y.js"
+      "_Modal-DbFILSXU.js"
     ]
   },
   "src/trainer/main.tsx": {
-    "file": "assets/trainer-Dp9_iLu0.js",
+    "file": "assets/trainer-DZVEqnGy.js",
     "name": "trainer",
     "src": "src/trainer/main.tsx",
     "isEntry": true,
     "imports": [
-      "_AuthPanel-twBQOj4Y.js"
+      "_Modal-DbFILSXU.js",
+      "_ProgressChartGrid-DBOEmadx.js"
     ]
   },
   "src/user/main.tsx": {
-    "file": "assets/user-CTnIFCpd.js",
+    "file": "assets/user-B1qamePB.js",
     "name": "user",
     "src": "src/user/main.tsx",
     "isEntry": true,
     "imports": [
-      "_AuthPanel-twBQOj4Y.js",
-      "_Modal-CdYYtFhm.js"
-    ],
-    "dynamicImports": [
-      "src/shared/components/charts/ProgressCharts.tsx"
+      "_Modal-DbFILSXU.js",
+      "_ProgressChartGrid-DBOEmadx.js"
     ]
   }
 }

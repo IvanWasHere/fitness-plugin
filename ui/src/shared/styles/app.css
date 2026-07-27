@@ -2387,3 +2387,66 @@
 .fc-faq p {
   padding-bottom: 12px;
 }
+
+/* ------------------------------------------------------------ trainer app */
+
+/* Inline rather than corner-pinned: the trainer nav item has a text label, so
+   the badge sits after it instead of over an icon. */
+.fc-nav-badge--inline {
+  position: static;
+  margin-left: auto;
+}
+
+.fc-client-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.fc-client-row__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.fc-client-row__body .fc-font-bold {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.fc-client-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+  border-radius: var(--rs);
+}
+
+/* The seven-tab bar scrolls rather than wrapping: seven labels do not fit a
+   phone, and a wrapped second row moves the content down unpredictably. */
+.fc-tabs {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--border);
+}
+
+.fc-tabs .fc-tab {
+  flex: 0 0 auto;
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.fc-tabs .fc-tab[aria-selected='true'] {
+  background: none;
+  border-bottom-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}

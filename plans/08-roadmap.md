@@ -1197,6 +1197,73 @@ assigns an existing plan but the **food-plan builder's meal editor** is not
 built, and [06](06-trainer-app.md) marks it deferrable to Phase 4 (−10 d) along
 with the exercise library.
 
+#### Slice 2 — SPA shell and client screens ✅ **complete 2026-07-28**
+
+The trainer app itself: shell, dashboard, client list, the seven-tab client
+record, and the request queue. No new endpoints — slice 1's API unchanged.
+
+**Build notes.**
+
+- **The dashboard leads with people, not counts.** [06](06-trainer-app.md) is
+  blunt about it — "a list of counts is a report; a list of *clients who need
+  something* is a tool" — so "Needs attention" is the first card and the stat row
+  sits under it. **No money appears anywhere** (Q2): trainers are traced, not
+  paid, and a figure they cannot act on and are not owed invites exactly the
+  wrong conversation.
+- **Q3 is surfaced on the client *list*, not just the record.** A row carries a
+  "+1 coach" tag, because a shared client is a different programming
+  conversation and the trainer should know before they open the record rather
+  than after.
+- **Co-trainers' assignments are shown but disabled, and the disabled control
+  says why.** Its accessible name is "Assigned by another coach" — a trainer who
+  cannot remove a row should be told why, not left clicking at nothing, and
+  hiding the row instead would hide that the client already has that work.
+  Verified against the seeded case: six assignments on one client across three
+  coaches, remove enabled on exactly the three that are yours.
+- **Tabs fetch on open.** Seven eager queries for a screen where a trainer looks
+  at one of them is six wasted requests.
+- **The Progress tab draws the member app's charts**, because
+  `TrainerService::progress()` delegates to `ProgressService::range()` — it *is*
+  the member's payload after a roster check. The grid moved to
+  `@shared/components/charts/ProgressChartGrid`; two renderings of one payload
+  would have drifted. Only the empty-state copy differs, via a `subject` prop:
+  "log a weight on the Health screen" is advice a trainer cannot take, and copy
+  addressed to the wrong person is worse than no copy.
+- **Declining asks for a reason and the screen states capacity up front**, since
+  capacity is enforced at accept and discovering you are full *after* clicking is
+  worse than being told first. `max: null` renders as "no limit set", never as
+  "full" — a fresh trainer with an unconfigured profile is not at capacity.
+
+**A shared-component bug the browser found, and tests could not.** `Modal`'s
+focus effect listed `[onCancel]` in its dependencies, and every caller passes an
+inline arrow — so the identity changed on every render, the effect re-ran, and it
+moved focus again. In a form dialog that is a live defect: type one character,
+state changes, focus jumps from the field to the confirm button, and **the next
+space bar press activates it**. Typing "My lower-body slots are full…" into the
+decline reason declined the request on the space after "My", with
+`decline_reason` saved as the single letter `M`. The effect now runs once and
+reads the current handler through a ref; a `form` dialog also opens on its first
+field rather than on its confirm button, because autofocusing a destructive
+button one stray space away from firing is the same hazard in slower motion.
+This affected **every** form modal in the app — W2.2's health dialogs included —
+and it survived four work packages of green tests because no test types a second
+character into a modal.
+
+*Verified in the browser* as `sarah.chen`: dashboard, client list, all seven
+tabs, the assign dialog, and a private note written and deleted (which also
+confirms the W3.1 CSRF desync was an artefact of my clearing the cookie, not a
+defect — a fresh session writes fine). The request queue was exercised against a
+seeded pending request, declined with a full reason, and the seed row removed.
+Member Progress re-checked after the chart extraction; `Modal` re-checked on the
+member's "Log weight" dialog. Gate: **phpcs 0 errors, phpunit 269 tests / 1555
+assertions, `ui/` typecheck + lint + format + build green.**
+
+**Deferred to the next slices:** the builders (workout, plan, food plan) and the
+trainer profile; trainer messaging (the Messages tab points at it). The Health
+tab shows weight and body fat derived from the progress payload — the fuller
+health record needs its own endpoint with access logging (Q10), which does not
+exist yet.
+
 #### Full package scope
 All `/trainer/*` endpoints with **both** ownership guards — shared read across
 trainers (Q13), private write to your own assignments — then dashboard, client
