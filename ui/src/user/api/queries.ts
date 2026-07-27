@@ -25,7 +25,12 @@ import type {
   Progress,
   ProgressRange,
   ProgressRecord,
+  BillingState,
+  CheckoutResult,
+  PaymentRecord,
+  Plan,
   Session,
+  Subscription,
   ThreadDetail,
   ThreadSummary,
   UnreadCount,
@@ -64,6 +69,9 @@ export const queryKeys = {
   activity: (page: number, types: string) => ['activity', page, types] as const,
   preferences: ['user', 'preferences'] as const,
   threads: ['messages', 'threads'] as const,
+  billing: ['billing', 'subscription'] as const,
+  plans: (trainerId?: number) => ['billing', 'plans', trainerId ?? 'all'] as const,
+  paymentHistory: (page: number) => ['billing', 'payments', page] as const,
   thread: (id: number) => ['messages', 'thread', id] as const,
 };
 
@@ -671,4 +679,93 @@ export function useUnreadMessages(): number {
   });
 
   return data?.unread_total ?? 0;
+}
+
+// ----------------------------------------------------------------- billing
+
+export function useBilling(): UseQueryResult<BillingState, ApiError> {
+  const { api } = useSession();
+
+  return useQuery({
+    queryKey: queryKeys.billing,
+    queryFn: () => api.get<BillingState>('billing/subscription'),
+  });
+}
+
+export function usePlans(
+  trainerId?: number,
+): UseQueryResult<{ items: Plan[]; gateway: string }, ApiError> {
+  const { api } = useSession();
+
+  return useQuery({
+    queryKey: queryKeys.plans(trainerId),
+    queryFn: () =>
+      api.get<{ items: Plan[]; gateway: string }>(
+        'billing/plans',
+        trainerId ? { trainer_id: trainerId } : undefined,
+      ),
+    staleTime: 5 * 60_000,
+  });
+}
+
+export function usePaymentHistory(
+  page = 1,
+): UseQueryResult<
+  { items: PaymentRecord[]; total: number; page: number; per_page: number },
+  ApiError
+> {
+  const { api } = useSession();
+
+  return useQuery({
+    queryKey: queryKeys.paymentHistory(page),
+    queryFn: () =>
+      api.get<{ items: PaymentRecord[]; total: number; page: number; per_page: number }>(
+        'billing/payments',
+        { page },
+      ),
+  });
+}
+
+/**
+ * Billing writes.
+ *
+ * Every one invalidates the boot-derived caches as well as the billing queries:
+ * a plan change moves entitlements, and entitlements decide what half the app
+ * lets the member do.
+ */
+export function useBillingActions() {
+  const { api } = useSession();
+  const queryClient = useQueryClient();
+
+  const settle = () => {
+    void queryClient.invalidateQueries({ queryKey: ['billing'] });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.dashboard });
+  };
+
+  const checkout = useMutation<CheckoutResult, ApiError, { plan_id: number; cycle: string }>({
+    mutationFn: (body) => api.post<CheckoutResult>('billing/checkout', body),
+    onSuccess: (result) => {
+      settle();
+
+      // A hosted checkout has to leave the app. Nothing is active yet — the
+      // webhook decides that — so there is no local state to write first.
+      if (result.status === 'redirect' && result.redirect_url) {
+        window.location.assign(result.redirect_url);
+      }
+    },
+  });
+
+  const cancel = useMutation<Subscription, ApiError, number>({
+    mutationFn: (id) =>
+      api.post<Subscription>('billing/subscription/cancel', { subscription_id: id }),
+    onSuccess: settle,
+  });
+
+  const resume = useMutation<Subscription, ApiError, number>({
+    mutationFn: (id) =>
+      api.post<Subscription>('billing/subscription/resume', { subscription_id: id }),
+    onSuccess: settle,
+  });
+
+  return { checkout, cancel, resume };
 }

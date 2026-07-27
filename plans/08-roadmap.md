@@ -988,6 +988,83 @@ dev, the test-mode/live-mode split leaks into config, and refunds/proration are
 fiddly. Treat 7 d as optimistic. Q2 removed the far larger Connect/payout/KYC
 branch this could otherwise have become.
 
+#### Status — ✅ **complete except the Stripe adapter, 2026-07-27**
+
+**Scope decision, taken with the owner.** D6 says ship `StripeGateway` +
+`ManualGateway`. Stripe means a new composer dependency and, with no API keys
+available, a few hundred lines of adapter and webhook code that could not be
+exercised even once. Agreed instead: **build the seam and everything above it,
+defer the Stripe adapter until keys exist.** It slots into
+`GatewayRegistry` through the `fitnessclub/payment_gateways` filter without
+touching anything else — which is the claim D6 makes for the seam, and the claim
+`FakeGateway` in the test suite already cashes.
+
+**Build notes.**
+
+- **The seam is the deliverable.** `PaymentGateway` has five methods and three
+  value objects, and nothing above it — `SubscriptionService`, the webhook route,
+  the admin screens — knows what a processor is. `GatewayResult` deliberately has
+  **three** states rather than a boolean: *redirect* (nothing is active yet, the
+  webhook decides), *settled* (active now), *failed*. Collapsing the first two is
+  exactly how a member gets features they have not paid for by abandoning a
+  hosted checkout page.
+- **A member holds a set of subscriptions, not one.** One per trainer (Q3), with
+  the platform tier as `trainer_id IS NULL`. So a second plan with the *same*
+  coach replaces the first — two concurrent subscriptions to one coach is double
+  billing — while plans with *different* coaches coexist. Both are tested.
+- **Cancelling always means at period end.** The status stays `active`,
+  `cancel_at_period_end` is set, and the expiry sweep flips it when the date
+  passes. Ending access at the click would take something the member already
+  bought; the screen says when it ends and offers to undo.
+- **Expiry and dunning are separate transitions.** A period that ended on a plan
+  set to renew becomes `past_due`, not `expired` — cutting somebody off because a
+  card needs re-trying is what dunning exists to avoid. Past-due members keep
+  their features through a 14-day grace window, then suspend.
+- **The webhook is the only public write endpoint in the plugin**, and it needed
+  an explicit CSRF exemption: `AuthProvider::guard()` refuses every non-GET
+  without a token, so without `isSignatureVerifiedRoute()` naming the path, every
+  delivery would have answered 403. **I had written the opposite in the route
+  comment before checking** — the guard does not skip sessionless routes, it
+  rejects them. Its protection is the adapter's signature check, which runs
+  before anything parses the body.
+- **Idempotency is a transient keyed on the gateway's own event id.** Gateways
+  retry on any non-2xx and sometimes deliver twice on a 2xx; without it a retried
+  `payment_succeeded` extends a subscription twice. A duplicate answers **200**,
+  not 409 — an error makes the gateway keep retrying. So does an unknown event
+  type, because gateways add them constantly.
+- **`ScheduleProvider::unschedule()` was already one job out of date** the moment
+  a second was added — it cleared only `STALE_SESSIONS`. Now iterates every job,
+  so deactivation leaves no hook firing into nothing.
+- **The overlapping-plan matrix is tested explicitly**, as
+  [03](03-backend.md#merging-across-multiple-subscriptions) asks, and for the
+  reason it gives: feature flicker as subscriptions lapse is invisible until a
+  member has two trainers. Booleans union; caps take the **max, never the sum**
+  (1 + 2 trainers is 2, not 3); null beats any number; a lapsed plan stops
+  contributing while the other holds; nothing active falls to the free tier
+  rather than to a denial. And **Q16**: a downgrade to a 1-trainer plan while
+  holding two reports a cap of 1 and severs neither — asserted against
+  `fc_user_trainers` directly, not just against the reported number.
+
+*Exit criterion met for everything built*, by test rather than in a browser: 17
+new tests covering the state machine, the merge matrix, the sweep, dunning and
+the webhook. Gate: **phpcs 0 errors, phpunit 239 tests / 1333 assertions, `ui/`
+typecheck + lint + format + build green.** The billing screens were **not**
+eyeballed — the CSRF desync recorded under W3.1 still blocks writes in the dev
+browser, and unpicking it is W1.3's fix rather than this package's.
+
+**A test-isolation bug worth recording**, because only the *full* suite found it:
+the webhook test hardcoded `evt_1` as its event id. Correct for one run; on the
+second the seven-day dedupe transient from the first was still set, so a real
+event was treated as a duplicate and the assertion on payment count failed. The
+test now mints a fresh id per run, as a real gateway does. Running the file alone
+passed both times — the suite is what caught it.
+
+**Deferred:** `StripeGateway` (above); **proration** on plan change, which is
+currently cancel-and-restart rather than a credited swap; invoice PDFs
+(`GET /billing/invoices/{id}`); refunds beyond marking a payment refunded; and
+`/admin/reports/trainers`, the Q2 attribution report — its data is all present in
+`fc_subscriptions.trainer_id` but the report itself is unbuilt.
+
 ### W3.3 Support tickets (3 d)
 Tickets + replies + internal notes, user ticket screens, admin ticket queue with
 assignment, trainer ticket view. FAQ from settings rather than hardcoded JS.

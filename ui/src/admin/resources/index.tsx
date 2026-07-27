@@ -427,6 +427,171 @@ export const healthConfig: ResourceConfig = {
   form: (props) => <SimpleForm {...props} fields={healthFields} notice={auditNotice()} />,
 };
 
+// ------------------------------------------------------------ billing (W3.2)
+
+const planFields: FieldSpec[] = [
+  { name: 'plan_name', label: 'Name', required: true },
+  { name: 'slug', label: 'Slug' },
+  { name: 'description', label: 'Description', type: 'textarea' },
+  { name: 'owner_type', label: 'Owner', type: 'select', options: ['platform', 'trainer'] },
+  { name: 'currency', label: 'Currency' },
+  { name: 'price_weekly', label: 'Weekly', type: 'number', step: '0.01' },
+  { name: 'price_monthly', label: 'Monthly', type: 'number', step: '0.01' },
+  { name: 'price_quarterly', label: 'Quarterly', type: 'number', step: '0.01' },
+  { name: 'price_yearly', label: 'Yearly', type: 'number', step: '0.01' },
+  { name: 'max_messages_per_week', label: 'Messages / week', type: 'number' },
+  // Q14: what a plan sells when it sells coaching.
+  { name: 'max_trainers', label: 'Max trainers', type: 'number' },
+  // The feature-flag editor. Raw JSON, validated server-side — invalid JSON is
+  // refused rather than stored, because a plan whose features became null would
+  // quietly drop every paying member on it to the free tier.
+  { name: 'features', label: 'Feature flags (JSON)', type: 'textarea' },
+  { name: 'sort_order', label: 'Sort order', type: 'number' },
+  { name: 'is_active', label: 'On sale', type: 'checkbox' },
+];
+
+export const plansConfig: ResourceConfig = {
+  resource: 'plans',
+  title: 'Plans',
+  singular: 'plan',
+  defaultSort: 'order',
+  defaultOrder: 'asc',
+  columns: [
+    { key: 'id', label: 'ID', sort: 'id' },
+    { key: 'plan_name', label: 'Name', sort: 'name' },
+    {
+      key: 'owner_type',
+      label: 'Owner',
+      render: (r) => (
+        <Tag tone={r.owner_type === 'platform' ? 'purple' : 'blue'}>{String(r.owner_type)}</Tag>
+      ),
+    },
+    { key: 'trainer_name', label: 'Trainer' },
+    {
+      key: 'price_monthly',
+      label: 'Monthly',
+      sort: 'price',
+      align: 'right',
+      render: (r) => num(r.price_monthly),
+    },
+    { key: 'max_trainers', label: 'Trainers', align: 'right' },
+    { key: 'active_subscribers', label: 'Subscribers', align: 'right' },
+    { key: 'is_active', label: 'On sale', render: (r) => (r.is_active ? 'Yes' : 'No') },
+  ],
+  filters: [
+    {
+      name: 'owner_type',
+      label: 'Owner',
+      options: ['platform', 'trainer'].map((v) => ({ value: v, label: v })),
+    },
+  ],
+  describe: (row) => String(row.plan_name ?? `#${row.id}`),
+  form: (props) => <SimpleForm {...props} fields={planFields} />,
+};
+
+/**
+ * Read-mostly on purpose: transitions belong to `SubscriptionService`, which
+ * knows that cancelling means at-period-end and how a renewal extends a period.
+ * Extending a date by hand is the supported override; setting `status` by hand
+ * would skip every rule.
+ */
+export const subscriptionsConfig: ResourceConfig = {
+  resource: 'subscriptions',
+  title: 'Subscriptions',
+  singular: 'subscription',
+  creatable: false,
+  defaultSort: 'id',
+  columns: [
+    { key: 'id', label: 'ID', sort: 'id' },
+    { key: 'user_name', label: 'Member', sort: 'user' },
+    { key: 'plan_name', label: 'Plan' },
+    { key: 'trainer_name', label: 'Trainer' },
+    { key: 'status', label: 'Status', sort: 'status', render: (r) => statusTag(r.status) },
+    { key: 'subscription_type', label: 'Cycle' },
+    { key: 'end_date', label: 'Ends', sort: 'ends', render: (r) => date(r.end_date) },
+    {
+      key: 'cancel_at_period_end',
+      label: 'Ending',
+      render: (r) => (r.cancel_at_period_end ? 'Yes' : '—'),
+    },
+  ],
+  filters: [
+    {
+      name: 'status',
+      label: 'Status',
+      options: ['active', 'trialing', 'past_due', 'cancelled', 'expired'].map((v) => ({
+        value: v,
+        label: v,
+      })),
+    },
+  ],
+  describe: (row) => `${row.plan_name} for ${row.user_name}`,
+  form: (props) => (
+    <SimpleForm
+      {...props}
+      fields={[
+        { name: 'end_date', label: 'Ends on', type: 'date' },
+        { name: 'auto_renew', label: 'Auto renew', type: 'checkbox' },
+        { name: 'cancel_at_period_end', label: 'Cancel at period end', type: 'checkbox' },
+      ]}
+    />
+  ),
+};
+
+export const paymentsConfig: ResourceConfig = {
+  resource: 'payments',
+  title: 'Payments',
+  singular: 'payment',
+  creatable: false,
+  defaultSort: 'date',
+  columns: [
+    { key: 'id', label: 'ID', sort: 'id' },
+    { key: 'user_name', label: 'Member', sort: 'user' },
+    { key: 'plan_name', label: 'Plan' },
+    {
+      key: 'amount',
+      label: 'Amount',
+      sort: 'amount',
+      align: 'right',
+      render: (r) => `${r.currency ?? ''} ${num(r.amount)}`,
+    },
+    {
+      key: 'status',
+      label: 'Status',
+      sort: 'status',
+      render: (r) => (
+        <Tag tone={r.status === 'completed' ? 'green' : 'red'}>{String(r.status)}</Tag>
+      ),
+    },
+    { key: 'gateway', label: 'Gateway' },
+    { key: 'payment_date', label: 'Date', sort: 'date', render: (r) => date(r.payment_date) },
+    { key: 'transaction_id', label: 'Reference' },
+  ],
+  filters: [
+    {
+      name: 'status',
+      label: 'Status',
+      options: ['completed', 'failed', 'refunded', 'pending'].map((v) => ({ value: v, label: v })),
+    },
+  ],
+  describe: (row) => `${row.currency} ${row.amount} from ${row.user_name}`,
+  form: (props) => (
+    <SimpleForm
+      {...props}
+      fields={[
+        {
+          name: 'status',
+          label: 'Status',
+          type: 'select',
+          options: ['completed', 'failed', 'refunded', 'pending'],
+        },
+        { name: 'payment_method', label: 'Method' },
+        { name: 'failure_reason', label: 'Note', type: 'textarea' },
+      ]}
+    />
+  ),
+};
+
 export const RESOURCES: ResourceConfig[] = [
   usersConfig,
   trainersConfig,
@@ -434,4 +599,7 @@ export const RESOURCES: ResourceConfig[] = [
   foodsConfig,
   mealsConfig,
   healthConfig,
+  plansConfig,
+  subscriptionsConfig,
+  paymentsConfig,
 ];

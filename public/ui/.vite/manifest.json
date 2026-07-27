@@ -18,7 +18,7 @@
     ]
   },
   "src/admin/main.tsx": {
-    "file": "assets/admin-B1VXiEHd.js",
+    "file": "assets/admin-B4M71fbu.js",
     "name": "admin",
     "src": "src/admin/main.tsx",
     "isEntry": true,
@@ -46,7 +46,7 @@
     ]
   },
   "src/user/main.tsx": {
-    "file": "assets/user-D-xDyF6h.js",
+    "file": "assets/user-D6iTEPCy.js",
     "name": "user",
     "src": "src/user/main.tsx",
     "isEntry": true,

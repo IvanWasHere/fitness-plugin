@@ -2,6 +2,7 @@
 
 use FitnessClub\Http\Controllers\Api\AdminController;
 use FitnessClub\Http\Controllers\Api\AuthController;
+use FitnessClub\Http\Controllers\Api\BillingController;
 use FitnessClub\Http\Controllers\Api\HealthController;
 use FitnessClub\Http\Controllers\Api\MessageController;
 use FitnessClub\Http\Controllers\Api\NotificationController;
@@ -976,6 +977,118 @@ Route::post('/messages/threads/(?P<id>\d+)/read', MessageController::class . '@r
 // Type is checked by reading the bytes, not by trusting the filename.
 Route::post('/messages/attachments', MessageController::class . '@upload', [
     'permission_callback' => [MessageController::class, 'canAccess'],
+]);
+
+/*
+|--------------------------------------------------------------------------
+| Billing — /billing/*
+|--------------------------------------------------------------------------
+|
+| Member-scoped; administrators manage subscriptions through /admin/* instead.
+|
+| `POST /billing/checkout` takes a plan_id and a cycle and **never a price** —
+| the server resolves the amount from the plan. A client-supplied price is, per
+| 02, the single most commonly exploited endpoint in subscription plugins, and
+| the args schema below has no field it could arrive in.
+|
+| The webhook is the **only public write endpoint in the plugin**: a gateway
+| cannot authenticate as anybody. Its security is the adapter's signature
+| verification, which happens before the body is parsed. It also needs an
+| explicit exemption from the CSRF gate — `AuthProvider::guard()` refuses any
+| non-GET without a token, so without
+| `AuthProvider::isSignatureVerifiedRoute()` naming this path it would answer
+| 403 `fc_csrf_missing` to every delivery.
+|
+*/
+
+Route::get('/billing/subscription', BillingController::class . '@subscription', [
+    'permission_callback' => [BillingController::class, 'canRead'],
+]);
+
+Route::get('/billing/plans', BillingController::class . '@plans', [
+    'permission_callback' => [BillingController::class, 'canRead'],
+    'args'                => [
+        'trainer_id' => ['type' => 'integer', 'minimum' => 1],
+    ],
+]);
+
+Route::get('/billing/payments', BillingController::class . '@paymentHistory', [
+    'permission_callback' => [BillingController::class, 'canRead'],
+    'args'                => $pagingArgs,
+]);
+
+Route::post('/billing/checkout', BillingController::class . '@checkout', [
+    'permission_callback' => [BillingController::class, 'canManage'],
+    'args'                => [
+        'plan_id' => [
+            'required'          => true,
+            'type'              => 'integer',
+            'minimum'           => 1,
+            'sanitize_callback' => 'absint',
+        ],
+        'cycle' => [
+            'required' => true,
+            'type'     => 'string',
+            'enum'     => ['weekly', 'monthly', 'quarterly', 'yearly'],
+        ],
+        'return_url' => [
+            'type'              => 'string',
+            'sanitize_callback' => 'esc_url_raw',
+        ],
+    ],
+]);
+
+$subscriptionArg = [
+    'subscription_id' => [
+        'required'          => true,
+        'type'              => 'integer',
+        'minimum'           => 1,
+        'sanitize_callback' => 'absint',
+    ],
+];
+
+Route::post('/billing/subscription/cancel', BillingController::class . '@cancel', [
+    'permission_callback' => [BillingController::class, 'canManage'],
+    'args'                => $subscriptionArg + [
+        // Defaults true: the member keeps what they paid for. Immediate
+        // cancellation exists for refunds and is an administrator's action.
+        'at_period_end' => ['type' => 'boolean', 'default' => true],
+    ],
+]);
+
+Route::post('/billing/subscription/resume', BillingController::class . '@resume', [
+    'permission_callback' => [BillingController::class, 'canManage'],
+    'args'                => $subscriptionArg,
+]);
+
+Route::post('/billing/subscription/change', BillingController::class . '@change', [
+    'permission_callback' => [BillingController::class, 'canManage'],
+    'args'                => $subscriptionArg + [
+        'plan_id' => [
+            'required'          => true,
+            'type'              => 'integer',
+            'minimum'           => 1,
+            'sanitize_callback' => 'absint',
+        ],
+        'cycle' => [
+            'required' => true,
+            'type'     => 'string',
+            'enum'     => ['weekly', 'monthly', 'quarterly', 'yearly'],
+        ],
+    ],
+]);
+
+// Public by necessity. `__return_true` appears exactly once in this file and
+// this is the second place it is justified (the other is the health probe).
+Route::post('/billing/webhook/(?P<gateway>[a-z0-9_-]+)', BillingController::class . '@webhook', [
+    'permission_callback' => '__return_true',
+    'args'                => [
+        'gateway' => [
+            'required'          => true,
+            'type'              => 'string',
+            'sanitize_callback' => 'sanitize_key',
+        ],
+    ],
 ]);
 
 Route::post('/foods', NutritionController::class . '@createFood', [

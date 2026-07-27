@@ -75,6 +75,17 @@ class AuthProvider extends ServiceProvider
             return $result;
         }
 
+        // Gateway webhooks cannot present a CSRF token — there is no browser and
+        // no session, which is exactly the situation the token proves the
+        // absence of. They are not unprotected: the adapter verifies the
+        // gateway's own signature before the body is parsed, which is a stronger
+        // check than a double-submit cookie. Kept as an explicit, narrow list
+        // rather than a "public routes" concept, so adding an exemption is a
+        // decision somebody has to write down here.
+        if ($this->isSignatureVerifiedRoute($request)) {
+            return $result;
+        }
+
         $session = Auth::session();
         $sent    = Csrf::fromRequest($request);
 
@@ -129,5 +140,21 @@ class AuthProvider extends ServiceProvider
     private function isOurRoute(WP_REST_Request $request): bool
     {
         return str_starts_with(ltrim((string) $request->get_route(), '/'), self::NAMESPACE_PREFIX);
+    }
+
+    /**
+     * Routes whose authenticity is established by a cryptographic signature
+     * rather than by a session (W3.2).
+     *
+     * Currently only the payment webhook. Matched on the route path rather than
+     * on a flag in the route definition, because the CSRF gate runs at
+     * `rest_pre_dispatch` — before the route's own callbacks and args are
+     * resolved — so there is nothing else available to read at that point.
+     */
+    private function isSignatureVerifiedRoute(WP_REST_Request $request): bool
+    {
+        $route = ltrim((string) $request->get_route(), '/');
+
+        return str_starts_with($route, self::NAMESPACE_PREFIX . '/billing/webhook/');
     }
 }

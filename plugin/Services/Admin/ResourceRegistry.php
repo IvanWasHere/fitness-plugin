@@ -312,6 +312,156 @@ final class ResourceRegistry
                 'audit'      => true,
             ],
 
+            /*
+             * Billing (W3.2). Plans are fully editable including the
+             * feature-flag JSON and `max_trainers` (Q14); subscriptions and
+             * payments are read-mostly — the state machine owns transitions, and
+             * an administrator typing `status = active` into a table would skip
+             * every rule in SubscriptionService.
+             */
+            'plans' => [
+                'table'  => 'fc_plans',
+                'alias'  => 'p',
+                'select' => [
+                    'p.id', 'p.owner_type', 'p.trainer_id', 'p.plan_name', 'p.slug',
+                    'p.description', 'p.plan_type', 'p.currency', 'p.price_weekly',
+                    'p.price_monthly', 'p.price_quarterly', 'p.price_yearly', 'p.features',
+                    'p.max_messages_per_week', 'p.max_trainers', 'p.is_active',
+                    'p.sort_order', 'p.created_at',
+                    't.display_name AS trainer_name',
+                    '(SELECT COUNT(*) FROM {p}fc_subscriptions s
+                        WHERE s.plan_id = p.id AND s.status = %s) AS active_subscribers',
+                ],
+                'select_params' => ['active'],
+                'joins'  => ['LEFT JOIN {p}fc_trainers t ON t.id = p.trainer_id'],
+                'search' => ['p.plan_name', 'p.slug', 'p.description'],
+                'sort'   => [
+                    'id'    => 'p.id',
+                    'name'  => 'p.plan_name',
+                    'price' => 'p.price_monthly',
+                    'order' => 'p.sort_order',
+                ],
+                'filters' => [
+                    'owner_type' => ['expr' => 'p.owner_type', 'op' => 'exact'],
+                    'is_active'  => ['expr' => 'p.is_active', 'op' => 'exact'],
+                ],
+                'default_sort' => ['order', 'asc'],
+                'writable' => [
+                    'plan_name'       => 'text',
+                    'slug'            => 'text',
+                    'description'     => 'textarea',
+                    'owner_type'      => 'text',
+                    'trainer_id'      => 'int_or_null',
+                    'plan_type'       => 'text',
+                    'currency'        => 'text',
+                    'price_weekly'    => 'decimal',
+                    'price_monthly'   => 'decimal',
+                    'price_quarterly' => 'decimal',
+                    'price_yearly'    => 'decimal',
+                    // The feature-flag editor the roadmap asks for. Stored as
+                    // JSON and merged by EntitlementService; `max_trainers`
+                    // lives here as well as in its own column because the JSON
+                    // overrides it (Q14).
+                    'features'        => 'json_object',
+                    'max_messages_per_week' => 'int',
+                    'max_trainers'    => 'int',
+                    'is_active'       => 'bool',
+                    'sort_order'      => 'int',
+                ],
+                'required'   => ['plan_name'],
+                'capability' => 'fc_manage_payments',
+                'creatable'  => true,
+                'audit'      => false,
+            ],
+
+            'subscriptions' => [
+                'table'  => 'fc_subscriptions',
+                'alias'  => 's',
+                'select' => [
+                    's.id', 's.user_id', 's.plan_id', 's.trainer_id', 's.start_date',
+                    's.end_date', 's.subscription_type', 's.status', 's.auto_renew',
+                    's.cancel_at_period_end', 's.price_paid', 's.currency', 's.gateway',
+                    's.created_at',
+                    'u.display_name AS user_name', 'p.plan_name', 't.display_name AS trainer_name',
+                ],
+                'joins' => [
+                    'INNER JOIN {p}fc_users u ON u.id = s.user_id',
+                    'INNER JOIN {p}fc_plans p ON p.id = s.plan_id',
+                    'LEFT JOIN {p}fc_trainers t ON t.id = s.trainer_id',
+                ],
+                'search' => ['u.display_name', 'p.plan_name'],
+                'sort'   => [
+                    'id'     => 's.id',
+                    'user'   => 'u.display_name',
+                    'status' => 's.status',
+                    'ends'   => 's.end_date',
+                ],
+                'filters' => [
+                    'status'  => ['expr' => 's.status', 'op' => 'exact'],
+                    'plan_id' => ['expr' => 's.plan_id', 'op' => 'exact'],
+                ],
+                'default_sort' => ['id', 'desc'],
+                // Deliberately narrow: transitions belong to SubscriptionService,
+                // which knows that cancelling means at-period-end and that
+                // renewal extends from the later of today and the current end.
+                // An admin extending a date by hand is the supported override;
+                // an admin setting `status` by hand is not.
+                'writable' => [
+                    'end_date'   => 'date',
+                    'auto_renew' => 'bool',
+                    'cancel_at_period_end' => 'bool',
+                ],
+                'required'   => [],
+                'capability' => 'fc_manage_payments',
+                'creatable'  => false,
+                'audit'      => false,
+            ],
+
+            'payments' => [
+                'table'  => 'fc_payments',
+                'alias'  => 'pay',
+                'select' => [
+                    'pay.id', 'pay.user_id', 'pay.subscription_id', 'pay.amount',
+                    'pay.currency', 'pay.payment_type', 'pay.gateway', 'pay.payment_method',
+                    'pay.transaction_id', 'pay.status', 'pay.failure_reason',
+                    'pay.payment_date', 'pay.created_at',
+                    'u.display_name AS user_name', 'p.plan_name',
+                ],
+                'joins' => [
+                    'LEFT JOIN {p}fc_users u ON u.id = pay.user_id',
+                    'LEFT JOIN {p}fc_subscriptions s ON s.id = pay.subscription_id',
+                    'LEFT JOIN {p}fc_plans p ON p.id = s.plan_id',
+                ],
+                'search' => ['u.display_name', 'pay.transaction_id'],
+                'sort'   => [
+                    'id'     => 'pay.id',
+                    'user'   => 'u.display_name',
+                    'amount' => 'pay.amount',
+                    'date'   => 'pay.payment_date',
+                    'status' => 'pay.status',
+                ],
+                'filters' => [
+                    'status'  => ['expr' => 'pay.status', 'op' => 'exact'],
+                    'gateway' => ['expr' => 'pay.gateway', 'op' => 'exact'],
+                    'from'    => ['expr' => 'DATE(pay.payment_date)', 'op' => 'gte'],
+                    'to'      => ['expr' => 'DATE(pay.payment_date)', 'op' => 'lte'],
+                ],
+                'default_sort' => ['date', 'desc'],
+                // A payment is a record of something that happened. The only
+                // editable parts are the notes a human adds about it — amount,
+                // gateway and transaction id are the gateway's account of
+                // events and are not ours to revise.
+                'writable' => [
+                    'status'         => 'text',
+                    'failure_reason' => 'textarea',
+                    'payment_method' => 'text',
+                ],
+                'required'   => [],
+                'capability' => 'fc_manage_payments',
+                'creatable'  => false,
+                'audit'      => false,
+            ],
+
             'health-entries' => [
                 'table'  => 'fc_health_stats',
                 'alias'  => 'h',

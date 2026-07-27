@@ -640,3 +640,81 @@ export interface MessagePoll {
   latest_id: number;
   unread_total: number;
 }
+
+// ----------------------------------------------------------------- billing
+
+export type BillingCycle = 'weekly' | 'monthly' | 'quarterly' | 'yearly';
+
+export interface Plan {
+  id: number;
+  plan_name: string;
+  slug: string | null;
+  description: string | null;
+  owner_type: string;
+  trainer_id: number | null;
+  currency: string;
+  /** Null for a cycle this plan is not sold on. */
+  prices: Record<BillingCycle, number | null>;
+  features: Record<string, unknown>;
+  max_trainers: number;
+  max_messages_per_week: number;
+}
+
+/**
+ * One subscription. A member may hold several at once — one per trainer (Q3) —
+ * so the screen renders a list, never "the" subscription.
+ */
+export interface Subscription {
+  id: number;
+  plan_id: number;
+  plan_name: string | null;
+  plan_slug: string | null;
+  description: string | null;
+  owner_type: string;
+  trainer_id: number | null;
+  trainer_name: string | null;
+  status: string;
+  cycle: string;
+  start_date: string | null;
+  end_date: string | null;
+  auto_renew: boolean;
+  /**
+   * Set means "ends on end_date and will not renew" — the status stays `active`
+   * until then, because the member keeps what they paid for.
+   */
+  cancel_at_period_end: boolean;
+  price_paid: number | null;
+  currency: string | null;
+  gateway: string | null;
+  features: Record<string, unknown>;
+}
+
+export interface BillingState {
+  items: Subscription[];
+  entitlements: Record<string, unknown>;
+  has_active: boolean;
+}
+
+export interface PaymentRecord {
+  id: number;
+  plan_name: string | null;
+  amount: number;
+  currency: string;
+  status: string;
+  gateway: string;
+  payment_type: string;
+  transaction_id: string | null;
+  failure_reason: string | null;
+  payment_date: string | null;
+}
+
+/**
+ * Checkout either redirects to a hosted page or settles on the spot. The client
+ * has to branch — a boolean "success" would collapse the two, and only one of
+ * them means the member now has the plan.
+ */
+export interface CheckoutResult {
+  status: 'redirect' | 'settled';
+  redirect_url?: string;
+  subscription?: Subscription;
+}

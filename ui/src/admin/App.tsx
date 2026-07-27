@@ -28,6 +28,9 @@ const NAV_ICONS: Record<string, IconName> = {
   foods: 'flame',
   meals: 'list',
   'health-entries': 'heart',
+  plans: 'target',
+  subscriptions: 'refresh',
+  payments: 'weight',
 };
 
 export function App() {

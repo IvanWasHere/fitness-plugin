@@ -722,6 +722,8 @@ final class AdminResourceService
                 return $this->textarea($value);
             case 'json_list':
                 return $this->jsonList($value);
+            case 'json_object':
+                return $this->jsonObject($value);
             default:
                 return $this->text($value);
         }
@@ -763,6 +765,46 @@ final class AdminResourceService
         $date = \DateTimeImmutable::createFromFormat('Y-m-d', trim($value));
 
         return $date && $date->format('Y-m-d') === trim($value) ? $date->format('Y-m-d') : null;
+    }
+
+    /**
+     * A key/value map stored as JSON — the plan feature-flag editor (W3.2).
+     *
+     * Accepts an object or a JSON string, because the editor may submit either
+     * a parsed object or the raw text an administrator typed. **Invalid JSON is
+     * refused rather than stored**: `features` is what `EntitlementService`
+     * merges, and a plan whose features silently became `null` would quietly
+     * drop every paying member on it to the free tier.
+     */
+    private function jsonObject($value): ?string
+    {
+        if (null === $value || '' === $value) {
+            return null;
+        }
+
+        if (is_string($value)) {
+            $decoded = json_decode($value, true);
+
+            if (!is_array($decoded)) {
+                throw new DomainException(
+                    'fc_invalid_json',
+                    __('The feature flags are not valid JSON.', 'fitnessclub'),
+                    400
+                );
+            }
+
+            return wp_json_encode($decoded);
+        }
+
+        if (!is_array($value)) {
+            throw new DomainException(
+                'fc_invalid_json',
+                __('The feature flags must be an object.', 'fitnessclub'),
+                400
+            );
+        }
+
+        return wp_json_encode($value);
     }
 
     /**

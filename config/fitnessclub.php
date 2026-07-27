@@ -83,6 +83,11 @@ return [
         'login_per_minute_ip'    => 5,
         'register_per_hour_ip'   => 5,
         'password_reset_per_hour' => 3,
+
+        // Dunning: how long a past-due subscription keeps its features before
+        // it is suspended. Long enough that a temporary decline does not cost
+        // somebody their history; short enough to matter (W3.2).
+        'dunning_grace_days'      => 14,
         // Confirming a reset (key + new password) is per IP — a stolen key is
         // tried in bulk, one email at a time.
         'password_reset_confirm_per_hour_ip' => 10,

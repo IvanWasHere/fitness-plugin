@@ -2,6 +2,8 @@
 
 namespace FitnessClub\Providers;
 
+use FitnessClub\Services\PaymentService;
+use FitnessClub\Services\SubscriptionService;
 use FitnessClub\Services\WorkoutSessionService;
 use FitnessClub\WPBones\Support\ServiceProvider;
 
@@ -26,12 +28,64 @@ class ScheduleProvider extends ServiceProvider
 {
     public const STALE_SESSIONS = 'fitnessclub_abandon_stale_sessions';
 
+    /** Subscription expiry and dunning, both daily (W3.2). */
+    public const EXPIRE_SUBSCRIPTIONS = 'fitnessclub_expire_subscriptions';
+    public const RETRY_PAYMENTS       = 'fitnessclub_retry_failed_payments';
+
+    /** @var array<string,string> hook => handler method. */
+    private const JOBS = [
+        self::STALE_SESSIONS       => 'abandonStaleSessions',
+        self::EXPIRE_SUBSCRIPTIONS => 'expireSubscriptions',
+        self::RETRY_PAYMENTS       => 'retryFailedPayments',
+    ];
+
     public function register()
     {
-        add_action(self::STALE_SESSIONS, [$this, 'abandonStaleSessions']);
+        $offset = HOUR_IN_SECONDS;
 
-        if (!wp_next_scheduled(self::STALE_SESSIONS)) {
-            wp_schedule_event(time() + HOUR_IN_SECONDS, 'daily', self::STALE_SESSIONS);
+        foreach (self::JOBS as $hook => $handler) {
+            add_action($hook, [$this, $handler]);
+
+            if (!wp_next_scheduled($hook)) {
+                // Staggered rather than all at the same minute: expiry must run
+                // before dunning, or dunning chases subscriptions that expiry
+                // has not yet moved to past_due.
+                wp_schedule_event(time() + $offset, 'daily', $hook);
+            }
+
+            $offset += 15 * MINUTE_IN_SECONDS;
+        }
+    }
+
+    /**
+     * Move ended subscriptions to `expired` or `past_due` (W3.2).
+     */
+    public function expireSubscriptions(): void
+    {
+        $result = (new SubscriptionService())->runExpiry();
+
+        if ($result['expired'] > 0 || $result['past_due'] > 0) {
+            $this->plugin->log()->info(sprintf(
+                'Subscription sweep: %d expired, %d past due.',
+                $result['expired'],
+                $result['past_due']
+            ));
+        }
+    }
+
+    /**
+     * Dunning: chase past-due members, then suspend after the grace period.
+     */
+    public function retryFailedPayments(): void
+    {
+        $result = (new PaymentService())->runDunning();
+
+        if ($result['notified'] > 0 || $result['suspended'] > 0) {
+            $this->plugin->log()->info(sprintf(
+                'Dunning: %d notified, %d suspended.',
+                $result['notified'],
+                $result['suspended']
+            ));
         }
     }
 
@@ -58,11 +112,17 @@ class ScheduleProvider extends ServiceProvider
      */
     public static function unschedule(): void
     {
-        $timestamp = wp_next_scheduled(self::STALE_SESSIONS);
+        // Every job, not just the first one registered: a hook left scheduled
+        // after deactivation fires an action nothing is listening for, and the
+        // single-hook version of this was already one job out of date the moment
+        // a second was added.
+        foreach (array_keys(self::JOBS) as $hook) {
+            $timestamp = wp_next_scheduled($hook);
 
-        while (false !== $timestamp) {
-            wp_unschedule_event($timestamp, self::STALE_SESSIONS);
-            $timestamp = wp_next_scheduled(self::STALE_SESSIONS);
+            while (false !== $timestamp) {
+                wp_unschedule_event($timestamp, $hook);
+                $timestamp = wp_next_scheduled($hook);
+            }
         }
     }
 }
