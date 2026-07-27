@@ -2,6 +2,7 @@
 
 namespace FitnessClub\Providers;
 
+use FitnessClub\Auth\Auth;
 use FitnessClub\Support\DashboardCache;
 use FitnessClub\Support\RateLimitException;
 use FitnessClub\Support\RateLimiter;
@@ -58,14 +59,18 @@ class ApiServiceProvider extends ServiceProvider
             return $result;
         }
 
-        $limits    = (array) $this->plugin->config('fitnessclub.limits', []);
-        $userId    = get_current_user_id();
-        $isAuthed  = $userId > 0;
+        $limits = (array) $this->plugin->config('fitnessclub.limits', []);
+
+        // The plugin's account, not WordPress' user: AuthProvider has already
+        // set the WordPress current user to 0 on this namespace, so
+        // get_current_user_id() would put every caller in the public bucket.
+        $accountId = Auth::accountId();
+        $isAuthed  = $accountId > 0;
 
         try {
             RateLimiter::hit(
                 'api',
-                $isAuthed ? 'u' . $userId : RateLimiter::ipHash(),
+                $isAuthed ? 'a' . $accountId : RateLimiter::ipHash(),
                 (int) ($isAuthed ? $limits['api_per_minute_auth'] : $limits['api_per_minute_public']),
                 MINUTE_IN_SECONDS
             );

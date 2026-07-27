@@ -2,7 +2,7 @@
 
 namespace FitnessClub\Tests\Integration;
 
-use FitnessClub\Providers\RoleProvider;
+use FitnessClub\Auth\Capabilities;
 
 /**
  * A private member with a workout of their own, built per test.
@@ -29,7 +29,7 @@ abstract class WorkoutFixtureCase extends IntegrationTestCase
     /** @var int[] fc_workouts.id rows created here. */
     private array $workoutIds = [];
 
-    /** @var int[] wp user ids whose activity/notification rows need clearing. */
+    /** @var int[] account ids whose activity/notification rows need clearing. */
     private array $noisyUsers = [];
 
     protected function tearDown(): void
@@ -38,10 +38,10 @@ abstract class WorkoutFixtureCase extends IntegrationTestCase
 
         // fc_users cascades sessions, assignments and personal records;
         // fc_workouts cascades exercises. Activity and notifications key off the
-        // WordPress id and have no FK, so they go by hand.
-        foreach ($this->noisyUsers as $wpUserId) {
-            $wpdb->delete($wpdb->prefix . 'fc_activity_log', ['wp_user_id' => $wpUserId]);
-            $wpdb->delete($wpdb->prefix . 'fc_notifications', ['wp_user_id' => $wpUserId]);
+        // account id and have no FK, so they go by hand.
+        foreach ($this->noisyUsers as $accountId) {
+            $wpdb->delete($wpdb->prefix . 'fc_activity_log', ['account_id' => $accountId]);
+            $wpdb->delete($wpdb->prefix . 'fc_notifications', ['account_id' => $accountId]);
         }
         foreach ($this->fcUserIds as $id) {
             $wpdb->delete($wpdb->prefix . 'fc_users', ['id' => $id]);
@@ -60,17 +60,17 @@ abstract class WorkoutFixtureCase extends IntegrationTestCase
     /**
      * A member, a workout, its exercises and the assignment that ties them.
      *
-     * @return array{wp_user_id:int,fc_user_id:int,workout_id:int,exercise_ids:int[]}
+     * @return array{account_id:int,fc_user_id:int,workout_id:int,exercise_ids:int[]}
      */
     protected function seedMemberWithWorkout(string $workoutType = 'strength'): array
     {
         global $wpdb;
 
-        $wpUserId = $this->makeUser(RoleProvider::ROLE_USER);
+        $accountId = $this->makeAccount(Capabilities::ROLE_USER);
         $now      = gmdate('Y-m-d H:i:s');
 
         $wpdb->insert($wpdb->prefix . 'fc_users', [
-            'wp_user_id'   => $wpUserId,
+            'account_id'   => $accountId,
             'display_name' => 'Fixture Member',
             'weight_kg'    => self::BODY_WEIGHT_KG,
             // UTC on purpose: log_date and the streak are computed in the user's
@@ -81,7 +81,7 @@ abstract class WorkoutFixtureCase extends IntegrationTestCase
         ]);
         $fcUserId          = (int) $wpdb->insert_id;
         $this->fcUserIds[] = $fcUserId;
-        $this->noisyUsers[] = $wpUserId;
+        $this->noisyUsers[] = $accountId;
 
         $wpdb->insert($wpdb->prefix . 'fc_workouts', [
             'workout_name'  => 'Fixture Workout',
@@ -131,7 +131,7 @@ abstract class WorkoutFixtureCase extends IntegrationTestCase
         ]);
 
         return [
-            'wp_user_id'   => $wpUserId,
+            'account_id'   => $accountId,
             'fc_user_id'   => $fcUserId,
             'workout_id'   => $workoutId,
             'exercise_ids' => $exerciseIds,

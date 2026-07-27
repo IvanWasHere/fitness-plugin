@@ -3,6 +3,7 @@
 namespace FitnessClub\Tests\Integration;
 
 use FitnessClub\Database\Seeders\DemoSeeder;
+use FitnessClub\Auth\AccountRepository;
 use FitnessClub\Support\Guard;
 use PHPUnit\Framework\TestCase;
 
@@ -29,30 +30,30 @@ final class GuardTest extends TestCase
 
     public function testAssignedTrainerCoachesClient(): void
     {
-        $this->assertTrue(Guard::trainerCoachesClient($this->wpId('sarah.chen'), $this->userId('alex.morgan')));
+        $this->assertTrue(Guard::trainerCoachesClient($this->accountIdFor('sarah.chen'), $this->userId('alex.morgan')));
     }
 
     public function testSecondTrainerAlsoCoachesSharedClient(): void
     {
         // The heart of Q3/Q13: Alex's OTHER trainer is equally a coach for reads.
-        $this->assertTrue(Guard::trainerCoachesClient($this->wpId('mike.torres'), $this->userId('alex.morgan')));
+        $this->assertTrue(Guard::trainerCoachesClient($this->accountIdFor('mike.torres'), $this->userId('alex.morgan')));
     }
 
     public function testUnrelatedTrainerDoesNotCoachClient(): void
     {
-        $this->assertFalse(Guard::trainerCoachesClient($this->wpId('lisa.park'), $this->userId('alex.morgan')));
+        $this->assertFalse(Guard::trainerCoachesClient($this->accountIdFor('lisa.park'), $this->userId('alex.morgan')));
     }
 
     public function testDeclinedLinkDoesNotGrantCoaching(): void
     {
         // Sam declined David in the seed; a declined request is not an assignment.
-        $this->assertFalse(Guard::trainerCoachesClient($this->wpId('david.kim'), $this->userId('sam.wilson')));
+        $this->assertFalse(Guard::trainerCoachesClient($this->accountIdFor('david.kim'), $this->userId('sam.wilson')));
     }
 
     public function testPendingLinkDoesNotGrantCoaching(): void
     {
         // Taylor has a pending request to David; pending is not active.
-        $this->assertFalse(Guard::trainerCoachesClient($this->wpId('david.kim'), $this->userId('taylor.brooks')));
+        $this->assertFalse(Guard::trainerCoachesClient($this->accountIdFor('david.kim'), $this->userId('taylor.brooks')));
     }
 
     // -------------------------------------------------------- write guard (Q13)
@@ -60,7 +61,7 @@ final class GuardTest extends TestCase
     public function testAssigningTrainerCanWriteOwnWorkout(): void
     {
         $this->assertTrue(Guard::trainerAssignedResource(
-            $this->wpId('sarah.chen'),
+            $this->accountIdFor('sarah.chen'),
             'workout',
             $this->workoutId('upper-body-power')
         ));
@@ -70,7 +71,7 @@ final class GuardTest extends TestCase
     {
         // Mike coaches Alex too (can READ), but did NOT author Upper Body Power, so
         // he must not WRITE it. The exact Q13 boundary.
-        $mike    = $this->wpId('mike.torres');
+        $mike    = $this->accountIdFor('mike.torres');
         $workout = $this->workoutId('upper-body-power');
 
         $this->assertTrue(
@@ -85,26 +86,26 @@ final class GuardTest extends TestCase
 
     public function testWriteGuardRejectsUnknownResourceType(): void
     {
-        $this->assertFalse(Guard::trainerAssignedResource($this->wpId('sarah.chen'), 'not_a_real_type', 1));
+        $this->assertFalse(Guard::trainerAssignedResource($this->accountIdFor('sarah.chen'), 'not_a_real_type', 1));
     }
 
     // ------------------------------------------------------------ owns session
 
     public function testUserOwnsOwnSession(): void
     {
-        $this->assertTrue(Guard::ownsSession($this->wpId('alex.morgan'), $this->alexSessionId()));
+        $this->assertTrue(Guard::ownsSession($this->accountIdFor('alex.morgan'), $this->alexSessionId()));
     }
 
     public function testOtherUserDoesNotOwnSession(): void
     {
-        $this->assertFalse(Guard::ownsSession($this->wpId('sam.wilson'), $this->alexSessionId()));
+        $this->assertFalse(Guard::ownsSession($this->accountIdFor('sam.wilson'), $this->alexSessionId()));
     }
 
     public function testTrainerIsNotSessionOwner(): void
     {
         // ownsSession is a USER ownership check; a trainer coaching Alex is not the
         // owner of the session even though a trainer endpoint may read it. Never conflate.
-        $this->assertFalse(Guard::ownsSession($this->wpId('sarah.chen'), $this->alexSessionId()));
+        $this->assertFalse(Guard::ownsSession($this->accountIdFor('sarah.chen'), $this->alexSessionId()));
     }
 
     // -------------------------------------------------------------- owns thread
@@ -112,16 +113,16 @@ final class GuardTest extends TestCase
     public function testBothPartiesParticipateInThread(): void
     {
         $thread = $this->alexSarahThreadId();
-        $this->assertTrue(Guard::participatesInThread($this->wpId('alex.morgan'), $thread));
-        $this->assertTrue(Guard::participatesInThread($this->wpId('sarah.chen'), $thread));
+        $this->assertTrue(Guard::participatesInThread($this->accountIdFor('alex.morgan'), $thread));
+        $this->assertTrue(Guard::participatesInThread($this->accountIdFor('sarah.chen'), $thread));
     }
 
     public function testOutsiderDoesNotParticipateInThread(): void
     {
         $thread = $this->alexSarahThreadId();
-        $this->assertFalse(Guard::participatesInThread($this->wpId('sam.wilson'), $thread));
+        $this->assertFalse(Guard::participatesInThread($this->accountIdFor('sam.wilson'), $thread));
         $this->assertFalse(
-            Guard::participatesInThread($this->wpId('mike.torres'), $thread),
+            Guard::participatesInThread($this->accountIdFor('mike.torres'), $thread),
             "Alex's other trainer is not a party to the Sarah thread."
         );
     }
@@ -131,8 +132,8 @@ final class GuardTest extends TestCase
     public function testUserOwnsResourceMapping(): void
     {
         $session = $this->alexSessionId();
-        $this->assertTrue(Guard::userOwnsResource($this->wpId('alex.morgan'), 'session', $session));
-        $this->assertFalse(Guard::userOwnsResource($this->wpId('alex.morgan'), 'unknown_type', $session));
+        $this->assertTrue(Guard::userOwnsResource($this->accountIdFor('alex.morgan'), 'session', $session));
+        $this->assertFalse(Guard::userOwnsResource($this->accountIdFor('alex.morgan'), 'unknown_type', $session));
     }
 
     /**
@@ -142,7 +143,7 @@ final class GuardTest extends TestCase
      */
     public function testGuardsRejectBadIds(int $id): void
     {
-        $wp = $this->wpId('sarah.chen');
+        $wp = $this->accountIdFor('sarah.chen');
 
         $this->assertFalse(Guard::trainerCoachesClient($wp, $id));
         $this->assertFalse(Guard::trainerAssignedResource($wp, 'workout', $id));
@@ -159,7 +160,7 @@ final class GuardTest extends TestCase
         return ['zero' => [0], 'negative' => [-1], 'nonexistent' => [99999999]];
     }
 
-    public function testResolversReturnNullForUnknownWpUser(): void
+    public function testResolversReturnNullForUnknownAccount(): void
     {
         $this->assertNull(Guard::userId(99999999));
         $this->assertNull(Guard::trainerId(99999999));
@@ -168,12 +169,12 @@ final class GuardTest extends TestCase
 
     // ------------------------------------------------------------------ helpers
 
-    private function wpId(string $login): int
+    private function accountIdFor(string $login): int
     {
-        $user = get_user_by('login', $login);
-        $this->assertNotFalse($user, "Seeded user '{$login}' is missing.");
+        $account = (new AccountRepository())->findByIdentifier($login);
+        $this->assertNotNull($account, "Seeded account '{$login}' is missing.");
 
-        return (int) $user->ID;
+        return $account->id;
     }
 
     private function userId(string $login): int
@@ -181,8 +182,8 @@ final class GuardTest extends TestCase
         global $wpdb;
 
         return (int) $wpdb->get_var($wpdb->prepare(
-            "SELECT id FROM {$wpdb->prefix}fc_users WHERE wp_user_id = %d",
-            $this->wpId($login)
+            "SELECT id FROM {$wpdb->prefix}fc_users WHERE account_id = %d",
+            $this->accountIdFor($login)
         ));
     }
 
@@ -191,8 +192,8 @@ final class GuardTest extends TestCase
         global $wpdb;
 
         return (int) $wpdb->get_var($wpdb->prepare(
-            "SELECT id FROM {$wpdb->prefix}fc_trainers WHERE wp_user_id = %d",
-            $this->wpId($login)
+            "SELECT id FROM {$wpdb->prefix}fc_trainers WHERE account_id = %d",
+            $this->accountIdFor($login)
         ));
     }
 

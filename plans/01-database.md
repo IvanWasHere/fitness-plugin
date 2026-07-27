@@ -24,7 +24,7 @@ with what the two prototypes actually read and write.
 | `wn_messages` | `fc_messages` | +attachments, +thread_id |
 | — | `fc_message_threads` | **new** — conversation list needs a parent |
 | `wn_support_tickets` | `fc_tickets` | assigned_to → WP user, not trainer |
-| `wn_ticket_replies` | `fc_ticket_replies` | author_wp_user_id, single column |
+| `wn_ticket_replies` | `fc_ticket_replies` | author_account_id, single column |
 | `wn_payments` | `fc_payments` | +currency, +gateway |
 | `wn_food_plans` | `fc_food_plans` | unchanged |
 | `wn_food_plan_meals` | `fc_food_plan_meals` | unchanged |
@@ -40,9 +40,19 @@ with what the two prototypes actually read and write.
 1. **`BIGINT(20) UNSIGNED` for every id and FK.** The spec uses `INT`, but WP's
    `wp_users.ID` is `BIGINT(20) UNSIGNED`; `INT` FKs to it break on large installs
    and produce type-mismatch join penalties.
-2. **`wp_user_id` is the identity anchor.** `fc_users.id` is an internal surrogate;
-   never expose it as "the user id" in the API — always resolve through
-   `wp_user_id` so WP's user management stays authoritative.
+2. **`account_id` is the identity anchor.** `fc_users.id` is an internal
+   surrogate; never expose it as "the user id" in the API — always resolve
+   through `account_id`.
+
+   > **Changed 2026-07-27.** This used to read `account_id`, "so WP's user
+   > management stays authoritative". It is not: the plugin owns its own
+   > credentials in **`fc_accounts`**, and a WordPress administrator has no
+   > access to the app without an account of their own. Every `*_account_id`
+   > column across the schema became `*_account_id`, which also turned the
+   > provenance columns (`actor_*`, `assigned_by_*`, `last_edited_by_*`) from
+   > polymorphic references to "some WordPress user" into plain references to a
+   > single table. See the identity tables below and the W1.2R build note in
+   > [08](08-roadmap.md).
 3. **Soft-delete nothing except payments and sessions.** GDPR erasure is simpler
    with hard deletes + `ON DELETE CASCADE`; financial records get
    `status='refunded'` instead of deletion.
@@ -66,10 +76,10 @@ return new class extends Migration {
   public function up() {
     $this->create('fc_users', "(
   id bigint(20) unsigned NOT NULL auto_increment,
-  wp_user_id bigint(20) unsigned NOT NULL,
+  account_id bigint(20) unsigned NOT NULL,
   ...
   PRIMARY KEY  (id),
-  UNIQUE KEY uq_wp_user (wp_user_id)
+  UNIQUE KEY uq_account (account_id)
     ) {$this->charsetCollate};");
 
     $this->engine('fc_users');               // dbDelta sets no storage engine
@@ -124,11 +134,79 @@ run (idempotent), zero SQL errors.
 
 ### Identity & relationships
 
-**`fc_users`** — profile extension of a WP user.
+**`fc_accounts`** — **the identity anchor.** One table for all three roles, which
+is what lets every provenance column elsewhere (`actor_account_id`,
+`assigned_by_account_id`, `last_edited_by_account_id`, …) reference a single id
+space instead of pointing vaguely at "some WordPress user".
 
 ```
 id                    BIGINT UNSIGNED PK
-wp_user_id            BIGINT UNSIGNED  UNIQUE, NOT NULL
+login                 VARCHAR(60)   UNIQUE, NOT NULL
+email                 VARCHAR(190)  NULL           -- nullable: a bootstrapped
+email_canonical       VARCHAR(190)  UNIQUE, NULL   --   admin has no address yet
+password_hash         VARCHAR(255)  NOT NULL       -- bcrypt, SHA-384 pre-hashed
+display_name          VARCHAR(100)
+role                  VARCHAR(20)   'user'|'trainer'|'admin'
+extra_caps            LONGTEXT NULL                -- per-account grants, JSON
+status                VARCHAR(20)   'active'|'pending'|'suspended'|'deleted'
+locale, timezone, avatar_url
+password_changed_at, failed_login_count, locked_until, last_login_at
+created_at, updated_at
+UNIQUE (login), UNIQUE (email_canonical), KEY (role, status)
+```
+
+`email_canonical` (lowercased) carries the uniqueness rather than `email`: the
+default collation is case-insensitive, but collation is a per-install variable,
+and an install running `_bin` would accept `Ivan@x.com` and `ivan@x.com` as two
+accounts. `varchar(190)` on the indexed strings for the utf8mb4 index limit.
+
+**Accounts are never hard-deleted.** A dozen tables reference one as provenance,
+so `DELETE` either orphans audit history or cascades a person's whole record
+away. `status='deleted'` is the tombstone, and `fc_users.account_id` /
+`fc_trainers.account_id` use `ON DELETE RESTRICT` to make that structural.
+
+**`fc_sessions`** — server-side sessions for the plugin's own cookie.
+
+```
+id, account_id FK CASCADE,
+selector CHAR(32) UNIQUE, token_hash CHAR(64), csrf_hash CHAR(64),
+remember TINYINT, ip_hash, user_agent,
+issued_at, last_seen_at, expires_at, absolute_expires_at, revoked_at
+KEY (account_id, expires_at), KEY (expires_at)
+```
+
+Split token: the cookie is `{selector}.{verifier}`, the row is found by the
+indexed public selector, and the verifier is compared against `token_hash` with
+`hash_equals`. The raw token is never stored, and `token_hash` is a plain
+SHA-256 rather than bcrypt — the input is already 256 bits of CSPRNG output, so
+a slow KDF would tax every request for nothing.
+
+Two expiries: `expires_at` slides on activity, `absolute_expires_at` never
+moves. Without the absolute cap a stolen cookie on an app that polls stays valid
+forever, because the theft keeps refreshing it.
+
+**`fc_account_tokens`** — password reset, invitation, email verification.
+
+```
+id, account_id FK CASCADE, purpose VARCHAR(32),
+selector CHAR(32) UNIQUE, token_hash CHAR(64),
+requested_ip_hash, expires_at, used_at, created_at
+KEY (account_id, purpose, used_at), KEY (expires_at)
+```
+
+Single use is enforced by a conditional `UPDATE … WHERE used_at IS NULL` with
+the affected-row count checked — never by reading the row and then writing it. A
+mail client that prefetches links plus the human clicking one is two concurrent
+redemptions, and the read-then-write version lets both through.
+
+**`fc_users`** — the member profile. An account is *who you are*; this is *what
+you are as a member*. Trainers and administrators have accounts and no row here,
+which is why member endpoints answer `fc_no_member_profile` rather than
+inventing an empty profile.
+
+```
+id                    BIGINT UNSIGNED PK
+account_id            BIGINT UNSIGNED  UNIQUE, NOT NULL
 display_name          VARCHAR(100)
 phone                 VARCHAR(32)
 avatar_url            VARCHAR(500)
@@ -147,7 +225,7 @@ timezone              VARCHAR(64)
 locale                VARCHAR(10)
 onboarded_at          DATETIME NULL
 created_at updated_at DATETIME
-KEY (wp_user_id)
+KEY (account_id)
 ```
 
 `weight_kg` is a deliberate denormalisation: the dashboard reads it on every load
@@ -157,7 +235,7 @@ and `MAX(record_date)` on `fc_health_stats` would be a subquery per request.
 **`fc_trainers`**
 
 ```
-id, wp_user_id UNIQUE, display_name, bio TEXT, specialization VARCHAR(255),
+id, account_id UNIQUE, display_name, bio TEXT, specialization VARCHAR(255),
 avatar_url, phone,
 hourly_rate DECIMAL(10,2),    -- DISPLAY ONLY (Q2). Never used in any calculation.
 currency CHAR(3) DEFAULT 'USD',
@@ -181,7 +259,7 @@ balance, no ledger — trainer revenue *attribution* is a report over
 `fc_subscriptions.trainer_id`, not a stored figure.
 
 Prototype shows an `online` boolean and a `clients` count. Neither is stored:
-online = `get_user_meta(wp_user_id,'fc_last_seen')` within 5 min (heartbeat);
+online = `fc_sessions.last_seen_at` within 5 min;
 client count = `COUNT(*)` on `fc_user_trainers WHERE status='active'`. Storing
 either invites permanent drift.
 
@@ -195,7 +273,7 @@ request_message VARCHAR(500) NULL,     -- NEW (Q4)
 responded_at DATETIME NULL,            -- NEW (Q4)
 decline_reason VARCHAR(255) NULL,      -- NEW (Q4)
 assigned_date DATE NULL, ended_date DATE NULL,
-assigned_by_wp_user_id BIGINT UNSIGNED NULL,   -- set only on admin override
+assigned_by_account_id BIGINT UNSIGNED NULL,   -- set only on admin override
 is_primary TINYINT(1) DEFAULT 0,       -- NEW (Q3): at most one per user
 status ENUM('pending','active','inactive','declined','withdrawn') DEFAULT 'pending',
 created_at, updated_at
@@ -210,7 +288,7 @@ trainer-scoped query joins it. Index accordingly.
 (`status='pending'`), the trainer accepts (`active`) or declines (`declined`);
 a user may withdraw a pending request (`withdrawn`). Admins can still create an
 `active` row directly as an override, which is the only case where
-`assigned_by_wp_user_id` is set. `declined`/`withdrawn` are deliberately distinct
+`assigned_by_account_id` is set. `declined`/`withdrawn` are deliberately distinct
 from `inactive` (a real relationship that ended) — collapsing them loses the
 ability to stop re-suggesting a trainer who already said no.
 
@@ -372,7 +450,7 @@ means the UI cannot label it and analytics cannot aggregate it.
 **`fc_user_workouts`** — NEW. Assignment + progress.
 
 ```
-id, user_id FK, workout_id FK, assigned_by_wp_user_id BIGINT NULL,
+id, user_id FK, workout_id FK, assigned_by_account_id BIGINT NULL,
 assigned_date DATE, scheduled_for DATE NULL,
 progress_percentage DECIMAL(5,2) DEFAULT 0,   -- the card's progress bar
 last_session_id BIGINT UNSIGNED NULL,
@@ -464,7 +542,7 @@ calories INT, protein_g carbs_g fat_g DECIMAL(6,2),
 fiber_g sugar_g sodium_mg DECIMAL(7,2) NULL,
 barcode VARCHAR(32) NULL,           -- §12/prototype "Scan Barcode"
 source ENUM('system','trainer','user') DEFAULT 'system',
-created_by_wp_user_id BIGINT NULL, is_verified TINYINT(1) DEFAULT 0,
+created_by_account_id BIGINT NULL, is_verified TINYINT(1) DEFAULT 0,
 created_at, updated_at
 KEY (category), KEY (barcode), FULLTEXT KEY ft_name (name, brand)
 ```
@@ -531,13 +609,13 @@ energy_score TINYINT NULL,      -- 1..10  (spec had ENUM; prototype uses 1-10)
 stress_score TINYINT NULL,      -- 1..5   kept, numeric
 notes TEXT,
 source ENUM('manual','device','trainer','admin') DEFAULT 'manual',   -- 'admin' per Q10
-last_edited_by_wp_user_id BIGINT UNSIGNED NULL,                       -- NEW (Q10)
+last_edited_by_account_id BIGINT UNSIGNED NULL,                       -- NEW (Q10)
 created_at, updated_at
 UNIQUE KEY uq_user_date (user_id, record_date)
 KEY (user_id, record_date)
 ```
 
-`source='admin'` and `last_edited_by_wp_user_id` exist because administrators may
+`source='admin'` and `last_edited_by_account_id` exist because administrators may
 edit these rows (Q10, confirmed). Without them a staff correction is
 indistinguishable from a self-reported reading, and the user's chart changes with
 no visible cause. Same two columns on `fc_nutrition_logs`. Every such edit also
@@ -586,7 +664,7 @@ subquery over the whole message table per conversation, per poll, per user.
 **`fc_messages`**
 
 ```
-id, thread_id FK, sender_wp_user_id BIGINT UNSIGNED,
+id, thread_id FK, sender_account_id BIGINT UNSIGNED,
 direction ENUM('user_to_trainer','trainer_to_user'),
 message TEXT, attachments JSON NULL,     -- NEW: prototype renders an inline image
 is_read TINYINT(1) DEFAULT 0, read_at DATETIME NULL,
@@ -594,49 +672,49 @@ created_at
 KEY (thread_id, created_at), KEY (thread_id, is_read)
 ```
 
-`sender_wp_user_id` rather than the spec's `user_id`+`trainer_id`+`direction` trio:
+`sender_account_id` rather than the spec's `user_id`+`trainer_id`+`direction` trio:
 one authoritative sender, direction kept as a denormalised convenience for the
 quota query.
 
 **`fc_notifications`** — NEW. Nothing in the spec, an entire screen in the prototype.
 
 ```
-id, wp_user_id BIGINT UNSIGNED,
+id, account_id BIGINT UNSIGNED,
 type ENUM('workout','message','achievement','subscription','system','progress','support'),
 title VARCHAR(255), body TEXT, icon VARCHAR(64), color VARCHAR(32),
 action_url VARCHAR(500) NULL, meta JSON NULL,
 is_read TINYINT(1) DEFAULT 0, read_at DATETIME NULL,
 created_at
-KEY (wp_user_id, is_read, created_at)
+KEY (account_id, is_read, created_at)
 ```
 
 **`fc_activity_log`** — NEW. "Recent Activity" feed + §15.2 audit requirement.
 
 ```
-id, wp_user_id BIGINT UNSIGNED, actor_wp_user_id BIGINT UNSIGNED NULL,
+id, account_id BIGINT UNSIGNED, actor_account_id BIGINT UNSIGNED NULL,
 type VARCHAR(48),                    -- workout.completed, nutrition.logged, health.updated…
 subject_type VARCHAR(48), subject_id BIGINT UNSIGNED NULL,
 title VARCHAR(255), detail VARCHAR(255), meta JSON,
 created_at
-KEY (wp_user_id, created_at), KEY (type, created_at)
+KEY (account_id, created_at), KEY (type, created_at)
 ```
 
-Doubles as the audit trail for sensitive admin actions (`actor_wp_user_id` = who
-did it, `wp_user_id` = to whom). Retention: prune > 12 months via cron.
+Doubles as the audit trail for sensitive admin actions (`actor_account_id` = who
+did it, `account_id` = to whom). Retention: prune > 12 months via cron.
 
 ### Support
 
 **`fc_tickets`**
 
 ```
-id, user_wp_user_id BIGINT UNSIGNED, subject VARCHAR(255), message TEXT,
+id, user_account_id BIGINT UNSIGNED, subject VARCHAR(255), message TEXT,
 category ENUM('billing','technical','general','training','other'),
 priority ENUM('low','medium','high','urgent') DEFAULT 'medium',
 status ENUM('open','in_progress','waiting_user','resolved','closed') DEFAULT 'open',
-assigned_to_wp_user_id BIGINT UNSIGNED NULL,     -- admin OR trainer, so WP id not trainer id
+assigned_to_account_id BIGINT UNSIGNED NULL,     -- admin OR trainer, so WP id not trainer id
 first_response_at resolved_at DATETIME NULL,     -- SLA reporting
 created_at, updated_at
-KEY (status, priority), KEY (assigned_to_wp_user_id, status), KEY (user_wp_user_id)
+KEY (status, priority), KEY (assigned_to_account_id, status), KEY (user_account_id)
 ```
 
 Spec's `assigned_to` FKs to `wn_trainers`, which makes assigning a ticket to an
@@ -645,7 +723,7 @@ administrator impossible — the exact case §13 requires.
 **`fc_ticket_replies`**
 
 ```
-id, ticket_id FK, author_wp_user_id BIGINT UNSIGNED,
+id, ticket_id FK, author_account_id BIGINT UNSIGNED,
 author_role ENUM('user','trainer','admin'),
 message TEXT, attachments JSON NULL,
 is_internal_note TINYINT(1) DEFAULT 0,     -- staff-only, never returned to the user

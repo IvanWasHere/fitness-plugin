@@ -33,7 +33,7 @@ final class WorkoutController extends MemberController
      */
     public function index(WP_REST_Request $request): WP_REST_Response|WP_Error
     {
-        return $this->asMember(function (int $wpUserId, int $fcUserId) use ($request): WP_REST_Response {
+        return $this->asMember(function (int $accountId, int $fcUserId) use ($request): WP_REST_Response {
             return $this->collection($this->workouts->listForUser($fcUserId, [
                 'status'     => $request->get_param('status'),
                 'difficulty' => $request->get_param('difficulty'),
@@ -50,7 +50,7 @@ final class WorkoutController extends MemberController
      */
     public function show(WP_REST_Request $request): WP_REST_Response|WP_Error
     {
-        return $this->asMember(function (int $wpUserId, int $fcUserId) use ($request): array {
+        return $this->asMember(function (int $accountId, int $fcUserId) use ($request): array {
             $workout = $this->workouts->detailForUser($fcUserId, (int) $request->get_param('id'));
 
             // Video is a paid feature; the workout is still readable without it,
@@ -74,7 +74,7 @@ final class WorkoutController extends MemberController
      */
     public function exercise(WP_REST_Request $request): WP_REST_Response|WP_Error
     {
-        return $this->asMember(function (int $wpUserId, int $fcUserId) use ($request): array {
+        return $this->asMember(function (int $accountId, int $fcUserId) use ($request): array {
             $exercise = $this->workouts->exerciseForUser($fcUserId, (int) $request->get_param('id'));
 
             if (!$this->entitlements()->can($fcUserId, 'has_video_workouts')) {

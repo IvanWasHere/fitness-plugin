@@ -33,7 +33,7 @@ return new class extends Migration {
   decline_reason varchar(255) DEFAULT NULL,
   assigned_date date DEFAULT NULL,
   ended_date date DEFAULT NULL,
-  assigned_by_wp_user_id bigint(20) unsigned DEFAULT NULL,
+  assigned_by_account_id bigint(20) unsigned DEFAULT NULL,
   created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY  (id),

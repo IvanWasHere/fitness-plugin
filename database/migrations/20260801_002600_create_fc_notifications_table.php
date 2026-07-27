@@ -10,7 +10,8 @@ if (!defined('ABSPATH')) {
  * Table: fc_notifications
  *
  * An entire screen in the user prototype with nothing behind it in the original
- * specification. Keyed on wp_user_id so trainers and admins can be notified too.
+ * specification. Keyed on account_id rather than on fc_users.id, so trainers and
+ * administrators — who have accounts but no member profile — can be notified too.
  *
  * @see plans/01-database.md
  */
@@ -21,7 +22,7 @@ return new class extends Migration {
             'fc_notifications',
             "(
   id bigint(20) unsigned NOT NULL auto_increment,
-  wp_user_id bigint(20) unsigned NOT NULL,
+  account_id bigint(20) unsigned NOT NULL,
   type varchar(32) NOT NULL DEFAULT 'system',
   title varchar(255) NOT NULL DEFAULT '',
   body text DEFAULT NULL,
@@ -33,7 +34,7 @@ return new class extends Migration {
   read_at datetime DEFAULT NULL,
   created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY  (id),
-  KEY idx_inbox (wp_user_id,is_read,created_at)
+  KEY idx_inbox (account_id,is_read,created_at)
             ) {$this->charsetCollate};"
         );
     }

@@ -108,6 +108,49 @@ return [
         'activity_retention_months' => 12,
     ],
 
+    /*
+    | Plugin-owned identity. The plugin does not use WordPress accounts: a
+    | WordPress administrator has no access to the app without an fc_accounts
+    | row. See plugin/Auth/.
+    */
+    'auth' => [
+        // Idle timeout, and the cap that never slides. Without the absolute
+        // cap, a stolen cookie on an app that polls stays valid forever —
+        // the theft keeps refreshing it.
+        'idle_minutes'           => 720,
+        'absolute_hours'         => 24,
+        'remember_idle_days'     => 14,
+        'remember_absolute_days' => 90,
+
+        // How rarely the idle window is slid forward. Without a floor this is a
+        // database write on every authenticated request.
+        'touch_interval_seconds' => 300,
+
+        // A reset link is a bearer credential sitting in an inbox, so it lives
+        // for an hour rather than WordPress' 24.
+        'reset_ttl_minutes' => 60,
+        'invite_ttl_hours'  => 72,
+
+        // Per-account lockout. RateLimiter throttles per IP, which is no
+        // obstacle to attempts against one account spread over many addresses.
+        'lockout_threshold' => 10,
+        'lockout_minutes'   => 15,
+
+        // bcrypt work factor. Raising it is safe: password_needs_rehash()
+        // upgrades each account on its next successful sign-in.
+        'bcrypt_cost' => 12,
+
+        // Words for generated credentials (adminFalcon / passFalcon7K3Q).
+        // Deliberately short, unambiguous and unmistakable when read aloud or
+        // copied off a screenshot.
+        'words' => [
+            'Falcon', 'Harbor', 'Cedar', 'Onyx', 'Sable', 'Quartz', 'Ember', 'Cobalt',
+            'Juniper', 'Marlin', 'Pepper', 'Ridge', 'Saffron', 'Tundra', 'Willow', 'Zephyr',
+            'Anchor', 'Bramble', 'Cinder', 'Drift', 'Fable', 'Gallop', 'Hollow', 'Iris',
+            'Kettle', 'Lantern', 'Meadow', 'Nectar', 'Orchid', 'Pilot', 'Quiver', 'Rustic',
+        ],
+    ],
+
     'defaults' => [
         'water_glass_ml' => 250,
         'water_goal_ml'  => 2000,

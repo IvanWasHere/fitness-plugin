@@ -8,7 +8,7 @@ needs it — an endpoint with no consumer does not get built.
 **Auth headers**
 
 ```
-X-WP-Nonce: <wp_create_nonce('wp_rest')>     # embedded apps (default)
+X-FC-CSRF: <token from the boot payload>      # embedded apps (default)
 Authorization: Bearer <jwt>                   # external clients only, Phase 4
 ```
 
@@ -70,7 +70,7 @@ entitlements are the merged result across all of them
 ([03](03-backend.md#merging-across-multiple-subscriptions)):
 
 ```json
-{ "user": { "id": 1, "wp_user_id": 5, "display_name": "Alex Morgan",
+{ "user": { "id": 1, "account_id": 5, "display_name": "Alex Morgan",
             "avatar_url": "…", "role": "fc_user", "timezone": "Europe/Belgrade" },
   "subscriptions": [ { "plan_name": "Pro", "status": "active", "cycle": "monthly",
                        "renews_at": "2026-08-15", "trainer_id": 1 } ],

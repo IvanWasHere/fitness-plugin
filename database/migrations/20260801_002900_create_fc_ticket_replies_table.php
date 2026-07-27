@@ -21,7 +21,7 @@ return new class extends Migration {
             "(
   id bigint(20) unsigned NOT NULL auto_increment,
   ticket_id bigint(20) unsigned NOT NULL,
-  author_wp_user_id bigint(20) unsigned NOT NULL,
+  author_account_id bigint(20) unsigned NOT NULL,
   author_role varchar(20) NOT NULL DEFAULT 'user',
   message text DEFAULT NULL,
   attachments longtext DEFAULT NULL,

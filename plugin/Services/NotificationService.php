@@ -28,7 +28,7 @@ final class NotificationService
      * @return int Row id, or 0 when suppressed by preference.
      */
     public function notify(
-        int $wpUserId,
+        int $accountId,
         string $type,
         string $title,
         string $body = '',
@@ -39,12 +39,12 @@ final class NotificationService
     ): int {
         global $wpdb;
 
-        if ($wpUserId <= 0 || !$this->wants($wpUserId, $type)) {
+        if ($accountId <= 0 || !$this->wants($accountId, $type)) {
             return 0;
         }
 
         $wpdb->insert($wpdb->prefix . 'fc_notifications', [
-            'wp_user_id' => $wpUserId,
+            'account_id' => $accountId,
             'type'       => $type,
             'title'      => mb_substr($title, 0, 255),
             'body'       => $body,
@@ -64,13 +64,13 @@ final class NotificationService
      * `notifications: { achievement: false, … }`. Absent means on — a new
      * category must not be silently muted for existing users.
      */
-    private function wants(int $wpUserId, string $type): bool
+    private function wants(int $accountId, string $type): bool
     {
         global $wpdb;
 
         $raw = $wpdb->get_var($wpdb->prepare(
-            "SELECT preferences FROM {$wpdb->prefix}fc_users WHERE wp_user_id = %d LIMIT 1",
-            $wpUserId
+            "SELECT preferences FROM {$wpdb->prefix}fc_users WHERE account_id = %d LIMIT 1",
+            $accountId
         ));
 
         if (null === $raw) {

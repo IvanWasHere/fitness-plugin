@@ -26,7 +26,7 @@ final class WorkoutApiTest extends WorkoutFixtureCase
     public function testWorkoutsListReturnsTheCallersAssignmentsWithPaginationHeaders(): void
     {
         $fixture = $this->seedMemberWithWorkout();
-        wp_set_current_user($fixture['wp_user_id']);
+        $this->signIn($fixture['account_id']);
 
         $response = $this->get('/workouts');
 
@@ -46,7 +46,7 @@ final class WorkoutApiTest extends WorkoutFixtureCase
         $mine = $this->seedMemberWithWorkout();
         $this->seedMemberWithWorkout(); // Someone else's workout, same shape.
 
-        wp_set_current_user($mine['wp_user_id']);
+        $this->signIn($mine['account_id']);
         $data = $this->get('/workouts')->get_data();
 
         $this->assertCount(1, $data['items'], 'Only my assignments.');
@@ -56,7 +56,7 @@ final class WorkoutApiTest extends WorkoutFixtureCase
     public function testWorkoutDetailIncludesOrderedExercises(): void
     {
         $fixture = $this->seedMemberWithWorkout();
-        wp_set_current_user($fixture['wp_user_id']);
+        $this->signIn($fixture['account_id']);
 
         $data = $this->get("/workouts/{$fixture['workout_id']}")->get_data();
 
@@ -71,7 +71,7 @@ final class WorkoutApiTest extends WorkoutFixtureCase
         $mine   = $this->seedMemberWithWorkout();
         $theirs = $this->seedMemberWithWorkout();
 
-        wp_set_current_user($mine['wp_user_id']);
+        $this->signIn($mine['account_id']);
         $response = $this->get("/workouts/{$theirs['workout_id']}");
 
         $this->assertSame(404, $response->get_status());
@@ -83,7 +83,7 @@ final class WorkoutApiTest extends WorkoutFixtureCase
         $mine   = $this->seedMemberWithWorkout();
         $theirs = $this->seedMemberWithWorkout();
 
-        wp_set_current_user($mine['wp_user_id']);
+        $this->signIn($mine['account_id']);
         $response = $this->get("/exercises/{$theirs['exercise_ids'][0]}");
 
         $this->assertSame(404, $response->get_status());
@@ -93,7 +93,7 @@ final class WorkoutApiTest extends WorkoutFixtureCase
     public function testVideoUrlsAreWithheldOnAPlanThatDoesNotIncludeThem(): void
     {
         $fixture = $this->seedMemberWithWorkout();
-        wp_set_current_user($fixture['wp_user_id']);
+        $this->signIn($fixture['account_id']);
 
         // The fixture member has no subscription, so the free-tier floor applies
         // and has_video_workouts is false.
@@ -110,7 +110,7 @@ final class WorkoutApiTest extends WorkoutFixtureCase
 
     public function testWorkoutsRequireASignedInMember(): void
     {
-        wp_set_current_user(0);
+        $this->signOut();
 
         $this->assertSame(401, $this->get('/workouts')->get_status());
     }
@@ -120,7 +120,7 @@ final class WorkoutApiTest extends WorkoutFixtureCase
     public function testTheSessionLifecycleOverRest(): void
     {
         $fixture = $this->seedMemberWithWorkout();
-        wp_set_current_user($fixture['wp_user_id']);
+        $this->signIn($fixture['account_id']);
 
         $idle = $this->get('/sessions/active');
         $this->assertSame(204, $idle->get_status(), 'No open session is 204, never a null body.');
@@ -172,7 +172,7 @@ final class WorkoutApiTest extends WorkoutFixtureCase
     public function testStartingASecondSessionReturns409NamingTheOpenOne(): void
     {
         $fixture = $this->seedMemberWithWorkout();
-        wp_set_current_user($fixture['wp_user_id']);
+        $this->signIn($fixture['account_id']);
 
         $first = $this->post('/sessions', ['workout_id' => $fixture['workout_id']]);
         $again = $this->post('/sessions', ['workout_id' => $fixture['workout_id']]);
@@ -189,10 +189,10 @@ final class WorkoutApiTest extends WorkoutFixtureCase
         $mine   = $this->seedMemberWithWorkout();
         $theirs = $this->seedMemberWithWorkout();
 
-        wp_set_current_user($theirs['wp_user_id']);
+        $this->signIn($theirs['account_id']);
         $sessionId = $this->post('/sessions', ['workout_id' => $theirs['workout_id']])->get_data()['id'];
 
-        wp_set_current_user($mine['wp_user_id']);
+        $this->signIn($mine['account_id']);
         $this->assertSame(404, $this->get("/sessions/{$sessionId}")->get_status());
         $this->assertSame(404, $this->post("/sessions/{$sessionId}/complete")->get_status());
     }
@@ -202,7 +202,7 @@ final class WorkoutApiTest extends WorkoutFixtureCase
         $mine   = $this->seedMemberWithWorkout();
         $theirs = $this->seedMemberWithWorkout();
 
-        wp_set_current_user($mine['wp_user_id']);
+        $this->signIn($mine['account_id']);
         $response = $this->post('/sessions', ['workout_id' => $theirs['workout_id']]);
 
         $this->assertSame(404, $response->get_status());
@@ -212,7 +212,7 @@ final class WorkoutApiTest extends WorkoutFixtureCase
     public function testSetLoggingValidatesItsArguments(): void
     {
         $fixture = $this->seedMemberWithWorkout();
-        wp_set_current_user($fixture['wp_user_id']);
+        $this->signIn($fixture['account_id']);
 
         $sessionId = $this->post('/sessions', ['workout_id' => $fixture['workout_id']])->get_data()['id'];
 
@@ -231,7 +231,7 @@ final class WorkoutApiTest extends WorkoutFixtureCase
     public function testASetWithExplicitNullMeasuresIsAccepted(): void
     {
         $fixture = $this->seedMemberWithWorkout();
-        wp_set_current_user($fixture['wp_user_id']);
+        $this->signIn($fixture['account_id']);
 
         $sessionId = $this->post('/sessions', ['workout_id' => $fixture['workout_id']])->get_data()['id'];
 
@@ -257,7 +257,7 @@ final class WorkoutApiTest extends WorkoutFixtureCase
     public function testActiveSessionAnswers204WhenNothingIsRunning(): void
     {
         $fixture = $this->seedMemberWithWorkout();
-        wp_set_current_user($fixture['wp_user_id']);
+        $this->signIn($fixture['account_id']);
 
         // A bare `null` body does not survive WP's REST serialisation — it goes
         // out as a zero-byte 200, which a client reading "empty means no
@@ -274,8 +274,13 @@ final class WorkoutApiTest extends WorkoutFixtureCase
 
     public function testAnAccountWithoutAMemberProfileIsToldSoPlainly(): void
     {
-        // A trainer has fc_access_app-adjacent capabilities but no fc_users row.
-        wp_set_current_user($this->makeUser('administrator', ['fc_access_app', 'fc_log_workouts']));
+        // An account that holds the member capabilities but has no fc_users row
+        // — a trainer granted them by hand, say. The capability gate lets it
+        // through, and the profile lookup is what refuses.
+        $this->signIn($this->makeAccount(
+            \FitnessClub\Auth\Capabilities::ROLE_TRAINER,
+            ['fc_access_app', 'fc_log_workouts']
+        ));
 
         $response = $this->get('/sessions/active');
 
@@ -305,6 +310,9 @@ final class WorkoutApiTest extends WorkoutFixtureCase
     {
         $request = new WP_REST_Request($method, '/fitnessclub/v1' . $route);
         $request->set_header('content-type', 'application/json');
+        // Every write goes through the CSRF gate now, so the harness has to
+        // carry the token exactly as the SPA does.
+        $request->set_header('X-FC-CSRF', $this->csrf());
         $request->set_body(wp_json_encode($body));
 
         return rest_get_server()->dispatch($request);

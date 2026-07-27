@@ -2,9 +2,11 @@
 
 namespace FitnessClub\Services;
 
+use FitnessClub\Auth\Account;
+use FitnessClub\Auth\Auth;
+use FitnessClub\Auth\Csrf;
 use FitnessClub\Support\AppRouter;
 use FitnessClub\Support\Guard;
-use WP_User;
 
 if (!defined('ABSPATH')) {
     exit();
@@ -15,11 +17,10 @@ if (!defined('ABSPATH')) {
  *
  * One object, two carriers:
  *
- *   - `me()`    — the body of `GET /auth/me`, re-fetched after login and on
- *                 nonce refresh.
- *   - `shell()` — the same object plus transport bits (REST root, nonce,
- *                 admin-ajax URL, branding), injected into the render shell's
- *                 `data-boot` so the SPA has everything before its first fetch.
+ *   - `me()`    — the body of `GET /auth/me`, re-fetched after login.
+ *   - `shell()` — the same object plus transport bits (REST root, CSRF token,
+ *                 branding), injected into the render shell's `data-boot` so the
+ *                 SPA has everything before its first fetch.
  *
  * Building both from one place is the point: the app must not render one thing
  * on first paint and a different thing after `/auth/me` resolves.
@@ -43,18 +44,19 @@ final class BootPresenter
      */
     public function me(): array
     {
-        $wpUser   = wp_get_current_user();
-        $loggedIn = $wpUser->exists();
-        $fcUserId = $loggedIn ? (Guard::userId((int) $wpUser->ID) ?? 0) : 0;
+        $account  = Auth::account();
+        $fcUserId = null === $account ? 0 : (Guard::userId($account->id) ?? 0);
 
         return [
-            'user'          => $loggedIn ? $this->user($wpUser, $fcUserId) : null,
+            'user'          => null === $account ? null : $this->user($account, $fcUserId),
             'subscriptions' => $fcUserId > 0 ? $this->subscriptions($fcUserId) : [],
             'trainers'      => $fcUserId > 0 ? $this->trainers($fcUserId) : [],
             'entitlements'  => $this->presentEntitlements($fcUserId),
             'theme'         => $this->theme->activeTokens(),
             'app'           => $this->app(),
-            'counts'        => $loggedIn ? $this->counts((int) $wpUser->ID, $fcUserId) : self::emptyCounts(),
+            'counts'        => null === $account
+                ? self::emptyCounts()
+                : $this->counts($account->id, $fcUserId),
         ];
     }
 
@@ -67,8 +69,12 @@ final class BootPresenter
     {
         return $this->me() + [
             'restUrl' => esc_url_raw(rest_url('fitnessclub/v1/')),
-            'ajaxUrl' => esc_url_raw(admin_url('admin-ajax.php')),
-            'nonce'   => wp_create_nonce('wp_rest'),
+            // Issued here if the visitor has none, so the login panel always has
+            // a token to present — which is what closes login CSRF. There is no
+            // `ajaxUrl` any more: it existed solely so the client could refresh
+            // an expiring WordPress nonce through admin-ajax, and this token
+            // cannot expire while its session lives.
+            'csrf'    => Csrf::ensureCookie(),
             'brand'   => (string) FitnessClub()->options->get('branding.name', 'FitForge'),
             'locale'  => determine_locale(),
             'flags'   => [
@@ -97,29 +103,33 @@ final class BootPresenter
 
     /**
      * Identity. `id` is the internal fc_users.id and is deliberately not "the
-     * user id" anywhere in the API — `wp_user_id` is the identity anchor.
+     * user id" anywhere in the API — `account_id` is the identity anchor.
      *
      * @return array<string,mixed>
      */
-    private function user(WP_User $wpUser, int $fcUserId): array
+    private function user(Account $account, int $fcUserId): array
     {
         $profile = $this->profileRow($fcUserId);
         $role    = AppRouter::currentRole();
 
         $user = [
             'id'           => $fcUserId,
-            'wp_user_id'   => (int) $wpUser->ID,
-            'display_name' => $profile['display_name'] ?: $wpUser->display_name,
-            'email'        => $wpUser->user_email,
-            'avatar_url'   => $profile['avatar_url'] ?: get_avatar_url($wpUser->ID),
+            'account_id'   => $account->id,
+            'display_name' => $profile['display_name'] ?: $account->displayName,
+            'email'        => $account->email,
+            // No get_avatar_url() fallback: Gravatar is keyed on a WordPress
+            // user's email and there is no WordPress user here. A member with no
+            // uploaded avatar gets null, and the client renders its initials
+            // placeholder — which is also one fewer third-party request per page.
+            'avatar_url'   => $profile['avatar_url'] ?: $account->avatarUrl,
             'role'         => $role,
-            'timezone'     => $profile['timezone'] ?: wp_timezone_string(),
+            'timezone'     => $profile['timezone'] ?: ($account->timezone ?: wp_timezone_string()),
             'onboarded'    => null !== $profile['onboarded_at'],
         ];
 
         if (AppRouter::ROLE_USER !== $role) {
             // The trainer SPA needs its fc_trainers.id; an admin may also coach.
-            $user['trainer_id'] = Guard::trainerId((int) $wpUser->ID) ?? 0;
+            $user['trainer_id'] = Guard::trainerId($account->id) ?? 0;
         }
 
         return $user;
@@ -213,7 +223,7 @@ final class BootPresenter
      *
      * @return array{unread_messages:int,unread_notifications:int}
      */
-    private function counts(int $wpUserId, int $fcUserId): array
+    private function counts(int $accountId, int $fcUserId): array
     {
         global $wpdb;
 
@@ -227,7 +237,7 @@ final class BootPresenter
             ));
         }
 
-        $trainerId = Guard::trainerId($wpUserId);
+        $trainerId = Guard::trainerId($accountId);
         if (null !== $trainerId) {
             $unreadMessages += (int) $wpdb->get_var($wpdb->prepare(
                 "SELECT COALESCE(SUM(trainer_unread_count), 0)
@@ -238,8 +248,8 @@ final class BootPresenter
 
         $unreadNotifications = (int) $wpdb->get_var($wpdb->prepare(
             "SELECT COUNT(*) FROM {$wpdb->prefix}fc_notifications
-              WHERE wp_user_id = %d AND is_read = 0",
-            $wpUserId
+              WHERE account_id = %d AND is_read = 0",
+            $accountId
         ));
 
         return [

@@ -55,7 +55,7 @@ final class DashboardApiTest extends WorkoutFixtureCase
     public function testDashboardReturnsEveryContractSectionForAFreshMember(): void
     {
         $fixture = $this->seedMemberWithWorkout();
-        wp_set_current_user($fixture['wp_user_id']);
+        $this->signIn($fixture['account_id']);
 
         $response = $this->get('/user/dashboard');
         $this->assertSame(200, $response->get_status());
@@ -121,7 +121,7 @@ final class DashboardApiTest extends WorkoutFixtureCase
         $this->completedSessionOn($fixture, 10, 300, 3600);
 
         $data = (new DashboardService())
-            ->forUser($fixture['wp_user_id'], $fixture['fc_user_id'], $this->today);
+            ->forUser($fixture['account_id'], $fixture['fc_user_id'], $this->today);
 
         $this->assertSame(2, $data['stats']['streak_days'], 'Today and yesterday.');
         $this->assertSame(2, $data['greeting']['streak_days'], 'Same number in both places.');
@@ -164,7 +164,7 @@ final class DashboardApiTest extends WorkoutFixtureCase
     public function testTodaysCardPrefersASessionLeftRunning(): void
     {
         $fixture = $this->seedMemberWithWorkout();
-        wp_set_current_user($fixture['wp_user_id']);
+        $this->signIn($fixture['account_id']);
 
         $started = $this->post('/sessions', ['workout_id' => $fixture['workout_id']]);
         $this->assertSame(201, $started->get_status());
@@ -179,7 +179,7 @@ final class DashboardApiTest extends WorkoutFixtureCase
     public function testTheSecondReadIsCachedAndCompletingASessionDropsIt(): void
     {
         $fixture = $this->seedMemberWithWorkout();
-        wp_set_current_user($fixture['wp_user_id']);
+        $this->signIn($fixture['account_id']);
 
         $this->assertSame('miss', $this->get('/user/dashboard')->get_headers()['X-FC-Cache']);
         $this->assertSame('hit', $this->get('/user/dashboard')->get_headers()['X-FC-Cache']);
@@ -197,7 +197,7 @@ final class DashboardApiTest extends WorkoutFixtureCase
     public function testRefreshBypassesTheCache(): void
     {
         $fixture = $this->seedMemberWithWorkout();
-        wp_set_current_user($fixture['wp_user_id']);
+        $this->signIn($fixture['account_id']);
 
         $this->get('/user/dashboard');
 
@@ -215,7 +215,7 @@ final class DashboardApiTest extends WorkoutFixtureCase
 
         $this->completedSessionOn($theirs, 0, 500);
 
-        wp_set_current_user($mine['wp_user_id']);
+        $this->signIn($mine['account_id']);
         $data = $this->get('/user/dashboard')->get_data();
 
         $this->assertSame(0, $data['stats']['calories_burned_today']);
@@ -225,7 +225,7 @@ final class DashboardApiTest extends WorkoutFixtureCase
 
     public function testSignedOutIsRefused(): void
     {
-        wp_set_current_user(0);
+        $this->signOut();
 
         $response = $this->get('/user/dashboard');
 
@@ -296,6 +296,9 @@ final class DashboardApiTest extends WorkoutFixtureCase
     private function post(string $route, array $body = []): WP_REST_Response
     {
         $request = new WP_REST_Request('POST', '/fitnessclub/v1' . $route);
+        // Every write goes through the CSRF gate now.
+        $request->set_header('X-FC-CSRF', $this->csrf());
+
         foreach ($body as $key => $value) {
             $request->set_param($key, $value);
         }

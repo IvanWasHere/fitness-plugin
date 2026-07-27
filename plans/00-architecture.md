@@ -142,7 +142,7 @@ rename; see [wpBones-native conventions](#wpbones-native-conventions)).
 
 | Client | Mechanism |
 |--------|-----------|
-| User / Trainer / Admin SPA (front-end, all at `/{base}`, role-selected — [D9](#d9--front-end-routing-configurable-app-url)) | WP cookie + `X-WP-Nonce` |
+| User / Trainer / Admin SPA (front-end, all at `/{base}`, role-selected — [D9](#d9--front-end-routing-configurable-app-url)) | **Plugin session cookie + `X-FC-CSRF`** (see D4a) |
 | Future mobile app / 3rd party | JWT bearer, `POST /auth/token` |
 
 `plan.md` §14 specifies JWT for everything. For a browser that already holds a
@@ -150,6 +150,39 @@ valid WP session that means storing a second credential in JS-reachable storage 
 strictly worse. JWT is built in Phase 4 for the mobile surface the spec
 anticipates (§17), gated behind a settings toggle, off by default. Details and
 threat notes in [03-backend.md](03-backend.md#authentication).
+
+### D4a — Identity: the plugin owns its accounts (supersedes half of D4), 2026-07-27
+
+**A WordPress administrator is not a FitnessClub administrator.** Identity lives
+in **`fc_accounts`**, with the plugin's own password storage, its own session
+cookie and its own CSRF token. Someone signed in to wp-admin who has no plugin
+account sees the login panel at `/{base}` like any other visitor, and gets a 401
+from every endpoint under `/wp-json/fitnessclub/v1/`.
+
+What this replaced, and why each piece went:
+
+| Was | Now | Why |
+|---|---|---|
+| `wp_signon` + WP auth cookie | `fc_sessions`, split-token cookie | The premise: WP identity grants nothing here |
+| `wp_rest` nonce, `X-WP-Nonce` | `X-FC-CSRF`, session-bound double-submit | A nonce expires on its own clock *while the session is still valid* — the app silently stopped saving. This token's life **is** the session's |
+| `Ajax\NonceProvider` refresh via admin-ajax | *(deleted)* | Nothing left to refresh |
+| `AuthServiceProvider` cookie bridge | *(deleted)* | Existed only because `wp_create_nonce()` reads `$_COOKIE` and `wp_set_auth_cookie()` does not populate it |
+| WP roles `fc_user`/`fc_trainer` + caps on `administrator` | `Auth\Capabilities` map on `fc_accounts.role` | A second, stale authority that granted nothing but read as if it did |
+| `wp_hash_password()` | `password_hash()`, bcrypt cost 12 | It is a **pluggable** function: any plugin or mu-plugin may redefine it, silently changing the hashing of the table we own |
+
+**What stays WordPress-gated**, because it cannot be otherwise: wp-admin pages
+(`admin.php` calls `auth_redirect()` before any plugin callback runs), plugin
+activation and uninstall, and WP-CLI. `config/menus.php` screens are WordPress
+pages and keep `manage_options`.
+
+**The cost, stated plainly.** Password storage and session security are now this
+plugin's responsibility rather than WordPress'. Two consequences worth carrying
+forward: the `/{base}` shell embeds identity *and* the CSRF token, so it must be
+excluded from any full-page cache (a cookie named `fc_session_*` matches no
+stock bypass rule — see `RewriteServiceProvider`); and a site that loses its only
+administrator password has no route back except
+`wp fitnessclub account reset-password`, which is why that command is not
+optional.
 
 ### D5 — Data access: wpBones `DB::table()` for the simple path, raw `$wpdb` for joins
 

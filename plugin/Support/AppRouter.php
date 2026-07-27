@@ -2,17 +2,23 @@
 
 namespace FitnessClub\Support;
 
+use FitnessClub\Auth\Auth;
+use FitnessClub\Auth\Capabilities;
+
 if (!defined('ABSPATH')) {
     exit();
 }
 
 /**
  * Resolves which of the three SPAs (D10) the backend serves at the configured
- * URL (D9), from the logged-in user's role.
+ * URL (D9), from the signed-in **account's** role.
  *
- * "The appropriate one is shown when they log in." Precedence for the rare
- * multi-role account is admin > trainer > user (Q17c). Unauthenticated visitors
- * get the user SPA, which shows the login screen.
+ * "The appropriate one is shown when they log in." Precedence is admin >
+ * trainer > user (Q17c), though it is now nearly decorative: `fc_accounts.role`
+ * is single-valued, where a WordPress user could hold several roles at once.
+ *
+ * Anyone without a plugin account — including a WordPress administrator sitting
+ * in wp-admin — gets the user SPA, which shows the login screen.
  */
 final class AppRouter
 {
@@ -20,9 +26,11 @@ final class AppRouter
     public const SPA_TRAINER = 'trainer';
     public const SPA_ADMIN   = 'admin';
 
-    public const ROLE_ADMIN   = 'administrator';
-    public const ROLE_TRAINER = 'fc_trainer';
-    public const ROLE_USER    = 'fc_user';
+    // The plugin's own role names, not WordPress role slugs. These travel to the
+    // client in the boot payload, so they are the vocabulary the SPAs speak.
+    public const ROLE_ADMIN   = Capabilities::ROLE_ADMIN;
+    public const ROLE_TRAINER = Capabilities::ROLE_TRAINER;
+    public const ROLE_USER    = Capabilities::ROLE_USER;
 
     /**
      * The SPA for the current user.
@@ -39,21 +47,22 @@ final class AppRouter
      */
     public static function currentRole(): string
     {
-        if (!is_user_logged_in()) {
+        $account = Auth::account();
+
+        // No plugin account, no app — and that includes a WordPress
+        // administrator with a live wp-admin session. `manage_options` used to
+        // resolve straight to the admin SPA here; it now means nothing, which is
+        // the whole point of the separation.
+        if (null === $account) {
             return self::ROLE_USER;
         }
 
-        // Admin wins — managing the platform outranks coaching or training.
-        if (current_user_can('manage_options')) {
-            return self::ROLE_ADMIN;
-        }
-
-        $user = wp_get_current_user();
-        if (in_array(self::ROLE_TRAINER, (array) $user->roles, true) || current_user_can('fc_access_trainer_app')) {
-            return self::ROLE_TRAINER;
-        }
-
-        return self::ROLE_USER;
+        return match ($account->role) {
+            // Admin wins — managing the platform outranks coaching or training.
+            Capabilities::ROLE_ADMIN   => self::ROLE_ADMIN,
+            Capabilities::ROLE_TRAINER => self::ROLE_TRAINER,
+            default                    => self::ROLE_USER,
+        };
     }
 
     public static function spaForRole(string $role): string

@@ -2,63 +2,142 @@
 
 namespace FitnessClub\Tests\Integration;
 
+use FitnessClub\Auth\Account;
+use FitnessClub\Auth\AccountRepository;
+use FitnessClub\Auth\Auth;
+use FitnessClub\Auth\Capabilities;
+use FitnessClub\Auth\SessionCookie;
 use PHPUnit\Framework\TestCase;
 
 /**
  * Base for integration tests against the real WordPress runtime.
  *
- * Provides throwaway-user creation and cleans up everything it created, so the
- * development database is left untouched.
+ * Identity here is the **plugin's**, not WordPress': tests create fc_accounts
+ * rows and sign in through Auth, because that is what the code under test
+ * consults. `wp_set_current_user()` no longer has any effect on anything in this
+ * plugin — which is itself worth a test, and BootPayloadTest has one.
+ *
+ * Everything created is cleaned up, so the development database is left as it
+ * was found.
  */
 abstract class IntegrationTestCase extends TestCase
 {
-    /** @var int[] */
-    private array $createdUsers = [];
+    /** @var int[] fc_accounts.id rows created here. */
+    private array $createdAccounts = [];
 
     protected function tearDown(): void
     {
+        global $wpdb;
+
+        // Sign out before deleting, or a memoized account outlives its row and
+        // the next test starts as a ghost.
+        Auth::forget();
+        SessionCookie::clear();
         wp_set_current_user(0);
 
-        // wp_delete_user() lives in the admin includes, not loaded on a front-end
-        // request context.
-        if (!function_exists('wp_delete_user')) {
-            require_once ABSPATH . 'wp-admin/includes/user.php';
-        }
+        foreach ($this->createdAccounts as $id) {
+            // Profiles first: fc_users and fc_trainers hold the account with
+            // ON DELETE RESTRICT, so the account cannot go while they exist.
+            //
+            // This is not only the fixtures' business — signing in as a member
+            // *creates* an fc_users row (AuthController::ensureProfileRow heals
+            // accounts made outside the app), so any test that logs in leaves
+            // one behind whether it meant to or not.
+            $wpdb->delete($wpdb->prefix . 'fc_users', ['account_id' => $id]);
+            $wpdb->delete($wpdb->prefix . 'fc_trainers', ['account_id' => $id]);
 
-        foreach ($this->createdUsers as $id) {
-            wp_delete_user($id);
+            // Sessions and tokens cascade.
+            $wpdb->delete($wpdb->prefix . 'fc_accounts', ['id' => $id]);
         }
-        $this->createdUsers = [];
+        $this->createdAccounts = [];
 
         parent::tearDown();
     }
 
     /**
-     * Create a throwaway user with a role and optional extra capabilities,
-     * tracked for deletion in tearDown.
+     * Create a throwaway plugin account with a known password.
      *
-     * @param string[] $caps
+     * @param string[] $extraCaps Per-account capability grants.
      */
-    protected function makeUser(string $role = 'subscriber', array $caps = []): int
-    {
-        $id = wp_insert_user([
-            'user_login' => 'fc_test_' . wp_generate_password(10, false),
-            'user_pass'  => wp_generate_password(),
-            'user_email' => uniqid('fc_test_', true) . '@example.test',
-            'role'       => $role,
+    protected function makeAccount(
+        string $role = Capabilities::ROLE_USER,
+        array $extraCaps = [],
+        string $status = Account::STATUS_ACTIVE
+    ): int {
+        global $wpdb;
+
+        $suffix = wp_generate_password(10, false);
+
+        $id = (new AccountRepository())->create([
+            'login'        => 'fc_test_' . $suffix,
+            'email'        => 'fc_test_' . $suffix . '@example.test',
+            'password'     => self::PASSWORD,
+            'display_name' => 'Test Account',
+            'role'         => $role,
+            'status'       => $status,
+            // UTC on purpose: log_date and the streak are computed in the
+            // account's own zone, and a floating zone makes those assertions
+            // flaky.
+            'timezone'     => 'UTC',
         ]);
 
-        $this->assertNotInstanceOf(\WP_Error::class, $id, 'Test user should be created.');
-        $id = (int) $id;
-        $this->createdUsers[] = $id;
+        $this->assertGreaterThan(0, $id, 'Test account should be created.');
 
-        if ($caps) {
-            $user = get_user_by('id', $id);
-            foreach ($caps as $cap) {
-                $user->add_cap($cap);
-            }
+        if ([] !== $extraCaps) {
+            $wpdb->update(
+                $wpdb->prefix . 'fc_accounts',
+                ['extra_caps' => wp_json_encode($extraCaps)],
+                ['id' => $id]
+            );
         }
+
+        $this->createdAccounts[] = $id;
 
         return $id;
     }
+
+    /**
+     * Register an account the *code under test* created, so teardown removes it
+     * too. Registration tests need this: the account they assert on was never
+     * handed out by makeAccount().
+     */
+    protected function trackAccount(int $accountId): void
+    {
+        $this->createdAccounts[] = $accountId;
+    }
+
+    /**
+     * Act as this account for the rest of the test — the replacement for
+     * `wp_set_current_user()`.
+     *
+     * Goes through `Auth::login()` rather than poking at state, so the session
+     * row, the cookie and the CSRF token all exist and the CSRF gate can be
+     * exercised for real.
+     */
+    protected function signIn(int $accountId): void
+    {
+        $account = (new AccountRepository())->find($accountId);
+
+        $this->assertNotNull($account, 'Account to sign in as should exist.');
+
+        Auth::forget();
+        Auth::login($account);
+    }
+
+    protected function signOut(): void
+    {
+        Auth::logout();
+        Auth::forget();
+    }
+
+    /**
+     * The CSRF token for the current session, for tests that dispatch writes.
+     */
+    protected function csrf(): string
+    {
+        return SessionCookie::readCsrf() ?? '';
+    }
+
+    /** The password every account made here is created with. */
+    protected const PASSWORD = 'test-password-2026';
 }

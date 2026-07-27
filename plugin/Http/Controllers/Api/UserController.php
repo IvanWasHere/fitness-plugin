@@ -40,7 +40,7 @@ final class UserController extends MemberController
      */
     public function dashboard(WP_REST_Request $request): WP_REST_Response|WP_Error
     {
-        return $this->asMember(function (int $wpUserId, int $fcUserId) use ($request): WP_REST_Response {
+        return $this->asMember(function (int $accountId, int $fcUserId) use ($request): WP_REST_Response {
             $refresh = (bool) $request->get_param('refresh');
             $cached  = $refresh ? null : DashboardCache::get($fcUserId);
 
@@ -51,7 +51,7 @@ final class UserController extends MemberController
                 return $response;
             }
 
-            $payload = $this->dashboard->forUser($wpUserId, $fcUserId);
+            $payload = $this->dashboard->forUser($accountId, $fcUserId);
             DashboardCache::put($fcUserId, $payload);
 
             $response = $this->response($payload);

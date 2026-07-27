@@ -2,6 +2,10 @@
 
 namespace FitnessClub\Database\Seeders;
 
+use FitnessClub\Auth\Account;
+use FitnessClub\Auth\Capabilities;
+use FitnessClub\Auth\PasswordHasher;
+
 if (!defined('ABSPATH')) {
     exit();
 }
@@ -11,15 +15,23 @@ if (!defined('ABSPATH')) {
  * cannot be tuned against six seeded users — every query looks instant on an empty
  * table, and the indexes that matter only show up under volume.
  *
- * Generates N users × DAYS days of sessions, nutrition and health rows. These are
- * NOT WordPress users — they are fc_users rows with synthetic wp_user_id values above
- * a high offset, so they can never collide with, or be mistaken for, real accounts,
- * and purge() can remove them cleanly.
+ * Generates N users × DAYS days of sessions, nutrition and health rows.
+ *
+ * These now need **real fc_accounts rows**: `fc_users.account_id` carries an
+ * ON DELETE RESTRICT foreign key, so the old trick of writing synthetic ids
+ * above a high offset would simply be rejected. They are marked by their login
+ * prefix instead, which is a better handle anyway — it is visible in the table
+ * rather than encoded in a number's magnitude, and purge() matches on it.
+ *
+ * The accounts get unusable password hashes. Nobody signs in as volume user 734,
+ * and hashing a thousand real passwords at bcrypt cost 12 would take minutes.
  */
 class VolumeSeeder extends Seeder
 {
-    private const WP_USER_OFFSET = 900000;
-    private const BATCH          = 500;
+    /** Login prefix that marks an account as generated bulk data. */
+    private const LOGIN_PREFIX = 'volume-';
+
+    private const BATCH = 500;
 
     public function __construct(
         private int $userCount = 1000,
@@ -54,15 +66,24 @@ class VolumeSeeder extends Seeder
     {
         $table = $this->table('users');
         $rows  = [];
+
         for ($i = 0; $i < $this->userCount; $i++) {
-            $wpId     = self::WP_USER_OFFSET + $i;
-            $existing = (int) $this->wpdb->get_var($this->wpdb->prepare("SELECT id FROM {$table} WHERE wp_user_id = %d", $wpId));
+            $accountId = $this->volumeAccount($i);
+            if (0 === $accountId) {
+                continue;
+            }
+
+            $existing = (int) $this->wpdb->get_var($this->wpdb->prepare(
+                "SELECT id FROM {$table} WHERE account_id = %d",
+                $accountId
+            ));
             if ($existing) {
                 continue;
             }
+
             $rows[] = $this->wpdb->prepare(
                 '(%d,%s,%s,%f,%f,%s,%s,%s)',
-                $wpId,
+                $accountId,
                 'Volume User ' . $i,
                 $i % 2 ? 'male' : 'female',
                 60 + ($i % 40),
@@ -80,17 +101,56 @@ class VolumeSeeder extends Seeder
             $this->flushUsers($table, $rows);
         }
 
+        $accounts = $this->table('accounts');
+
         return $this->wpdb->get_col($this->wpdb->prepare(
-            "SELECT id FROM {$table} WHERE wp_user_id >= %d ORDER BY id",
-            self::WP_USER_OFFSET
+            "SELECT u.id FROM {$table} u
+               JOIN {$accounts} a ON a.id = u.account_id
+              WHERE a.login LIKE %s
+              ORDER BY u.id",
+            $this->wpdb->esc_like(self::LOGIN_PREFIX) . '%'
         ));
+    }
+
+    /**
+     * The account behind volume user $i, created if absent.
+     *
+     * Written directly rather than through AccountRepository::create() so the
+     * hash is generated once per row instead of running bcrypt a thousand times.
+     */
+    private function volumeAccount(int $index): int
+    {
+        $table = $this->table('accounts');
+        $login = self::LOGIN_PREFIX . $index;
+
+        $existing = (int) $this->wpdb->get_var($this->wpdb->prepare(
+            "SELECT id FROM {$table} WHERE login = %s",
+            $login
+        ));
+
+        if ($existing) {
+            return $existing;
+        }
+
+        $this->wpdb->insert($table, [
+            'login'         => $login,
+            'password_hash' => PasswordHasher::unusable(),
+            'display_name'  => 'Volume User ' . $index,
+            'role'          => Capabilities::ROLE_USER,
+            'status'        => Account::STATUS_ACTIVE,
+            'timezone'      => 'UTC',
+            'created_at'    => $this->now(),
+            'updated_at'    => $this->now(),
+        ]);
+
+        return (int) $this->wpdb->insert_id;
     }
 
     /** @param string[] $rows */
     private function flushUsers(string $table, array $rows): void
     {
         $this->wpdb->query(
-            "INSERT INTO `{$table}` (wp_user_id, display_name, gender, weight_kg, height_cm, fitness_level, activity_level, updated_at) VALUES " . implode(',', $rows)
+            "INSERT INTO `{$table}` (account_id, display_name, gender, weight_kg, height_cm, fitness_level, activity_level, updated_at) VALUES " . implode(',', $rows)
         );
     }
 
@@ -236,18 +296,33 @@ class VolumeSeeder extends Seeder
      */
     public function purge(): void
     {
-        $users = $this->table('users');
-        $ids   = $this->wpdb->get_col($this->wpdb->prepare("SELECT id FROM {$users} WHERE wp_user_id >= %d", self::WP_USER_OFFSET));
+        $users    = $this->table('users');
+        $accounts = $this->table('accounts');
+        $like     = $this->wpdb->esc_like(self::LOGIN_PREFIX) . '%';
+
+        $ids = $this->wpdb->get_col($this->wpdb->prepare(
+            "SELECT u.id FROM {$users} u
+               JOIN {$accounts} a ON a.id = u.account_id
+              WHERE a.login LIKE %s",
+            $like
+        ));
+
         if (!$ids) {
             $this->note('volume purge: nothing to remove');
 
             return;
         }
+
         $in = implode(',', array_map('intval', $ids));
         foreach (['workout_sessions', 'nutrition_days', 'health_stats'] as $table) {
             $this->wpdb->query('DELETE FROM ' . $this->table($table) . " WHERE user_id IN ({$in})");
         }
+
+        // fc_users before fc_accounts: the FK is ON DELETE RESTRICT, so the
+        // other order is rejected rather than cascading.
         $this->wpdb->query("DELETE FROM {$users} WHERE id IN ({$in})");
+        $this->wpdb->query($this->wpdb->prepare("DELETE FROM {$accounts} WHERE login LIKE %s", $like));
+
         $this->note('volume purge: removed ' . count($ids) . ' synthetic users and their rows');
     }
 }

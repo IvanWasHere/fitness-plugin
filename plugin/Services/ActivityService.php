@@ -18,7 +18,7 @@ if (!defined('ABSPATH')) {
  *     actor and the before/after in `meta`, and they are **exempt from pruning**;
  *     an audit trail with a retention window is not an audit trail.
  *
- * `wp_user_id` is the subject (whose feed it belongs to), `actor_wp_user_id` is
+ * `account_id` is the subject (whose feed it belongs to), `actor_account_id` is
  * who did it. They differ exactly when someone acted on another person's data,
  * which is the question an audit trail exists to answer.
  */
@@ -31,7 +31,7 @@ final class ActivityService
      * @param array<string,mixed>  $meta    Anything the feed renderer may want later.
      */
     public function record(
-        int $wpUserId,
+        int $accountId,
         string $type,
         string $title,
         string $detail = '',
@@ -39,7 +39,7 @@ final class ActivityService
         ?int $subjectId = null,
         array $meta = []
     ): int {
-        return $this->insert($wpUserId, $wpUserId, $type, $title, $detail, $subjectType, $subjectId, $meta, false);
+        return $this->insert($accountId, $accountId, $type, $title, $detail, $subjectType, $subjectId, $meta, false);
     }
 
     /**
@@ -48,8 +48,8 @@ final class ActivityService
      * @param array<string,mixed> $meta Include `before`/`after` — the point of the row.
      */
     public function audit(
-        int $subjectWpUserId,
-        int $actorWpUserId,
+        int $subjectAccountId,
+        int $actorAccountId,
         string $type,
         string $title,
         string $detail = '',
@@ -58,8 +58,8 @@ final class ActivityService
         array $meta = []
     ): int {
         return $this->insert(
-            $subjectWpUserId,
-            $actorWpUserId,
+            $subjectAccountId,
+            $actorAccountId,
             $type,
             $title,
             $detail,
@@ -75,21 +75,21 @@ final class ActivityService
      *
      * @return array<int,array<string,mixed>>
      */
-    public function feed(int $wpUserId, int $limit = 10): array
+    public function feed(int $accountId, int $limit = 10): array
     {
         global $wpdb;
 
-        if ($wpUserId <= 0) {
+        if ($accountId <= 0) {
             return [];
         }
 
         $rows = $wpdb->get_results($wpdb->prepare(
             "SELECT type, title, detail, subject_type, subject_id, meta, created_at
                FROM {$wpdb->prefix}fc_activity_log
-              WHERE wp_user_id = %d AND is_audit = 0
+              WHERE account_id = %d AND is_audit = 0
               ORDER BY created_at DESC, id DESC
               LIMIT %d",
-            $wpUserId,
+            $accountId,
             max(1, min(100, $limit))
         ), ARRAY_A);
 
@@ -112,8 +112,8 @@ final class ActivityService
      * @param array<string,mixed> $meta
      */
     private function insert(
-        int $wpUserId,
-        int $actorWpUserId,
+        int $accountId,
+        int $actorAccountId,
         string $type,
         string $title,
         string $detail,
@@ -125,8 +125,8 @@ final class ActivityService
         global $wpdb;
 
         $wpdb->insert($wpdb->prefix . 'fc_activity_log', [
-            'wp_user_id'       => $wpUserId,
-            'actor_wp_user_id' => $actorWpUserId,
+            'account_id'       => $accountId,
+            'actor_account_id' => $actorAccountId,
             'type'             => $type,
             'subject_type'     => $subjectType,
             'subject_id'       => $subjectId,

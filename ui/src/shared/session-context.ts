@@ -29,7 +29,7 @@ export interface ResetInput {
 export interface MessageResponse {
   ok: boolean;
   message?: string;
-  nonce?: string;
+  csrf?: string;
 }
 
 export interface SessionValue {

@@ -439,7 +439,7 @@ final class WorkoutSessionService
      *
      * @return array<string,mixed>
      */
-    public function complete(int $wpUserId, int $fcUserId, int $sessionId): array
+    public function complete(int $accountId, int $fcUserId, int $sessionId): array
     {
         global $wpdb;
 
@@ -493,7 +493,7 @@ final class WorkoutSessionService
 
         $this->announce($fcUserId, 'session.completed');
 
-        return $this->celebration($wpUserId, $fcUserId, $sessionId, $records);
+        return $this->celebration($accountId, $fcUserId, $sessionId, $records);
     }
 
     /**
@@ -991,7 +991,7 @@ final class WorkoutSessionService
      * @param array<int,array<string,mixed>> $records
      * @return array<string,mixed>
      */
-    private function celebration(int $wpUserId, int $fcUserId, int $sessionId, array $records): array
+    private function celebration(int $accountId, int $fcUserId, int $sessionId, array $records): array
     {
         global $wpdb;
 
@@ -1016,7 +1016,7 @@ final class WorkoutSessionService
         $duration  = (int) $session['duration_seconds'];
 
         $this->activity->record(
-            $wpUserId,
+            $accountId,
             'workout.completed',
             $workoutName,
             sprintf(
@@ -1031,7 +1031,7 @@ final class WorkoutSessionService
         );
 
         $this->notifications->notify(
-            $wpUserId,
+            $accountId,
             'workout',
             /* translators: %s: workout name. */
             sprintf(__('%s complete', 'fitnessclub'), $workoutName),
@@ -1049,7 +1049,7 @@ final class WorkoutSessionService
 
         foreach ($records as $record) {
             $this->activity->record(
-                $wpUserId,
+                $accountId,
                 'pr.achieved',
                 /* translators: %s: exercise name. */
                 sprintf(__('New personal record: %s', 'fitnessclub'), $record['exercise_name']),
@@ -1060,7 +1060,7 @@ final class WorkoutSessionService
             );
 
             $this->notifications->notify(
-                $wpUserId,
+                $accountId,
                 'achievement',
                 __('New personal record', 'fitnessclub'),
                 sprintf(

@@ -42,12 +42,17 @@ Route::get('/health', function () {
 | Auth — /auth/*
 |--------------------------------------------------------------------------
 |
-| Cookie + nonce. The public routes are guarded by requireGuest() rather than
-| __return_true: they are reachable without a session, but not *with* one, so a
-| stray call cannot silently swap the signed-in user.
+| The plugin's own session cookie plus its own CSRF token (Auth\Csrf) — no
+| WordPress auth cookie and no `wp_rest` nonce is involved, and a WordPress
+| administrator with no fc_accounts row is anonymous here.
 |
-| Note there is no /auth/nonce route — refreshing an expired nonce cannot work
-| over REST. See FitnessClub\Ajax\NonceProvider for the reason and the mechanism.
+| The public routes are guarded by requireGuest() rather than __return_true:
+| they are reachable without a session, but not *with* one, so a stray call
+| cannot silently swap the signed-in account.
+|
+| There is no nonce-refresh route, and no need for one: the CSRF token lives
+| exactly as long as the session it is bound to, so it cannot go stale while the
+| session is still good.
 |
 */
 
@@ -115,20 +120,19 @@ Route::post('/auth/password/forgot', AuthController::class . '@forgotPassword', 
 ]);
 
 Route::post('/auth/password/reset', AuthController::class . '@resetPassword', [
-    // Open, unlike the other public routes: the reset *key* is the authorisation,
+    // Open, unlike the other public routes: the token *is* the authorisation,
     // and someone who still has a session on this browser must be able to follow
-    // the link they were emailed — wp-login.php behaves the same way.
+    // the link they were emailed.
     'permission_callback' => '__return_true',
     'args'                => [
-        'key' => [
+        // One opaque `{selector}.{verifier}` value, where the old contract took
+        // a WordPress reset key alongside the login it belonged to. The login is
+        // no longer needed — the selector identifies the row — and not asking
+        // for it means the link cannot leak who it was issued to.
+        'token' => [
             'required'          => true,
             'type'              => 'string',
-            'description'       => 'Reset key from the emailed link.',
-            'sanitize_callback' => 'sanitize_text_field',
-        ],
-        'login' => [
-            'required'          => true,
-            'type'              => 'string',
+            'description'       => 'Token from the emailed link.',
             'sanitize_callback' => 'sanitize_text_field',
         ],
         'password' => [

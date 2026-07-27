@@ -23,7 +23,7 @@ return new class extends Migration {
   id bigint(20) unsigned NOT NULL auto_increment,
   user_id bigint(20) unsigned NOT NULL,
   workout_id bigint(20) unsigned NOT NULL,
-  assigned_by_wp_user_id bigint(20) unsigned DEFAULT NULL,
+  assigned_by_account_id bigint(20) unsigned DEFAULT NULL,
   assigned_date date DEFAULT NULL,
   scheduled_for date DEFAULT NULL,
   progress_percentage decimal(5,2) NOT NULL DEFAULT 0.00,

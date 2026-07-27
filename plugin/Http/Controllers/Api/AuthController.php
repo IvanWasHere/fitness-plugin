@@ -2,7 +2,13 @@
 
 namespace FitnessClub\Http\Controllers\Api;
 
-use FitnessClub\Providers\RoleProvider;
+use FitnessClub\Auth\Account;
+use FitnessClub\Auth\Auth;
+use FitnessClub\Auth\Capabilities;
+use FitnessClub\Auth\Csrf;
+use FitnessClub\Auth\PasswordHasher;
+use FitnessClub\Auth\TokenService;
+use FitnessClub\Services\AccountMailer;
 use FitnessClub\Services\BootPresenter;
 use FitnessClub\Support\AppRouter;
 use FitnessClub\Support\RateLimitException;
@@ -11,7 +17,6 @@ use FitnessClub\WPBones\Routing\API\RestController;
 use WP_Error;
 use WP_REST_Request;
 use WP_REST_Response;
-use WP_User;
 
 if (!defined('ABSPATH')) {
     exit();
@@ -20,27 +25,35 @@ if (!defined('ABSPATH')) {
 /**
  * `/auth/*` — session lifecycle and the boot payload (plans/02-api-contract.md#auth).
  *
- * Cookie + nonce is the primary scheme: the SPA is served from the site's own
- * origin (D9), so a WordPress auth cookie is the session and `X-WP-Nonce` is the
- * CSRF proof. JWT is Phase 4 and for external clients only.
+ * **The plugin owns its own accounts.** A WordPress session grants nothing here:
+ * an administrator signed in to wp-admin who has no fc_accounts row sees the
+ * login panel like anyone else. Identity is the plugin's session cookie, CSRF is
+ * the plugin's own token (Auth\Csrf), and neither `wp_signon()` nor the
+ * `wp_rest` nonce is involved.
  *
- * Two things every method here holds to:
+ * Four things every method here holds to:
  *
  *   1. **No account enumeration.** A wrong password, an unknown email and an
- *      unknown username all produce the same `fc_invalid_credentials`; a forgot
+ *      unknown login all produce the same `fc_invalid_credentials`; a forgot
  *      request for an address that does not exist returns the same 200 as one
- *      that does. WordPress core leaks this by default; we do not re-leak it.
- *   2. **Rate limits before work.** Every public method spends its bucket before
+ *      that does.
+ *   2. **No timing oracle either.** Owning the hash makes the *duration* of a
+ *      request as revealing as its body, so an unknown login still spends a
+ *      bcrypt verify against a dummy hash. Careful wording alone would not have
+ *      been enough here.
+ *   3. **Rate limits before work.** Every public method spends its bucket before
  *      touching the database, so a flood costs one transient read.
+ *   4. **A password change evicts every session.** A reset whose whole
+ *      motivation may be "somebody else is in my account" has to remove them.
  */
 final class AuthController extends RestController
 {
     /**
      * POST /auth/login
      *
-     * On success the response *is* the boot payload — same shape as `/auth/me`
-     * plus a nonce minted for the session that was just created, so the SPA can
-     * swap straight from the login panel to the app with no second round trip.
+     * On success the response *is* the boot payload — the same shape as
+     * `/auth/me` plus the CSRF token for the session just created, so the SPA
+     * swaps straight from the login panel to the app with no second round trip.
      */
     public function login(WP_REST_Request $request): WP_REST_Response|WP_Error
     {
@@ -53,34 +66,69 @@ final class AuthController extends RestController
             return $e->toWpError();
         }
 
-        $signon = wp_signon([
-            'user_login'    => (string) $request->get_param('user_login'),
-            'user_password' => (string) $request->get_param('password'),
-            'remember'      => (bool) $request->get_param('remember'),
-        ], is_ssl());
+        $identifier = sanitize_text_field((string) $request->get_param('user_login'));
+        $password   = (string) $request->get_param('password');
+        $account    = Auth::accounts()->findByIdentifier($identifier);
 
-        if (is_wp_error($signon)) {
-            // Deliberately flat: core distinguishes "unknown user" from "wrong
-            // password", which turns the endpoint into an account oracle.
+        if (null === $account) {
+            // Spend the time anyway. Without this, an unknown login returns in
+            // microseconds while a known one takes a bcrypt verify, and the
+            // endpoint becomes an account enumerator no matter how carefully the
+            // message is worded.
+            PasswordHasher::verifyDummy($password);
+
+            return $this->invalidCredentials();
+        }
+
+        $credentials = Auth::accounts()->credentialsFor($account->id);
+        if (null === $credentials) {
+            return $this->invalidCredentials();
+        }
+
+        if ($this->isLocked($credentials['locked_until'])) {
             return $this->responseError(
-                'fc_invalid_credentials',
-                __('That email or password is not correct.', 'fitnessclub'),
-                401
+                'fc_account_locked',
+                __('Too many failed attempts. Try again shortly.', 'fitnessclub'),
+                429
             );
+        }
+
+        if (!PasswordHasher::verify($password, $credentials['password_hash'])) {
+            Auth::accounts()->recordFailedLogin($account->id);
+
+            return $this->invalidCredentials();
+        }
+
+        // A correct password for an account that is not active is still a
+        // refusal, but a different one: telling somebody "your account is
+        // suspended" is not enumeration, because they have already proved they
+        // own it.
+        if (!$account->isActive()) {
+            return $this->responseError(
+                'fc_account_inactive',
+                __('This account is not active. Contact an administrator.', 'fitnessclub'),
+                403
+            );
+        }
+
+        // The hash is upgraded here, while the plaintext is still in scope, so
+        // raising the cost later migrates accounts as they sign in.
+        if (PasswordHasher::needsRehash($credentials['password_hash'])) {
+            Auth::accounts()->rehash($account->id, $password);
         }
 
         // A user who mistyped twice then succeeded should not stay throttled.
         RateLimiter::clear('login', $ipKey);
 
-        return $this->bootResponse($signon);
+        return $this->bootResponse($account, (bool) $request->get_param('remember'));
     }
 
     /**
      * POST /auth/register
      *
-     * Creates the WordPress user, its fc_users profile row, and signs them in —
-     * one call, because a registration flow that then asks the user to log in is
-     * a flow with a drop-off point for no reason.
+     * Creates the account, its fc_users profile row, and signs them in — one
+     * call, because a registration flow that then asks the user to log in is a
+     * flow with a drop-off point for no reason.
      */
     public function register(WP_REST_Request $request): WP_REST_Response|WP_Error
     {
@@ -122,7 +170,7 @@ final class AuthController extends RestController
             return $tooShort;
         }
 
-        if (email_exists($email)) {
+        if (Auth::accounts()->emailExists($email)) {
             // Registration cannot hide that an address is taken — the account
             // simply cannot be created twice. Say so plainly and point at login.
             return $this->responseError(
@@ -132,30 +180,28 @@ final class AuthController extends RestController
             );
         }
 
-        $userId = wp_insert_user([
-            'user_login'   => $this->uniqueLoginFrom($email),
-            'user_email'   => $email,
-            'user_pass'    => $password,
+        $accountId = Auth::accounts()->create([
+            'login'        => $this->uniqueLoginFrom($email),
+            'email'        => $email,
+            'password'     => $password,
             'display_name' => '' !== $name ? $name : $this->nameFromEmail($email),
-            'role'         => RoleProvider::ROLE_USER,
+            'role'         => Capabilities::ROLE_USER,
+            'status'       => Account::STATUS_ACTIVE,
+            'locale'       => determine_locale(),
+            'timezone'     => wp_timezone_string(),
         ]);
 
-        if (is_wp_error($userId)) {
+        $account = Auth::accounts()->find($accountId);
+
+        if (null === $account) {
             return $this->responseError(
                 'fc_registration_failed',
-                $userId->get_error_message(),
+                __('The account could not be created.', 'fitnessclub'),
                 400
             );
         }
 
-        $user = get_user_by('id', (int) $userId);
-        $this->ensureProfileRow($user);
-
-        wp_set_current_user($user->ID);
-        wp_set_auth_cookie($user->ID, false, is_ssl());
-        do_action('wp_login', $user->user_login, $user);
-
-        $response = $this->bootResponse($user);
+        $response = $this->bootResponse($account, false);
         $response->set_status(201);
 
         return $response;
@@ -164,17 +210,17 @@ final class AuthController extends RestController
     /**
      * POST /auth/logout
      *
-     * Returns a nonce for the *logged-out* session so the SPA can keep talking to
-     * public endpoints (the login panel it is about to render) without a reload.
+     * Returns a CSRF token for the *signed-out* caller, so the SPA can keep
+     * talking to public endpoints — the login panel it is about to render —
+     * without a reload.
      */
     public function logout(): WP_REST_Response
     {
-        wp_logout();
-        wp_set_current_user(0);
+        Auth::logout();
 
         return $this->response([
-            'ok'    => true,
-            'nonce' => wp_create_nonce('wp_rest'),
+            'ok'   => true,
+            'csrf' => Csrf::ensureCookie(),
         ]);
     }
 
@@ -189,9 +235,9 @@ final class AuthController extends RestController
     /**
      * POST /auth/password/forgot
      *
-     * Always 200 with the same body. Rate-limited twice: per email (so one
-     * address cannot be mail-bombed) and per IP (so the endpoint cannot be swept
-     * to find which addresses are registered by timing or by mail volume).
+     * Always 200 with the same body. Rate-limited twice: per address (so one
+     * account cannot be mail-bombed) and per IP (so the endpoint cannot be swept
+     * to find which addresses are registered by mail volume).
      */
     public function forgotPassword(WP_REST_Request $request): WP_REST_Response|WP_Error
     {
@@ -215,10 +261,19 @@ final class AuthController extends RestController
             return $e->toWpError();
         }
 
-        // retrieve_password() sends the mail and returns a WP_Error for unknown
-        // accounts. The error is swallowed on purpose — see the docblock.
-        if ('' !== $login) {
-            retrieve_password($login);
+        $account = '' === $login ? null : Auth::accounts()->findByIdentifier($login);
+
+        // Unknown address, no email, same response. An account with no email on
+        // file (a bootstrapped administrator) is the same case: there is nowhere
+        // to send it, and saying so would confirm the account exists.
+        if (null !== $account && null !== $account->email && $account->isActive()) {
+            $token = (new TokenService())->issue(
+                $account->id,
+                TokenService::PURPOSE_RESET,
+                (int) FitnessClub()->config('fitnessclub.auth.reset_ttl_minutes', 60) * MINUTE_IN_SECONDS
+            );
+
+            (new AccountMailer())->sendPasswordReset($account, $token);
         }
 
         return $this->response([
@@ -232,6 +287,9 @@ final class AuthController extends RestController
 
     /**
      * POST /auth/password/reset — the target of the emailed link.
+     *
+     * Serves invitations too: the mechanics are identical, and redeeming an
+     * invite is what moves a bootstrapped account from `pending` to `active`.
      */
     public function resetPassword(WP_REST_Request $request): WP_REST_Response|WP_Error
     {
@@ -248,8 +306,7 @@ final class AuthController extends RestController
             return $e->toWpError();
         }
 
-        $key      = sanitize_text_field((string) $request->get_param('key'));
-        $login    = sanitize_text_field((string) $request->get_param('login'));
+        $token    = sanitize_text_field((string) $request->get_param('token'));
         $password = (string) $request->get_param('password');
 
         $tooShort = $this->passwordTooShort($password);
@@ -257,8 +314,13 @@ final class AuthController extends RestController
             return $tooShort;
         }
 
-        $user = check_password_reset_key($key, $login);
-        if (is_wp_error($user)) {
+        $tokens    = new TokenService();
+        $accountId = $tokens->redeem($token, TokenService::PURPOSE_RESET)
+            ?? $tokens->redeem($token, TokenService::PURPOSE_INVITE);
+
+        // One flat error for missing, wrong, expired and already-used. Any
+        // distinction here is an oracle for whether a link was ever valid.
+        if (null === $accountId) {
             return $this->responseError(
                 'fc_invalid_reset_key',
                 __('That reset link has expired or has already been used.', 'fitnessclub'),
@@ -266,7 +328,14 @@ final class AuthController extends RestController
             );
         }
 
-        reset_password($user, $password);
+        Auth::accounts()->setPassword($accountId, $password);
+        Auth::accounts()->activate($accountId);
+        Auth::sessions()->revokeAllFor($accountId);
+
+        $account = Auth::accounts()->find($accountId);
+        if (null !== $account) {
+            (new AccountMailer())->sendPasswordChanged($account);
+        }
 
         // Not signed in automatically: whoever holds the link may not be the
         // account owner, and a fresh login proves the new password was received.
@@ -277,57 +346,75 @@ final class AuthController extends RestController
     }
 
     /**
-     * The boot payload for a freshly authenticated user.
+     * The boot payload for a freshly authenticated account.
      *
-     * `wp_set_current_user()` after sign-in matters: the nonce, the role → SPA
-     * resolution and every query in BootPresenter run against the *new* identity,
-     * not the anonymous one this request started with.
+     * `Auth::login()` before building it matters: the CSRF token, the role → SPA
+     * resolution and every query in BootPresenter must run against the *new*
+     * identity, not the anonymous one this request started with.
      */
-    private function bootResponse(WP_User $user): WP_REST_Response
+    private function bootResponse(Account $account, bool $remember): WP_REST_Response
     {
-        wp_set_current_user($user->ID);
-        $this->ensureProfileRow($user);
+        Auth::login($account, $remember);
+        $this->ensureProfileRow($account);
 
         return $this->response((new BootPresenter())->shell());
     }
 
     /**
      * Every member needs an fc_users row — it is where the profile, the health
-     * data and every ownership check hang off. Created lazily so accounts that
-     * predate the plugin (or were made in wp-admin) heal on first sign-in.
+     * data and every ownership check hang off. Created lazily so an account made
+     * by an administrator heals on first sign-in.
      *
      * Trainers and administrators are skipped: a trainer's identity lives in
      * fc_trainers, and an admin who never uses the member app needs no row.
      */
-    private function ensureProfileRow(WP_User $user): void
+    private function ensureProfileRow(Account $account): void
     {
         global $wpdb;
 
-        if (!in_array(RoleProvider::ROLE_USER, (array) $user->roles, true)) {
+        if (Capabilities::ROLE_USER !== $account->role) {
             return;
         }
 
         $exists = $wpdb->get_var($wpdb->prepare(
-            "SELECT id FROM {$wpdb->prefix}fc_users WHERE wp_user_id = %d LIMIT 1",
-            $user->ID
+            "SELECT id FROM {$wpdb->prefix}fc_users WHERE account_id = %d LIMIT 1",
+            $account->id
         ));
 
         if (null !== $exists) {
             return;
         }
 
+        $now = gmdate('Y-m-d H:i:s');
+
         $wpdb->insert($wpdb->prefix . 'fc_users', [
-            'wp_user_id'   => $user->ID,
-            'display_name' => $user->display_name,
-            'locale'       => determine_locale(),
-            'timezone'     => wp_timezone_string(),
-            'created_at'   => gmdate('Y-m-d H:i:s'),
-            'updated_at'   => gmdate('Y-m-d H:i:s'),
+            'account_id'   => $account->id,
+            'display_name' => $account->displayName,
+            'locale'       => $account->locale ?? determine_locale(),
+            'timezone'     => $account->timezone ?? wp_timezone_string(),
+            'created_at'   => $now,
+            'updated_at'   => $now,
         ]);
     }
 
+    private function invalidCredentials(): WP_Error
+    {
+        // Deliberately flat: distinguishing "unknown account" from "wrong
+        // password" turns the endpoint into an account oracle.
+        return new WP_Error(
+            'fc_invalid_credentials',
+            __('That email or password is not correct.', 'fitnessclub'),
+            ['status' => 401]
+        );
+    }
+
+    private function isLocked(?string $lockedUntil): bool
+    {
+        return null !== $lockedUntil && $lockedUntil > gmdate('Y-m-d H:i:s');
+    }
+
     /**
-     * A login name derived from the email's local part, suffixed until free.
+     * A login handle derived from the email's local part, suffixed until free.
      * Members sign in with their email; the login is an internal handle they
      * never see, so readability beats cleverness.
      */
@@ -337,7 +424,7 @@ final class AuthController extends RestController
         $base = '' !== $base ? strtolower($base) : 'member';
 
         $login = $base;
-        for ($i = 2; username_exists($login) && $i < 1000; $i++) {
+        for ($i = 2; Auth::accounts()->loginExists($login) && $i < 1000; $i++) {
             $login = $base . $i;
         }
 
@@ -384,14 +471,13 @@ final class AuthController extends RestController
     /**
      * Permission callback for `/auth/me` and `/auth/logout`.
      *
-     * `is_user_logged_in()` rather than a capability: an administrator with no
-     * fc_* role must still be able to boot the admin SPA (AppRouter resolves
-     * which one), and a 401 here is about *having a session*, not about what the
-     * session may do.
+     * Having a session, not holding a capability: an administrator must be able
+     * to boot the admin SPA (AppRouter decides which one), and a 401 here is
+     * about *being signed in*, not about what the account may do.
      */
     public static function requireSession(): bool|WP_Error
     {
-        if (is_user_logged_in()) {
+        if (Auth::check()) {
             return true;
         }
 
@@ -403,14 +489,13 @@ final class AuthController extends RestController
     }
 
     /**
-     * Public routes still refuse to serve a *half*-authenticated request: if the
-     * caller sent a cookie, WordPress has already resolved it by now, and the
-     * login endpoint being reachable while signed in is a footgun (it would
-     * silently swap sessions).
+     * Public routes still refuse to serve a request from somebody already signed
+     * in: the login endpoint being reachable with a live session is a footgun,
+     * because it would silently swap one account for another.
      */
     public static function requireGuest(): bool|WP_Error
     {
-        if (!is_user_logged_in()) {
+        if (!Auth::check()) {
             return true;
         }
 

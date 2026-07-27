@@ -12,7 +12,7 @@ if (!defined('ABSPATH')) {
  * One row per logged meal. Totals are denormalised sums of the child item rows and
  * are recomputed on every child write.
  *
- * `source` and `last_edited_by_wp_user_id` exist because administrators may edit
+ * `source` and `last_edited_by_account_id` exist because administrators may edit
  * these rows (Q10). Without them a staff correction is indistinguishable from a
  * self-reported entry and the user's charts change with no visible cause.
  *
@@ -35,7 +35,7 @@ return new class extends Migration {
   total_fat_g decimal(6,2) NOT NULL DEFAULT 0.00,
   notes text DEFAULT NULL,
   source varchar(20) NOT NULL DEFAULT 'manual',
-  last_edited_by_wp_user_id bigint(20) unsigned DEFAULT NULL,
+  last_edited_by_account_id bigint(20) unsigned DEFAULT NULL,
   created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY  (id),

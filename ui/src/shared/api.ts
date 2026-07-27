@@ -3,21 +3,24 @@ import type { BootPayload } from './boot';
 /**
  * The REST client every screen goes through (plans/02-api-contract.md).
  *
- * Cookie + nonce: the SPA is served from the site's own origin (D9), so
- * `credentials: 'same-origin'` carries the WordPress session and `X-WP-Nonce`
- * proves the request is not cross-site.
+ * The SPA is served from the site's own origin (D9), so
+ * `credentials: 'same-origin'` carries the plugin's session cookie and
+ * `X-FC-CSRF` proves the request is not cross-site.
  *
- * ## The nonce-expiry retry, which is the whole reason this class exists
+ * ## The nonce-refresh machinery is gone, and good riddance
  *
- * A `wp_rest` nonce lasts 12–24 hours. An app left open overnight — a phone in a
- * pocket between gym sessions is exactly this — starts getting
- * `403 rest_cookie_invalid_nonce` on every call while still looking signed in.
- * Left unhandled it presents as "the app silently stopped saving".
+ * This class used to carry ~90 lines of retry logic for one problem: a
+ * `wp_rest` nonce expires on its own 12–24 hour clock, *independently of the
+ * session*. An app left open overnight — a phone in a pocket between gym
+ * sessions is exactly this — started getting `403 rest_cookie_invalid_nonce` on
+ * every call while still looking signed in, which presented as "the app
+ * silently stopped saving". The fix was to refresh the nonce through admin-ajax
+ * and retry once.
  *
- * So a 403 with that code is not an error here: refresh the nonce (see
- * `NonceProvider` for why that goes through admin-ajax and not REST), retry the
- * call exactly once, and only surface a re-login prompt if the refresh itself
- * says the session is gone. Once per request, never a loop.
+ * The plugin's CSRF token lives exactly as long as the session it is bound to,
+ * so that state cannot occur: if the token is bad, the session is gone, and the
+ * honest answer is a 401 and the login panel — which `isAuthError` already
+ * drives. No refresh, no retry, no `ajaxUrl`.
  */
 
 /** WordPress's `WP_Error` serialisation — one error shape for every failure. */
@@ -51,44 +54,43 @@ export class ApiError extends Error {
   }
 }
 
-/** Codes WordPress uses for "your nonce is stale", as opposed to "you may not". */
-const STALE_NONCE_CODES = new Set(['rest_cookie_invalid_nonce', 'rest_nonce_invalid']);
-
 type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
 export class ApiClient {
-  private nonce: string;
+  private csrf: string;
 
   private readonly restUrl: string;
 
-  private readonly ajaxUrl: string;
-
-  /** In-flight refresh, shared so a burst of 403s triggers one refresh, not six. */
-  private refreshing: Promise<boolean> | null = null;
-
-  constructor(boot: Pick<BootPayload, 'restUrl' | 'ajaxUrl' | 'nonce'>) {
+  constructor(boot: Pick<BootPayload, 'restUrl' | 'csrf'>) {
     this.restUrl = boot.restUrl.replace(/\/$/, '');
-    this.ajaxUrl = boot.ajaxUrl;
-    this.nonce = boot.nonce;
+    this.csrf = boot.csrf;
   }
 
-  /** The current nonce — a fresh session response supersedes it. */
-  setNonce(nonce: string): void {
-    if (nonce) {
-      this.nonce = nonce;
+  /** The current CSRF token — a fresh session response supersedes it. */
+  setCsrf(csrf: string): void {
+    if (csrf) {
+      this.csrf = csrf;
     }
   }
 
-  /**
-   * A URL that authenticates without request headers, for `navigator.sendBeacon`.
-   *
-   * A beacon cannot carry `X-WP-Nonce` — the API allows no custom headers — but
-   * WordPress also accepts the nonce as a `_wpnonce` parameter, which is how the
-   * player flushes queued sets during `pagehide`, when there is no time left for
-   * a normal request.
-   */
+  /** The plain URL for `navigator.sendBeacon`. */
   beaconUrl(path: string): string {
-    return `${this.restUrl}/${path.replace(/^\//, '')}?_wpnonce=${encodeURIComponent(this.nonce)}`;
+    return `${this.restUrl}/${path.replace(/^\//, '')}`;
+  }
+
+  /**
+   * A body that authenticates without request headers, for `navigator.sendBeacon`.
+   *
+   * A beacon cannot set headers, so the token rides in the JSON body, where
+   * `WP_REST_Request` parses it into a normal parameter. It deliberately does
+   * *not* go in the query string, which is where the old `?_wpnonce=` fallback
+   * put it — a query parameter ends up in web-server access logs, in `Referer`
+   * headers and in every proxy in between, which is no place for a token.
+   */
+  beaconBody(body: Record<string, unknown>): Blob {
+    return new Blob([JSON.stringify({ ...body, _csrf: this.csrf })], {
+      type: 'application/json',
+    });
   }
 
   get<T>(path: string, params?: Record<string, string | number | boolean>): Promise<T> {
@@ -114,14 +116,14 @@ export class ApiClient {
     return this.send<T>('DELETE', path);
   }
 
-  private async send<T>(method: Method, path: string, body?: unknown, isRetry = false): Promise<T> {
+  private async send<T>(method: Method, path: string, body?: unknown): Promise<T> {
     const response = await fetch(`${this.restUrl}/${path.replace(/^\//, '')}`, {
       method,
       credentials: 'same-origin',
       headers: {
         Accept: 'application/json',
         ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
-        ...(this.nonce ? { 'X-WP-Nonce': this.nonce } : {}),
+        ...(this.csrf ? { 'X-FC-CSRF': this.csrf } : {}),
       },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
@@ -133,61 +135,13 @@ export class ApiClient {
     }
 
     const error = payload as WpErrorBody;
-    const code = typeof error.code === 'string' ? error.code : 'fc_request_failed';
-
-    if (!isRetry && response.status === 403 && STALE_NONCE_CODES.has(code)) {
-      if (await this.refreshNonce()) {
-        return this.send<T>(method, path, body, true);
-      }
-    }
 
     throw new ApiError(
-      code,
+      typeof error.code === 'string' ? error.code : 'fc_request_failed',
       typeof error.message === 'string' ? error.message : 'Something went wrong.',
       response.status,
       (error.data ?? {}) as Record<string, unknown>,
     );
-  }
-
-  /**
-   * Ask admin-ajax for a nonce bound to whatever session the cookie still names.
-   * Returns false when there is no session left to refresh for.
-   */
-  private refreshNonce(): Promise<boolean> {
-    this.refreshing ??= this.doRefresh().finally(() => {
-      this.refreshing = null;
-    });
-
-    return this.refreshing;
-  }
-
-  private async doRefresh(): Promise<boolean> {
-    try {
-      const response = await fetch(`${this.ajaxUrl}?action=fc_nonce`, {
-        credentials: 'same-origin',
-        headers: { Accept: 'application/json' },
-      });
-
-      if (!response.ok) {
-        return false;
-      }
-
-      const json = (await response.json()) as {
-        success?: boolean;
-        data?: { nonce?: string; logged_in?: boolean };
-      };
-
-      const nonce = json?.data?.nonce;
-      if (json?.success !== true || typeof nonce !== 'string' || nonce === '') {
-        return false;
-      }
-
-      this.nonce = nonce;
-      return true;
-    } catch {
-      // Offline, or the site is down. The caller surfaces the original error.
-      return false;
-    }
   }
 
   /**

@@ -6,17 +6,17 @@ use FitnessClub\Database\Upgrade\Manager;
 use PHPUnit\Framework\TestCase;
 
 /**
- * The 29-table schema is present, InnoDB, and carries the columns the original
+ * The 32-table schema is present, InnoDB, and carries the columns the original
  * spec omitted (the plan's blockers). See plans/01-database.md.
  */
 final class SchemaTest extends TestCase
 {
-    public function testAll29TablesExist(): void
+    public function testAllTablesExist(): void
     {
         global $wpdb;
 
         $tables = $wpdb->get_col("SHOW TABLES LIKE '{$wpdb->prefix}fc\\_%'");
-        $this->assertCount(29, $tables);
+        $this->assertCount(32, $tables);
     }
 
     public function testEveryTableIsInnoDb(): void
@@ -57,7 +57,7 @@ final class SchemaTest extends TestCase
             'session resume cursor'         => ['workout_sessions', ['current_exercise_index', 'current_set_index', 'last_resumed_at']],
             'multi-trainer request fields'  => ['user_trainers', ['is_primary', 'requested_at', 'decline_reason']],
             'plan entitlement cap'          => ['plans', ['max_trainers', 'owner_type']],
-            'health provenance (Q10)'       => ['health_stats', ['source', 'last_edited_by_wp_user_id']],
+            'health provenance (Q10)'       => ['health_stats', ['source', 'last_edited_by_account_id']],
             'per-set logging'               => ['set_logs', ['exercise_log_id', 'set_index', 'rpe']],
         ];
     }

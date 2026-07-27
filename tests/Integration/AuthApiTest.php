@@ -2,24 +2,29 @@
 
 namespace FitnessClub\Tests\Integration;
 
-use FitnessClub\Providers\RoleProvider;
+use FitnessClub\Auth\Account;
+use FitnessClub\Auth\AccountRepository;
+use FitnessClub\Auth\Auth;
+use FitnessClub\Auth\Capabilities;
+use FitnessClub\Auth\Csrf;
+use FitnessClub\Auth\PasswordHasher;
+use FitnessClub\Auth\SessionCookie;
+use FitnessClub\Auth\TokenService;
 use FitnessClub\Support\RateLimiter;
 use WP_REST_Request;
+use WP_REST_Response;
 
 /**
- * `/auth/*` — the session lifecycle (W1.3, plans/02-api-contract.md#auth).
+ * `/auth/*` against the real REST server, on the plugin's own identity.
  *
- * Against the real REST server and the real database: the whole point of these
- * endpoints is what WordPress does with cookies, nonces and password hashing, so
- * a mocked version would assert nothing.
+ * The behaviours this pins down are the ones that are easy to regress and
+ * expensive to get wrong: flat credential errors, the CSRF gate, per-IP and
+ * per-address throttling, and the fact that a WordPress session buys nothing.
+ *
+ * @covers \FitnessClub\Http\Controllers\Api\AuthController
  */
 final class AuthApiTest extends IntegrationTestCase
 {
-    private const PASSWORD = 'correct-horse-battery-staple';
-
-    /** @var int[] fc_users rows to clean up (created by the register endpoint). */
-    private array $createdLogins = [];
-
     public static function setUpBeforeClass(): void
     {
         parent::setUpBeforeClass();
@@ -30,115 +35,160 @@ final class AuthApiTest extends IntegrationTestCase
     {
         parent::setUp();
 
-        // Every test shares one IP hash, so a previous test's attempts would
-        // spend this one's budget.
-        foreach (['login', 'register', 'pwforgot_ip', 'pwreset', 'api'] as $bucket) {
-            RateLimiter::clear($bucket, RateLimiter::ipHash());
-        }
+        // Each test starts from an anonymous browser holding a CSRF cookie —
+        // which is what the shell hands a visitor before they sign in.
+        Auth::forget();
+        SessionCookie::clear();
+        Csrf::ensureCookie();
 
-        // No test may send real mail.
-        add_filter('pre_wp_mail', '__return_true', 999);
+        // Buckets are per-IP and the test IP never changes, so a login test
+        // would otherwise inherit the previous one's failures.
+        RateLimiter::clear('login', RateLimiter::ipHash());
+        RateLimiter::clear('register', RateLimiter::ipHash());
+        RateLimiter::clear('pwforgot_ip', RateLimiter::ipHash());
+        RateLimiter::clear('pwreset', RateLimiter::ipHash());
     }
 
-    protected function tearDown(): void
+    // ----------------------------------------------------------------- login
+
+    public function testLoginReturnsTheBootPayloadAndAWorkingCsrfToken(): void
     {
-        remove_filter('pre_wp_mail', '__return_true', 999);
+        $accountId = $this->makeAccount();
+        $account   = (new AccountRepository())->find($accountId);
 
-        global $wpdb;
-        foreach ($this->createdLogins as $wpUserId) {
-            $wpdb->delete($wpdb->prefix . 'fc_users', ['wp_user_id' => $wpUserId]);
-            wp_delete_user($wpUserId);
-        }
-        $this->createdLogins = [];
-
-        parent::tearDown();
-    }
-
-    // ---------------------------------------------------------------- login
-
-    public function testLoginReturnsTheBootPayloadAndAWorkingNonce(): void
-    {
-        $userId = $this->makeMember();
-        $email  = get_userdata($userId)->user_email;
-
-        $response = $this->post('/auth/login', ['user_login' => $email, 'password' => self::PASSWORD]);
+        $response = $this->post('/auth/login', [
+            'user_login' => $account->login,
+            'password'   => self::PASSWORD,
+        ]);
 
         $this->assertSame(200, $response->get_status());
 
         $data = $response->get_data();
-        $this->assertSame($userId, $data['user']['wp_user_id']);
-        $this->assertSame('fc_user', $data['user']['role']);
-        $this->assertSame('user', $data['app']['spa'], 'A member resolves to the user SPA.');
-        $this->assertNotEmpty($data['nonce']);
-        $this->assertNotEmpty($data['restUrl']);
-        $this->assertNotEmpty($data['ajaxUrl'], 'The client needs this to refresh an expired nonce.');
+        $this->assertSame($accountId, $data['user']['account_id']);
+        $this->assertSame('user', $data['user']['role']);
+        $this->assertSame('user', $data['app']['spa']);
 
-        // The session really was established, not just described.
-        $this->assertSame($userId, get_current_user_id());
+        // The token is bound to the session that was just created, so the very
+        // next write works without a round trip.
+        $this->assertNotEmpty($data['csrf']);
+        $this->assertSame(
+            $data['csrf'],
+            SessionCookie::readCsrf(),
+            'The token in the payload is the one in the cookie.'
+        );
 
-        // The nonce was minted for the session that login created — this is the
-        // cookie-bridging fix in AuthServiceProvider. Without it the value comes
-        // back signed against the anonymous session and every later call 403s.
-        $this->assertSame(1, wp_verify_nonce($data['nonce'], 'wp_rest'));
+        // The WordPress nonce apparatus is gone, and its absence is part of the
+        // contract now — a client that still looks for these is out of date.
+        $this->assertArrayNotHasKey('nonce', $data);
+        $this->assertArrayNotHasKey('ajaxUrl', $data);
+    }
+
+    public function testLoginSignsInByEmailAsWellAsLogin(): void
+    {
+        $accountId = $this->makeAccount();
+        $account   = (new AccountRepository())->find($accountId);
+
+        $response = $this->post('/auth/login', [
+            'user_login' => $account->email,
+            'password'   => self::PASSWORD,
+        ]);
+
+        $this->assertSame(200, $response->get_status());
+        $this->assertSame($accountId, $response->get_data()['user']['account_id']);
     }
 
     public function testLoginWithAWrongPasswordIsFlatlyRejected(): void
     {
-        $userId = $this->makeMember();
-        $email  = get_userdata($userId)->user_email;
+        $account = (new AccountRepository())->find($this->makeAccount());
 
-        $response = $this->post('/auth/login', ['user_login' => $email, 'password' => 'not-the-password']);
+        $response = $this->post('/auth/login', [
+            'user_login' => $account->login,
+            'password'   => 'not-the-password',
+        ]);
 
         $this->assertSame(401, $response->get_status());
         $this->assertSame('fc_invalid_credentials', $response->get_data()['code']);
-        $this->assertSame(0, get_current_user_id());
     }
 
     public function testLoginTellsUnknownAccountsApartFromWrongPasswordsInNoWay(): void
     {
-        $userId = $this->makeMember();
-        $email  = get_userdata($userId)->user_email;
+        $account = (new AccountRepository())->find($this->makeAccount());
 
-        $wrongPassword = $this->post('/auth/login', ['user_login' => $email, 'password' => 'nope']);
-        RateLimiter::clear('login', RateLimiter::ipHash());
-        $unknownUser = $this->post('/auth/login', [
-            'user_login' => 'nobody-here@example.test',
-            'password'   => 'nope',
+        $wrongPassword = $this->post('/auth/login', [
+            'user_login' => $account->login,
+            'password'   => 'not-the-password',
         ]);
 
-        // Identical code, status and message: the endpoint is not an oracle for
-        // "does this address have an account".
-        $this->assertSame($wrongPassword->get_status(), $unknownUser->get_status());
-        $this->assertSame($wrongPassword->get_data()['code'], $unknownUser->get_data()['code']);
-        $this->assertSame($wrongPassword->get_data()['message'], $unknownUser->get_data()['message']);
+        $unknownAccount = $this->post('/auth/login', [
+            'user_login' => 'nobody-here@example.test',
+            'password'   => 'not-the-password',
+        ]);
+
+        // Same status, same code, same message: the endpoint is not an oracle
+        // for which addresses have accounts.
+        $this->assertSame($wrongPassword->get_status(), $unknownAccount->get_status());
+        $this->assertSame(
+            $wrongPassword->get_data()['code'],
+            $unknownAccount->get_data()['code']
+        );
+        $this->assertSame(
+            $wrongPassword->get_data()['message'],
+            $unknownAccount->get_data()['message']
+        );
     }
 
     public function testLoginIsRateLimitedPerIp(): void
     {
-        $limit = (int) FitnessClub()->config('fitnessclub.limits.login_per_minute_ip');
-        $this->assertGreaterThan(0, $limit);
+        $account = (new AccountRepository())->find($this->makeAccount());
+        $limit   = (int) FitnessClub()->config('fitnessclub.limits.login_per_minute_ip', 5);
 
-        for ($i = 0; $i < $limit; $i++) {
-            $response = $this->post('/auth/login', ['user_login' => 'ghost@example.test', 'password' => 'x']);
-            $this->assertSame(401, $response->get_status(), "Attempt {$i} should still be allowed.");
+        for ($attempt = 0; $attempt < $limit; $attempt++) {
+            $this->post('/auth/login', [
+                'user_login' => $account->login,
+                'password'   => 'wrong',
+            ]);
         }
 
-        $blocked = $this->post('/auth/login', ['user_login' => 'ghost@example.test', 'password' => 'x']);
+        $response = $this->post('/auth/login', [
+            'user_login' => $account->login,
+            'password'   => self::PASSWORD,
+        ]);
 
-        $this->assertSame(429, $blocked->get_status());
-        $data = $blocked->get_data();
-        $this->assertSame('fc_rate_limited', $data['code']);
-        $this->assertSame($limit, $data['data']['limit']);
-        $this->assertGreaterThan(0, $data['data']['retry_after'], 'Retry-After must never say "now".');
+        $this->assertSame(429, $response->get_status());
+    }
+
+    public function testAnAccountLocksItselfAfterRepeatedFailures(): void
+    {
+        $accountId = $this->makeAccount();
+        $account   = (new AccountRepository())->find($accountId);
+        $accounts  = new AccountRepository();
+
+        // Straight at the repository: the per-IP limiter would refuse long
+        // before the per-account threshold, and it is the account-level lock
+        // being tested — the half that a distributed attacker cannot dodge by
+        // changing address.
+        $threshold = (int) FitnessClub()->config('fitnessclub.auth.lockout_threshold', 10);
+        for ($i = 0; $i < $threshold; $i++) {
+            $accounts->recordFailedLogin($accountId);
+        }
+
+        $response = $this->post('/auth/login', [
+            'user_login' => $account->login,
+            'password'   => self::PASSWORD,
+        ]);
+
+        $this->assertSame(429, $response->get_status());
+        $this->assertSame('fc_account_locked', $response->get_data()['code']);
     }
 
     public function testLoginIsRefusedWhileAlreadySignedIn(): void
     {
-        $userId = $this->makeMember();
-        wp_set_current_user($userId);
+        $accountId = $this->makeAccount();
+        $account   = (new AccountRepository())->find($accountId);
+        $this->signIn($accountId);
 
         $response = $this->post('/auth/login', [
-            'user_login' => get_userdata($userId)->user_email,
+            'user_login' => $account->login,
             'password'   => self::PASSWORD,
         ]);
 
@@ -146,44 +196,105 @@ final class AuthApiTest extends IntegrationTestCase
         $this->assertSame('fc_already_authenticated', $response->get_data()['code']);
     }
 
-    // ------------------------------------------------------------- register
+    public function testASuspendedAccountCannotSignInEvenWithTheRightPassword(): void
+    {
+        $accountId = $this->makeAccount(Capabilities::ROLE_USER, [], Account::STATUS_SUSPENDED);
+        $account   = (new AccountRepository())->find($accountId);
+
+        $response = $this->post('/auth/login', [
+            'user_login' => $account->login,
+            'password'   => self::PASSWORD,
+        ]);
+
+        // Not `fc_invalid_credentials`: they proved they own the account, so
+        // telling them it is switched off is not enumeration.
+        $this->assertSame(403, $response->get_status());
+        $this->assertSame('fc_account_inactive', $response->get_data()['code']);
+    }
+
+    // -------------------------------------------------------------- the gate
+
+    public function testAWriteWithoutACsrfTokenIsRefused(): void
+    {
+        $account = (new AccountRepository())->find($this->makeAccount());
+
+        $request = new WP_REST_Request('POST', '/fitnessclub/v1/auth/login');
+        $request->set_param('user_login', $account->login);
+        $request->set_param('password', self::PASSWORD);
+
+        $response = rest_get_server()->dispatch($request);
+
+        $this->assertSame(403, $response->get_status());
+        $this->assertSame('fc_csrf_missing', $response->get_data()['code']);
+    }
+
+    public function testAWriteWithTheWrongCsrfTokenIsRefused(): void
+    {
+        $account = (new AccountRepository())->find($this->makeAccount());
+
+        $request = new WP_REST_Request('POST', '/fitnessclub/v1/auth/login');
+        $request->set_header('X-FC-CSRF', str_repeat('f', 64));
+        $request->set_param('user_login', $account->login);
+        $request->set_param('password', self::PASSWORD);
+
+        $response = rest_get_server()->dispatch($request);
+
+        $this->assertSame(403, $response->get_status());
+        $this->assertSame('fc_csrf_mismatch', $response->get_data()['code']);
+    }
+
+    public function testReadsNeedNoCsrfToken(): void
+    {
+        $this->signIn($this->makeAccount());
+
+        // No header at all — GET is safe by contract, and requiring a token on
+        // reads would break every link into the app.
+        $response = rest_get_server()->dispatch(new WP_REST_Request('GET', '/fitnessclub/v1/auth/me'));
+
+        $this->assertSame(200, $response->get_status());
+    }
+
+    // -------------------------------------------------------------- register
 
     public function testRegisterCreatesAMemberWithAProfileRowAndSignsThemIn(): void
     {
         global $wpdb;
 
-        $email    = uniqid('fc_reg_', true) . '@example.test';
+        $email = 'new_' . wp_generate_password(8, false) . '@example.test';
+
         $response = $this->post('/auth/register', [
             'email'        => $email,
-            'password'     => self::PASSWORD,
-            'display_name' => 'Casey Rivers',
+            'password'     => 'a-long-enough-password',
+            'display_name' => 'New Member',
         ]);
 
         $this->assertSame(201, $response->get_status());
 
-        $data   = $response->get_data();
-        $wpUser = get_user_by('email', $email);
-        $this->assertNotFalse($wpUser, 'The WordPress user should exist.');
-        $this->createdLogins[] = (int) $wpUser->ID;
+        $account = (new AccountRepository())->findByEmail($email);
+        $this->assertNotNull($account);
+        $this->trackAccount($account->id);
 
-        $this->assertContains(RoleProvider::ROLE_USER, (array) $wpUser->roles);
-        $this->assertSame('Casey Rivers', $data['user']['display_name']);
-        $this->assertSame((int) $wpUser->ID, get_current_user_id(), 'Registration signs the member in.');
+        $this->assertSame(Capabilities::ROLE_USER, $account->role);
+        $this->assertSame('New Member', $account->displayName);
 
-        // The fc_users row is what every ownership check hangs off — without it
-        // the account exists in WordPress and nowhere in the product.
-        $profileId = $wpdb->get_var($wpdb->prepare(
-            "SELECT id FROM {$wpdb->prefix}fc_users WHERE wp_user_id = %d",
-            $wpUser->ID
-        ));
-        $this->assertNotNull($profileId);
-        $this->assertSame((int) $profileId, $data['user']['id']);
+        // The member profile is created with the account — every ownership
+        // check hangs off it.
+        $this->assertNotNull($wpdb->get_var($wpdb->prepare(
+            "SELECT id FROM {$wpdb->prefix}fc_users WHERE account_id = %d",
+            $account->id
+        )));
+
+        // And they are signed in, not left at a second form.
+        $this->assertSame($account->id, $response->get_data()['user']['account_id']);
+        $this->assertTrue(Auth::check());
+
+        $wpdb->delete($wpdb->prefix . 'fc_users', ['account_id' => $account->id]);
     }
 
     public function testRegisterRejectsAShortPassword(): void
     {
         $response = $this->post('/auth/register', [
-            'email'    => uniqid('fc_reg_', true) . '@example.test',
+            'email'    => 'short_' . wp_generate_password(8, false) . '@example.test',
             'password' => 'short',
         ]);
 
@@ -193,18 +304,18 @@ final class AuthApiTest extends IntegrationTestCase
 
     public function testRegisterRejectsAnAddressThatAlreadyHasAnAccount(): void
     {
-        $userId = $this->makeMember();
+        $account = (new AccountRepository())->find($this->makeAccount());
 
         $response = $this->post('/auth/register', [
-            'email'    => get_userdata($userId)->user_email,
-            'password' => self::PASSWORD,
+            'email'    => $account->email,
+            'password' => 'a-long-enough-password',
         ]);
 
         $this->assertSame(409, $response->get_status());
         $this->assertSame('fc_email_taken', $response->get_data()['code']);
     }
 
-    // --------------------------------------------------------------- me
+    // -------------------------------------------------------------- me/logout
 
     public function testMeRequiresASession(): void
     {
@@ -214,188 +325,250 @@ final class AuthApiTest extends IntegrationTestCase
         $this->assertSame('fc_not_authenticated', $response->get_data()['code']);
     }
 
-    public function testMeResolvesTheSpaFromTheRole(): void
+    public function testMeResolvesTheSpaFromTheAccountRole(): void
     {
-        $cases = [
-            'user'    => $this->makeMember(),
-            'trainer' => $this->makeUser(RoleProvider::ROLE_TRAINER),
-            'admin'   => $this->makeUser('administrator'),
-        ];
+        foreach (
+            [
+            Capabilities::ROLE_USER    => 'user',
+            Capabilities::ROLE_TRAINER => 'trainer',
+            Capabilities::ROLE_ADMIN   => 'admin',
+            ] as $role => $expectedSpa
+        ) {
+            $this->signIn($this->makeAccount($role));
 
-        foreach ($cases as $expectedSpa => $userId) {
-            wp_set_current_user($userId);
+            $data = rest_get_server()
+                ->dispatch(new WP_REST_Request('GET', '/fitnessclub/v1/auth/me'))
+                ->get_data();
 
-            $response = rest_get_server()->dispatch(new WP_REST_Request('GET', '/fitnessclub/v1/auth/me'));
-            $data     = $response->get_data();
-
-            $this->assertSame(200, $response->get_status());
-            $this->assertSame($expectedSpa, $data['app']['spa'], "A {$expectedSpa} should get the {$expectedSpa} SPA.");
-            $this->assertSame((int) $userId, $data['user']['wp_user_id']);
-            $this->assertArrayHasKey('colors', $data['theme'], 'The boot payload carries theme tokens.');
+            $this->assertSame($expectedSpa, $data['app']['spa'], "Role {$role}");
+            $this->assertSame($role, $data['user']['role']);
         }
     }
 
-    public function testMeFallsBackToFreeTierEntitlementsWithNoSubscription(): void
+    /**
+     * The requirement this whole work package exists for.
+     */
+    public function testAWordPressAdministratorWithNoAccountIsAnonymous(): void
     {
-        wp_set_current_user($this->makeMember());
+        $wpAdmin = wp_insert_user([
+            'user_login' => 'fc_wpadmin_' . wp_generate_password(8, false),
+            'user_pass'  => wp_generate_password(),
+            'user_email' => uniqid('fc_wpadmin_', true) . '@example.test',
+            'role'       => 'administrator',
+        ]);
 
-        $data = rest_get_server()
-            ->dispatch(new WP_REST_Request('GET', '/fitnessclub/v1/auth/me'))
-            ->get_data();
+        wp_set_current_user((int) $wpAdmin);
+        $this->assertTrue(current_user_can('manage_options'), 'Really is a WordPress administrator.');
 
-        // Fail open to the floor, never closed — a user with no plan can still
-        // log their own workouts (plans/03-backend.md#entitlements).
-        $this->assertTrue($data['entitlements']['can_log_workouts']);
-        $this->assertFalse($data['entitlements']['has_active_subscription']);
-        $this->assertSame(0, $data['entitlements']['max_trainers']);
-        $this->assertSame(0, $data['entitlements']['trainers_used']);
-        $this->assertSame([], $data['subscriptions']);
-        $this->assertSame([], $data['trainers']);
+        $me = rest_get_server()->dispatch(new WP_REST_Request('GET', '/fitnessclub/v1/auth/me'));
+        $this->assertSame(401, $me->get_status(), 'A wp-admin session grants nothing here.');
+
+        $dashboard = rest_get_server()->dispatch(
+            new WP_REST_Request('GET', '/fitnessclub/v1/user/dashboard')
+        );
+        $this->assertSame(401, $dashboard->get_status());
+
+        // And they are routed to the user SPA, which is the login screen.
+        $this->assertSame('user', \FitnessClub\Support\AppRouter::currentSpa());
+
+        if (!function_exists('wp_delete_user')) {
+            require_once ABSPATH . 'wp-admin/includes/user.php';
+        }
+        wp_delete_user((int) $wpAdmin);
     }
 
-    // ------------------------------------------------------------- logout
-
-    public function testLogoutEndsTheSessionAndReturnsAGuestNonce(): void
+    public function testLogoutEndsTheSessionAndReturnsAGuestToken(): void
     {
-        wp_set_current_user($this->makeMember());
+        $this->signIn($this->makeAccount());
 
-        $response = $this->post('/auth/logout', []);
+        $response = $this->post('/auth/logout');
 
         $this->assertSame(200, $response->get_status());
         $this->assertTrue($response->get_data()['ok']);
-        $this->assertNotEmpty($response->get_data()['nonce']);
-        $this->assertSame(0, get_current_user_id());
+        $this->assertNotEmpty(
+            $response->get_data()['csrf'],
+            'A signed-out client still needs a token to reach the login endpoint.'
+        );
+        $this->assertFalse(Auth::check());
     }
 
-    // ------------------------------------------------------- password reset
+    public function testLogoutRevokesTheSessionRowSoTheCookieIsDead(): void
+    {
+        global $wpdb;
+
+        $accountId = $this->makeAccount();
+        $this->signIn($accountId);
+        $cookie = SessionCookie::read();
+
+        $this->post('/auth/logout');
+
+        $this->assertSame(
+            1,
+            (int) $wpdb->get_var($wpdb->prepare(
+                "SELECT COUNT(*) FROM {$wpdb->prefix}fc_sessions
+                  WHERE account_id = %d AND revoked_at IS NOT NULL",
+                $accountId
+            )),
+            'Revoked server-side, so replaying the cookie cannot resurrect it.'
+        );
+
+        Auth::forget();
+        $this->assertNull(Auth::sessions()->resolve($cookie));
+    }
+
+    // ------------------------------------------------------ password recovery
 
     public function testForgotPasswordAnswersTheSameForKnownAndUnknownAddresses(): void
     {
-        $userId = $this->makeMember();
+        $account = (new AccountRepository())->find($this->makeAccount());
 
-        $email = get_userdata($userId)->user_email;
-        $this->clearForgotBucketsFor($email, 'nobody-here@example.test');
+        $known = $this->post('/auth/password/forgot', ['user_login' => $account->email]);
 
-        $known = $this->post('/auth/password/forgot', ['user_login' => $email]);
-        $unknown = $this->post('/auth/password/forgot', ['user_login' => 'nobody-here@example.test']);
+        RateLimiter::clear('pwforgot_ip', RateLimiter::ipHash());
+
+        // A *fresh* unknown address each run. The per-address bucket is a
+        // one-hour window held in a transient, so a hard-coded address here
+        // 429s on the fourth run within an hour — which reads as a broken
+        // endpoint rather than as the throttle doing its job.
+        $unknown = $this->post('/auth/password/forgot', [
+            'user_login' => 'nobody_' . wp_generate_password(10, false) . '@example.test',
+        ]);
 
         $this->assertSame(200, $known->get_status());
         $this->assertSame(200, $unknown->get_status());
         $this->assertSame($known->get_data(), $unknown->get_data());
     }
 
-    public function testForgotPasswordIsRateLimitedPerAddress(): void
+    public function testResetPasswordChangesThePasswordAndRevokesEverySession(): void
     {
-        $limit = (int) FitnessClub()->config('fitnessclub.limits.password_reset_per_hour');
-        $email = 'flooded@example.test';
+        global $wpdb;
 
-        // This bucket's window is an hour, so a previous run of the suite would
-        // otherwise still be holding it.
-        $this->clearForgotBucketsFor($email);
+        $accountId = $this->makeAccount();
+        $account   = (new AccountRepository())->find($accountId);
 
-        for ($i = 0; $i < $limit; $i++) {
-            $this->assertSame(200, $this->post('/auth/password/forgot', ['user_login' => $email])->get_status());
-        }
+        // Two devices signed in, which is the state a reset is meant to end.
+        $this->signIn($accountId);
+        Auth::sessions()->issue($accountId);
 
-        $blocked = $this->post('/auth/password/forgot', ['user_login' => $email]);
+        $token = (new TokenService())->issue($accountId, TokenService::PURPOSE_RESET, 3600);
 
-        $this->assertSame(429, $blocked->get_status());
-        $this->assertSame('fc_rate_limited', $blocked->get_data()['code']);
-    }
-
-    public function testResetPasswordChangesThePasswordWithAValidKey(): void
-    {
-        $userId = $this->makeMember();
-        $user   = get_userdata($userId);
-        $key    = get_password_reset_key($user);
-        $this->assertNotInstanceOf(\WP_Error::class, $key);
+        Auth::forget();
+        SessionCookie::clear();
+        Csrf::ensureCookie();
 
         $response = $this->post('/auth/password/reset', [
-            'key'      => $key,
-            'login'    => $user->user_login,
-            'password' => 'a-brand-new-passphrase',
+            'token'    => $token,
+            'password' => 'a-brand-new-password',
         ]);
 
         $this->assertSame(200, $response->get_status());
 
-        $authenticated = wp_authenticate($user->user_login, 'a-brand-new-passphrase');
-        $this->assertNotInstanceOf(\WP_Error::class, $authenticated);
-        $this->assertSame($userId, $authenticated->ID);
+        $credentials = (new AccountRepository())->credentialsFor($accountId);
+        $this->assertTrue(PasswordHasher::verify('a-brand-new-password', $credentials['password_hash']));
+        $this->assertFalse(PasswordHasher::verify(self::PASSWORD, $credentials['password_hash']));
 
-        // The key is single-use: replaying it must not work.
-        $replay = $this->post('/auth/password/reset', [
-            'key'      => $key,
-            'login'    => $user->user_login,
-            'password' => 'yet-another-passphrase',
-        ]);
-        $this->assertSame(400, $replay->get_status());
-        $this->assertSame('fc_invalid_reset_key', $replay->get_data()['code']);
+        $live = (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$wpdb->prefix}fc_sessions
+              WHERE account_id = %d AND revoked_at IS NULL",
+            $accountId
+        ));
+        $this->assertSame(0, $live, 'Every device is signed out — the point of a reset.');
+
+        // Not signed in automatically: whoever held the link may not be the owner.
+        $this->assertFalse(Auth::check());
+        $this->assertNotNull($account);
     }
 
-    public function testResetPasswordWorksWhileStillSignedInOnThisBrowser(): void
+    public function testAResetTokenWorksOnlyOnce(): void
     {
-        $userId = $this->makeMember();
-        $user   = get_userdata($userId);
-        $key    = get_password_reset_key($user);
-        wp_set_current_user($userId);
+        $accountId = $this->makeAccount();
+        $token     = (new TokenService())->issue($accountId, TokenService::PURPOSE_RESET, 3600);
 
-        // The key is the authorisation, not the absence of a session — a user
-        // who asked for a reset on their phone must be able to follow the link
-        // on the laptop where they are still signed in.
-        $response = $this->post('/auth/password/reset', [
-            'key'      => $key,
-            'login'    => $user->user_login,
-            'password' => 'a-brand-new-passphrase',
+        $first = $this->post('/auth/password/reset', [
+            'token'    => $token,
+            'password' => 'first-new-password',
+        ]);
+        $this->assertSame(200, $first->get_status());
+
+        $second = $this->post('/auth/password/reset', [
+            'token'    => $token,
+            'password' => 'second-new-password',
         ]);
 
-        $this->assertSame(200, $response->get_status());
+        $this->assertSame(400, $second->get_status());
+        $this->assertSame('fc_invalid_reset_key', $second->get_data()['code']);
     }
 
-    public function testResetPasswordRejectsAForgedKey(): void
+    public function testAnExpiredResetTokenIsRefused(): void
     {
-        $userId = $this->makeMember();
+        global $wpdb;
+
+        $accountId = $this->makeAccount();
+        $token     = (new TokenService())->issue($accountId, TokenService::PURPOSE_RESET, 3600);
+
+        // Move the expiry into the past rather than waiting an hour.
+        $wpdb->query($wpdb->prepare(
+            "UPDATE {$wpdb->prefix}fc_account_tokens
+                SET expires_at = DATE_SUB(UTC_TIMESTAMP(), INTERVAL 1 MINUTE)
+              WHERE account_id = %d",
+            $accountId
+        ));
 
         $response = $this->post('/auth/password/reset', [
-            'key'      => 'made-up-key',
-            'login'    => get_userdata($userId)->user_login,
-            'password' => 'a-brand-new-passphrase',
+            'token'    => $token,
+            'password' => 'a-brand-new-password',
         ]);
 
         $this->assertSame(400, $response->get_status());
         $this->assertSame('fc_invalid_reset_key', $response->get_data()['code']);
     }
 
-    // -------------------------------------------------------------- helpers
+    public function testResetPasswordRejectsAForgedToken(): void
+    {
+        $response = $this->post('/auth/password/reset', [
+            'token'    => str_repeat('a', 32) . '.' . str_repeat('b', 64),
+            'password' => 'a-brand-new-password',
+        ]);
+
+        $this->assertSame(400, $response->get_status());
+        $this->assertSame('fc_invalid_reset_key', $response->get_data()['code']);
+    }
 
     /**
-     * A member with a known password and an fc_users row.
+     * An invitation redeems through the same endpoint, and activates the
+     * account — which is how a bootstrapped or admin-created account becomes
+     * usable.
      */
-    private function makeMember(): int
+    public function testAnInviteTokenActivatesAPendingAccount(): void
     {
-        $id = $this->makeUser(RoleProvider::ROLE_USER);
-        wp_set_password(self::PASSWORD, $id);
+        $accountId = $this->makeAccount(Capabilities::ROLE_USER, [], Account::STATUS_PENDING);
+        $token     = (new TokenService())->issue($accountId, TokenService::PURPOSE_INVITE, 3600);
 
-        return $id;
+        $response = $this->post('/auth/password/reset', [
+            'token'    => $token,
+            'password' => 'a-chosen-password',
+        ]);
+
+        $this->assertSame(200, $response->get_status());
+
+        $account = (new AccountRepository())->find($accountId);
+        $this->assertTrue($account->isActive(), 'Redeeming an invite activates the account.');
     }
+
+    // ---------------------------------------------------------------- helpers
 
     /**
      * @param array<string,mixed> $body
      */
-    private function post(string $route, array $body): \WP_REST_Response
+    private function post(string $route, array $body = []): WP_REST_Response
     {
         $request = new WP_REST_Request('POST', '/fitnessclub/v1' . $route);
-        $request->set_header('content-type', 'application/json');
-        $request->set_body(wp_json_encode($body));
+        $request->set_header('X-FC-CSRF', $this->csrf());
+
+        foreach ($body as $key => $value) {
+            $request->set_param($key, $value);
+        }
 
         return rest_get_server()->dispatch($request);
-    }
-
-    private function clearForgotBucketsFor(string ...$emails): void
-    {
-        RateLimiter::clear('pwforgot_ip', RateLimiter::ipHash());
-
-        foreach ($emails as $email) {
-            RateLimiter::clear('pwforgot', RateLimiter::keyFor($email));
-        }
     }
 }

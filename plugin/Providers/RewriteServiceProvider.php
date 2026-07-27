@@ -84,10 +84,29 @@ class RewriteServiceProvider extends ServiceProvider
             return;
         }
 
+        // Whoever WordPress thinks is rendering this, they are not the app's
+        // user. An administrator browsing wp-admin in another tab must see the
+        // login panel here, not the admin SPA.
+        wp_set_current_user(0);
+
         $spa = AppRouter::currentSpa();
 
         status_header(200);
         nocache_headers();
+
+        // The shell embeds the member's identity *and* their CSRF token in
+        // `data-boot`, so a cached copy served to a second visitor is a session
+        // leak — not a stale page. Every stock cache-bypass rule keys on
+        // `wordpress_logged_in_*`, which a cookie named `fc_session_*` does not
+        // match, so the bypass has to be requested explicitly. This is the one
+        // place a plugin-owned cookie is genuinely worse than WordPress' own,
+        // and `/{base}/*` should also be excluded at the edge on any host with a
+        // full-page cache. See Auth\SessionCookie for the filter that lets an
+        // uncooperative cache be given a name it recognises.
+        if (!defined('DONOTCACHEPAGE')) {
+            define('DONOTCACHEPAGE', true);
+        }
+        header('Vary: Cookie');
 
         // toHTML(), not (string) or render(): wpBones' render() *echoes* and
         // returns null outside ajax, so casting would emit the page as a side

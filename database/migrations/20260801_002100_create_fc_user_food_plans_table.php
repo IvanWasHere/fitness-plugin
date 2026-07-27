@@ -24,7 +24,7 @@ return new class extends Migration {
   id bigint(20) unsigned NOT NULL auto_increment,
   user_id bigint(20) unsigned NOT NULL,
   food_plan_id bigint(20) unsigned NOT NULL,
-  assigned_by_wp_user_id bigint(20) unsigned DEFAULT NULL,
+  assigned_by_account_id bigint(20) unsigned DEFAULT NULL,
   start_date date DEFAULT NULL,
   end_date date DEFAULT NULL,
   status varchar(20) NOT NULL DEFAULT 'active',

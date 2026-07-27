@@ -22,7 +22,7 @@ return new class extends Migration {
             'fc_trainers',
             "(
   id bigint(20) unsigned NOT NULL auto_increment,
-  wp_user_id bigint(20) unsigned NOT NULL,
+  account_id bigint(20) unsigned NOT NULL,
   display_name varchar(100) DEFAULT NULL,
   bio text DEFAULT NULL,
   specialization varchar(255) DEFAULT NULL,
@@ -38,9 +38,13 @@ return new class extends Migration {
   created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY  (id),
-  UNIQUE KEY uq_wp_user (wp_user_id),
+  UNIQUE KEY uq_account (account_id),
   KEY idx_directory (status,accepting_clients)
             ) {$this->charsetCollate};"
         );
+
+        // RESTRICT for the same reason as fc_users: the account is provenance.
+        $this->engine('fc_trainers');
+        $this->foreign('fc_trainers', 'account_id', 'fc_accounts', 'id', 'RESTRICT');
     }
 };

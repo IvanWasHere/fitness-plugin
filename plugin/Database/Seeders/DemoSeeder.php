@@ -2,6 +2,8 @@
 
 namespace FitnessClub\Database\Seeders;
 
+use FitnessClub\Auth\Capabilities;
+
 if (!defined('ABSPATH')) {
     exit();
 }
@@ -9,6 +11,10 @@ if (!defined('ABSPATH')) {
 /**
  * The full prototype dataset. OPT-IN ONLY — never wired into database/seeders/, so
  * demo accounts never appear on a production site. Run via `php bones fitnessclub:seed --demo`.
+ *
+ * Every demo account signs in with `Seeder::DEMO_PASSWORD`. These are plugin
+ * accounts (fc_accounts), not WordPress users — the plugin stopped creating
+ * WordPress users when identity moved in-house.
  *
  * Deliberately exercises the paths easy to get wrong later:
  *  - Alex Morgan is coached by BOTH Sarah Chen and Mike Torres (Q3), Sarah primary,
@@ -63,11 +69,11 @@ class DemoSeeder extends Seeder
     private function seedTrainers(): void
     {
         foreach (DemoData::trainers() as $t) {
-            $wpId = $this->wpUser($t['login'], $t['email'], $t['name'], 'fc_trainer');
-            if (!$wpId) {
+            $accountId = $this->account($t["login"], $t["email"], $t["name"], Capabilities::ROLE_TRAINER);
+            if (!$accountId) {
                 continue;
             }
-            $this->trainers[$t['login']] = $this->upsert('trainers', ['wp_user_id' => $wpId], [
+            $this->trainers[$t['login']] = $this->upsert('trainers', ["account_id" => $accountId], [
                 'display_name' => $t['name'], 'bio' => $t['bio'], 'specialization' => $t['specialization'],
                 'phone' => $t['phone'], 'hourly_rate' => 65.00, 'currency' => 'USD',
                 'rating' => $t['rating'], 'rating_count' => $t['rating_count'], 'status' => 'active',
@@ -81,11 +87,11 @@ class DemoSeeder extends Seeder
     private function seedUsers(): void
     {
         foreach (DemoData::users() as $u) {
-            $wpId = $this->wpUser($u['login'], $u['email'], $u['name'], 'fc_user');
-            if (!$wpId) {
+            $accountId = $this->account($u["login"], $u["email"], $u["name"], Capabilities::ROLE_USER);
+            if (!$accountId) {
                 continue;
             }
-            $this->users[$u['login']] = $this->upsert('users', ['wp_user_id' => $wpId], [
+            $this->users[$u['login']] = $this->upsert('users', ["account_id" => $accountId], [
                 'display_name' => $u['name'], 'phone' => $u['phone'], 'date_of_birth' => $u['dob'],
                 'gender' => $u['gender'], 'height_cm' => $u['height'], 'weight_kg' => $u['weight'],
                 'target_weight_kg' => $u['target_weight'], 'body_fat_percentage' => $u['body_fat'],
@@ -196,7 +202,7 @@ class DemoSeeder extends Seeder
                 continue;
             }
             $this->upsert('user_workouts', ['user_id' => $alex, 'workout_id' => $workoutId], [
-                'assigned_by_wp_user_id' => $this->trainerWpUserId($w['trainer']),
+                'assigned_by_account_id' => $this->trainerAccountIdFor($w['trainer']),
                 'assigned_date' => $this->daysAgo(30 - $i), 'scheduled_for' => $this->daysAgo(-($i % 7)),
                 'progress_percentage' => $w['progress'], 'times_completed' => (int) floor($w['progress'] / 25),
                 'status' => $w['progress'] >= 100 ? 'completed' : ($w['progress'] > 0 ? 'in_progress' : 'assigned'),
@@ -374,11 +380,11 @@ class DemoSeeder extends Seeder
                 'status' => 'open', 'updated_at' => $this->now(),
             ]);
             $threads++;
-            $alexWpId    = $this->userWpUserId('alex.morgan');
-            $trainerWpId = $this->trainerWpUserId($trainerLogin);
+            $alexAccountId    = $this->accountIdFor('alex.morgan');
+            $trainerAccountId = $this->trainerAccountIdFor($trainerLogin);
             foreach ($messages as $i => [$direction, $text, $daysAgo]) {
                 $this->upsert('messages', ['thread_id' => $threadId, 'message' => $text], [
-                    'sender_wp_user_id' => 'user_to_trainer' === $direction ? $alexWpId : $trainerWpId,
+                    'sender_account_id' => 'user_to_trainer' === $direction ? $alexAccountId : $trainerAccountId,
                     'direction' => $direction, 'is_read' => 'user_to_trainer' === $direction ? 1 : ($i < 2 ? 1 : 0),
                     'created_at' => gmdate('Y-m-d H:i:s', strtotime("-{$daysAgo} days") + ($i * 300)),
                 ]);
@@ -390,12 +396,12 @@ class DemoSeeder extends Seeder
 
     private function seedNotifications(): void
     {
-        $wpId = $this->userWpUserId('alex.morgan');
-        if (!$wpId) {
+        $accountId = $this->accountIdFor('alex.morgan');
+        if (!$accountId) {
             return;
         }
         foreach (DemoData::notifications() as [$type, $title, $body, $icon, $color, $read, $daysAgo]) {
-            $this->upsert('notifications', ['wp_user_id' => $wpId, 'title' => $title], [
+            $this->upsert('notifications', ['account_id' => $accountId, 'title' => $title], [
                 'type' => $type, 'body' => $body, 'icon' => $icon, 'color' => $color, 'is_read' => $read,
                 'read_at' => $read ? $this->now() : null, 'created_at' => gmdate('Y-m-d H:i:s', strtotime("-{$daysAgo} days")),
             ]);
@@ -405,8 +411,8 @@ class DemoSeeder extends Seeder
 
     private function seedActivity(): void
     {
-        $wpId = $this->userWpUserId('alex.morgan');
-        if (!$wpId) {
+        $accountId = $this->accountIdFor('alex.morgan');
+        if (!$accountId) {
             return;
         }
         $items = [
@@ -417,7 +423,7 @@ class DemoSeeder extends Seeder
             ['nutrition.water', 'Water Intake', '8 glasses completed', 1],
         ];
         foreach ($items as [$type, $title, $detail, $daysAgo]) {
-            $this->upsert('activity_log', ['wp_user_id' => $wpId, 'type' => $type, 'title' => $title], [
+            $this->upsert('activity_log', ['account_id' => $accountId, 'type' => $type, 'title' => $title], [
                 'detail' => $detail, 'is_audit' => 0, 'created_at' => gmdate('Y-m-d H:i:s', strtotime("-{$daysAgo} days")),
             ]);
         }
@@ -426,31 +432,32 @@ class DemoSeeder extends Seeder
 
     private function seedTickets(): void
     {
-        $wpId = $this->userWpUserId('alex.morgan');
-        if (!$wpId) {
+        $accountId = $this->accountIdFor('alex.morgan');
+        if (!$accountId) {
             return;
         }
-        $ticketId = $this->upsert('tickets', ['user_wp_user_id' => $wpId, 'subject' => 'Cannot sync workout on mobile'], [
+        $ticketId = $this->upsert('tickets', ['user_account_id' => $accountId, 'subject' => 'Cannot sync workout on mobile'], [
             'message' => 'My last two sessions did not appear on the dashboard until I refreshed.',
             'category' => 'technical', 'priority' => 'medium', 'status' => 'open', 'updated_at' => $this->now(),
         ]);
-        $this->upsert('ticket_replies', ['ticket_id' => $ticketId, 'author_wp_user_id' => $wpId], [
+        $this->upsert('ticket_replies', ['ticket_id' => $ticketId, 'author_account_id' => $accountId], [
             'author_role' => 'user', 'message' => 'Still happening on the latest version.', 'is_internal_note' => 0, 'created_at' => $this->now(),
         ]);
         $this->note('support: 1 ticket, 1 reply');
     }
 
-    private function userWpUserId(string $login): int
+    private function accountIdFor(string $login): int
     {
-        $user = get_user_by('login', $login);
-
-        return $user ? (int) $user->ID : 0;
+        return $this->accountId($login);
     }
 
-    private function trainerWpUserId(string $login): ?int
+    /**
+     * Null rather than 0 for an unknown trainer: the columns this feeds
+     * (`assigned_by_account_id`, `sender_account_id`) are nullable provenance,
+     * and 0 would be a reference to an account that cannot exist.
+     */
+    private function trainerAccountIdFor(string $login): ?int
     {
-        $user = get_user_by('login', $login);
-
-        return $user ? (int) $user->ID : null;
+        return $this->accountId($login) ?: null;
     }
 }

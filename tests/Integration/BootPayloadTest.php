@@ -2,7 +2,8 @@
 
 namespace FitnessClub\Tests\Integration;
 
-use FitnessClub\Providers\RoleProvider;
+use FitnessClub\Auth\Auth;
+use FitnessClub\Auth\Capabilities;
 use FitnessClub\Services\BootPresenter;
 use FitnessClub\Services\ThemeService;
 use FitnessClub\Support\AppRouter;
@@ -19,7 +20,7 @@ final class BootPayloadTest extends IntegrationTestCase
 {
     public function testAnonymousVisitorGetsTheUserSpaWithNoIdentity(): void
     {
-        wp_set_current_user(0);
+        $this->signOut();
 
         $boot = (new BootPresenter())->shell();
 
@@ -28,48 +29,68 @@ final class BootPayloadTest extends IntegrationTestCase
         $this->assertNull($boot['user']);
         $this->assertSame('user', $boot['app']['spa']);
         $this->assertSame(AppRouter::basePath(), $boot['app']['basename']);
-        $this->assertNotEmpty($boot['nonce']);
-        $this->assertNotEmpty($boot['ajaxUrl']);
         $this->assertArrayHasKey('registration_open', $boot['flags']);
+
+        // An anonymous visitor still gets a CSRF token: the login form is a
+        // write, and without one it could not be submitted at all.
+        $this->assertNotEmpty($boot['csrf']);
     }
 
     public function testShellPayloadCarriesEverythingTheFirstFrameNeeds(): void
     {
-        $userId = $this->makeUser(RoleProvider::ROLE_USER);
-        wp_set_current_user($userId);
+        $accountId = $this->makeAccount(Capabilities::ROLE_USER);
+        $this->signIn($accountId);
 
         $boot = (new BootPresenter())->shell();
 
         foreach (['user', 'subscriptions', 'trainers', 'entitlements', 'theme', 'app', 'counts'] as $key) {
             $this->assertArrayHasKey($key, $boot, "The /auth/me contract key '{$key}' is missing.");
         }
-        foreach (['restUrl', 'ajaxUrl', 'nonce', 'brand', 'locale', 'flags'] as $key) {
+        foreach (['restUrl', 'csrf', 'brand', 'locale', 'flags'] as $key) {
             $this->assertArrayHasKey($key, $boot, "The shell transport key '{$key}' is missing.");
         }
 
-        $this->assertSame(get_userdata($userId)->display_name, $boot['user']['display_name']);
+        // Gone with WordPress identity, and their absence is part of the
+        // contract: a client still reading these is speaking the old protocol.
+        $this->assertArrayNotHasKey('nonce', $boot);
+        $this->assertArrayNotHasKey('ajaxUrl', $boot);
+
+        $this->assertSame($accountId, $boot['user']['account_id']);
+        $this->assertSame(Auth::account()->displayName, $boot['user']['display_name']);
         $this->assertSame(0, $boot['counts']['unread_messages']);
         $this->assertSame(0, $boot['counts']['unread_notifications']);
     }
 
     public function testTrainerAndAdminResolveToTheirOwnSpa(): void
     {
-        wp_set_current_user($this->makeUser(RoleProvider::ROLE_TRAINER));
+        $this->signIn($this->makeAccount(Capabilities::ROLE_TRAINER));
         $this->assertSame('trainer', (new BootPresenter())->me()['app']['spa']);
 
-        wp_set_current_user($this->makeUser('administrator'));
+        $this->signIn($this->makeAccount(Capabilities::ROLE_ADMIN));
         $this->assertSame('admin', (new BootPresenter())->me()['app']['spa']);
     }
 
-    public function testAdminOutranksTrainerForAMultiRoleAccount(): void
+    public function testAWordPressSessionContributesNothingToTheBootPayload(): void
     {
-        // Q17c: precedence is admin > trainer > user, no switcher at launch.
-        $userId = $this->makeUser('administrator');
-        get_user_by('id', $userId)->add_role(RoleProvider::ROLE_TRAINER);
-        wp_set_current_user($userId);
+        $wpUser = wp_insert_user([
+            'user_login' => 'fc_boot_' . wp_generate_password(8, false),
+            'user_pass'  => wp_generate_password(),
+            'user_email' => uniqid('fc_boot_', true) . '@example.test',
+            'role'       => 'administrator',
+        ]);
 
-        $this->assertSame('admin', AppRouter::currentSpa());
-        $this->assertSame(AppRouter::ROLE_ADMIN, AppRouter::currentRole());
+        wp_set_current_user((int) $wpUser);
+        $this->signOut();
+
+        $boot = (new BootPresenter())->shell();
+
+        $this->assertNull($boot['user'], 'A wp-admin session is not an app session.');
+        $this->assertSame('user', $boot['app']['spa']);
+
+        if (!function_exists('wp_delete_user')) {
+            require_once ABSPATH . 'wp-admin/includes/user.php';
+        }
+        wp_delete_user((int) $wpUser);
     }
 
     public function testThemeTokensMergeDownToCssVariablesScopedToTheAppRoot(): void
@@ -102,7 +123,7 @@ final class BootPayloadTest extends IntegrationTestCase
 
     public function testShellMarkupCarriesTheBootPayloadAndTheThemeBlock(): void
     {
-        wp_set_current_user(0);
+        $this->signOut();
 
         $html = FitnessClub()->view('app.shell', [
             'boot'     => (new BootPresenter())->shell(),

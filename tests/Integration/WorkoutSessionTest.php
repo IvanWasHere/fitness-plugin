@@ -94,7 +94,7 @@ final class WorkoutSessionTest extends WorkoutFixtureCase
 
         // --- 15 more minutes, then complete ----------------------------------
         $this->rewindSession($sessionId, 900, ['started_at', 'last_resumed_at']);
-        $celebration = $this->sessions->complete($fixture['wp_user_id'], $fcUserId, $sessionId);
+        $celebration = $this->sessions->complete($fixture['account_id'], $fcUserId, $sessionId);
 
         // Duration: 10 min before the pause + 15 min after. The 20-minute gap is
         // paused time and must not be in it.
@@ -161,12 +161,12 @@ final class WorkoutSessionTest extends WorkoutFixtureCase
         // Feed + notification: the celebration screen is not the only record.
         $this->assertSame(1, (int) $wpdb->get_var($wpdb->prepare(
             "SELECT COUNT(*) FROM {$wpdb->prefix}fc_activity_log
-              WHERE wp_user_id = %d AND type = 'workout.completed'",
-            $fixture['wp_user_id']
+              WHERE account_id = %d AND type = 'workout.completed'",
+            $fixture['account_id']
         )));
         $this->assertGreaterThan(0, (int) $wpdb->get_var($wpdb->prepare(
-            "SELECT COUNT(*) FROM {$wpdb->prefix}fc_notifications WHERE wp_user_id = %d",
-            $fixture['wp_user_id']
+            "SELECT COUNT(*) FROM {$wpdb->prefix}fc_notifications WHERE account_id = %d",
+            $fixture['account_id']
         )));
     }
 
@@ -182,7 +182,7 @@ final class WorkoutSessionTest extends WorkoutFixtureCase
         ]);
 
         $celebration = $this->sessions->complete(
-            $fixture['wp_user_id'],
+            $fixture['account_id'],
             $fixture['fc_user_id'],
             $session['id']
         );
@@ -323,10 +323,10 @@ final class WorkoutSessionTest extends WorkoutFixtureCase
     {
         $fixture = $this->seedMemberWithWorkout();
         $session = $this->sessions->start($fixture['fc_user_id'], $fixture['workout_id']);
-        $this->sessions->complete($fixture['wp_user_id'], $fixture['fc_user_id'], $session['id']);
+        $this->sessions->complete($fixture['account_id'], $fixture['fc_user_id'], $session['id']);
 
         $this->expectException(DomainException::class);
-        $this->sessions->complete($fixture['wp_user_id'], $fixture['fc_user_id'], $session['id']);
+        $this->sessions->complete($fixture['account_id'], $fixture['fc_user_id'], $session['id']);
     }
 
     public function testAnotherMembersSessionIsNotFound(): void
@@ -360,7 +360,7 @@ final class WorkoutSessionTest extends WorkoutFixtureCase
         $this->assertSame($session['id'], $this->sessions->active($fixture['fc_user_id'])['id']);
 
         $this->sessions->resume($fixture['fc_user_id'], $session['id']);
-        $this->sessions->complete($fixture['wp_user_id'], $fixture['fc_user_id'], $session['id']);
+        $this->sessions->complete($fixture['account_id'], $fixture['fc_user_id'], $session['id']);
         $this->assertNull($this->sessions->active($fixture['fc_user_id']));
     }
 
@@ -427,12 +427,12 @@ final class WorkoutSessionTest extends WorkoutFixtureCase
 
         $first = $this->sessions->start($fcUserId, $fixture['workout_id']);
         $this->sessions->logSet($fcUserId, $first['id'], $lift, 0, ['reps' => 10, 'weight_kg' => 50]);
-        $this->sessions->complete($fixture['wp_user_id'], $fcUserId, $first['id']);
+        $this->sessions->complete($fixture['account_id'], $fcUserId, $first['id']);
 
         $second = $this->sessions->start($fcUserId, $fixture['workout_id']);
         // Heavier but fewer reps: max_weight falls, max_reps does not.
         $this->sessions->logSet($fcUserId, $second['id'], $lift, 0, ['reps' => 6, 'weight_kg' => 60]);
-        $celebration = $this->sessions->complete($fixture['wp_user_id'], $fcUserId, $second['id']);
+        $celebration = $this->sessions->complete($fixture['account_id'], $fcUserId, $second['id']);
 
         $types = array_column($celebration['personal_records'], 'record_type');
         sort($types);
@@ -454,11 +454,11 @@ final class WorkoutSessionTest extends WorkoutFixtureCase
 
         $first = $this->sessions->start($fcUserId, $fixture['workout_id']);
         $this->sessions->logSet($fcUserId, $first['id'], $lift, 0, ['reps' => 10, 'weight_kg' => 50]);
-        $this->sessions->complete($fixture['wp_user_id'], $fcUserId, $first['id']);
+        $this->sessions->complete($fixture['account_id'], $fcUserId, $first['id']);
 
         $second = $this->sessions->start($fcUserId, $fixture['workout_id']);
         $this->sessions->logSet($fcUserId, $second['id'], $lift, 0, ['reps' => 10, 'weight_kg' => 50]);
-        $celebration = $this->sessions->complete($fixture['wp_user_id'], $fcUserId, $second['id']);
+        $celebration = $this->sessions->complete($fixture['account_id'], $fcUserId, $second['id']);
 
         $this->assertSame([], $celebration['personal_records']);
     }
@@ -474,7 +474,7 @@ final class WorkoutSessionTest extends WorkoutFixtureCase
         $session = $this->sessions->start($fixture['fc_user_id'], $fixture['workout_id']);
         $this->sessions->logSet($fixture['fc_user_id'], $session['id'], $plank, 0, ['duration_seconds' => 45]);
         $this->sessions->logSet($fixture['fc_user_id'], $session['id'], $plank, 1, ['duration_seconds' => 70]);
-        $celebration = $this->sessions->complete($fixture['wp_user_id'], $fixture['fc_user_id'], $session['id']);
+        $celebration = $this->sessions->complete($fixture['account_id'], $fixture['fc_user_id'], $session['id']);
 
         $record = $this->recordFor($celebration['personal_records'], 'Fixture Lift 1', 'best_time');
         $this->assertSame(70.0, $record['value']);
@@ -495,7 +495,7 @@ final class WorkoutSessionTest extends WorkoutFixtureCase
 
         $session = $this->sessions->start($fcUserId, $fixture['workout_id']);
         $this->sessions->logSet($fcUserId, $session['id'], $lift, 0, ['reps' => 10, 'weight_kg' => 50]);
-        $this->sessions->complete($fixture['wp_user_id'], $fcUserId, $session['id']);
+        $this->sessions->complete($fixture['account_id'], $fcUserId, $session['id']);
 
         // "It was actually 85, I mistyped." That is exactly when a record changes.
         $reviewed = $this->sessions->review($fcUserId, $session['id'], [

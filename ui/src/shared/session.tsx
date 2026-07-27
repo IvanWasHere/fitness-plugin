@@ -27,8 +27,8 @@ import {
 export function SessionProvider({ spa, children }: { spa: SpaName; children: ReactNode }) {
   const [boot, setBoot] = useState<BootPayload>(() => bootOrDefaults(spa));
 
-  // Built once from the first payload: the client owns the nonce from then on,
-  // refreshing it itself when WordPress expires it.
+  // Built once from the first payload; the CSRF token it carries lives exactly
+  // as long as the session, so there is nothing to refresh.
   const api = useMemo(() => new ApiClient(boot), []); // eslint-disable-line react-hooks/exhaustive-deps
 
   /**
@@ -37,7 +37,7 @@ export function SessionProvider({ spa, children }: { spa: SpaName; children: Rea
    */
   const adopt = useCallback(
     (next: BootPayload) => {
-      api.setNonce(next.nonce);
+      api.setCsrf(next.csrf);
 
       if (next.app.spa !== spa) {
         window.location.assign(`${next.app.base}/`);
@@ -73,10 +73,10 @@ export function SessionProvider({ spa, children }: { spa: SpaName; children: Rea
       return;
     }
 
-    api.setNonce(result.nonce ?? '');
+    api.setCsrf(result.csrf ?? '');
     setBoot((current) => ({
       ...current,
-      nonce: result.nonce ?? current.nonce,
+      csrf: result.csrf ?? current.csrf,
       user: null,
       subscriptions: [],
       trainers: [],

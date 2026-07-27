@@ -2,7 +2,7 @@
  * The boot payload the PHP shell injects (D9/D10, plans/02-api-contract.md).
  *
  * The shell renders `<div id="fc-app" data-boot="…">` where the JSON carries
- * everything the SPA needs for its first frame — REST root, nonce, current user,
+ * everything the SPA needs for its first frame — REST root, CSRF token, user,
  * theme tokens, entitlements, counts and the app base path. The SPA never
  * guesses its own configuration, and `GET /auth/me` returns the same shape so a
  * refresh is a straight replacement rather than a merge.
@@ -10,11 +10,12 @@
 export interface BootUser {
   /** fc_users.id — internal, never "the user id" in the API. */
   id: number;
-  wp_user_id: number;
+  /** fc_accounts.id — the identity anchor. */
+  account_id: number;
   display_name: string;
   email?: string;
   avatar_url?: string;
-  role: 'fc_user' | 'fc_trainer' | 'administrator' | string;
+  role: 'user' | 'trainer' | 'admin' | string;
   timezone?: string;
   onboarded?: boolean;
   /** Present for trainers and admins: fc_trainers.id. */
@@ -87,8 +88,7 @@ export interface BootIdentity {
 /** The identity plus the transport bits only the shell can supply. */
 export interface BootPayload extends BootIdentity {
   restUrl: string;
-  ajaxUrl: string;
-  nonce: string;
+  csrf: string;
   brand: string;
   locale: string;
   flags: { registration_open: boolean; [key: string]: boolean };
@@ -129,8 +129,8 @@ export function bootOrDefaults(spa: SpaName): BootPayload {
 
   return {
     restUrl: '/wp-json/fitnessclub/v1/',
-    ajaxUrl: '/wp-admin/admin-ajax.php',
-    nonce: '',
+
+    csrf: '',
     brand: 'FitnessClub',
     locale: 'en_US',
     flags: { registration_open: true },

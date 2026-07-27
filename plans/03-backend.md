@@ -91,7 +91,7 @@ final class Guard
             "SELECT ut.id
                FROM {$wpdb->prefix}fc_user_trainers ut
                JOIN {$wpdb->prefix}fc_trainers t ON t.id = ut.trainer_id
-              WHERE t.wp_user_id = %d AND ut.user_id = %d AND ut.status = 'active'
+              WHERE t.account_id = %d AND ut.user_id = %d AND ut.status = 'active'
               LIMIT 1",
             $trainerWpUserId, $userId
         ));
@@ -135,7 +135,7 @@ Assets are enqueued with a boot object:
 ```php
 wp_localize_script('fc-user-app', 'FC_BOOT', [
     'restUrl'  => esc_url_raw(rest_url('fitnessclub/v1/')),
-    'nonce'    => wp_create_nonce('wp_rest'),
+    'csrf'     => Csrf::ensureCookie(),
     'user'     => $bootPresenter->forCurrentUser(),
     'theme'    => $themeService->activeTokens(),
     'features' => $entitlements->all(),

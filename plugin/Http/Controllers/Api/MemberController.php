@@ -2,6 +2,7 @@
 
 namespace FitnessClub\Http\Controllers\Api;
 
+use FitnessClub\Auth\Auth;
 use FitnessClub\Services\EntitlementService;
 use FitnessClub\Support\DomainException;
 use FitnessClub\Support\Guard;
@@ -19,7 +20,7 @@ if (!defined('ABSPATH')) {
  * Three things every one of them needs, and getting any of them wrong is the
  * classic hole in a plugin of this shape (plans/03-backend.md):
  *
- *   - **the caller's fc_users.id**, resolved from the WordPress user rather than
+ *   - **the caller's fc_users.id**, resolved from the plugin session rather than
  *     accepted from the request — an endpoint that takes a user id as a
  *     parameter is an endpoint that will be handed someone else's;
  *   - **entitlement gates**, returning `fc_feature_unavailable` with
@@ -37,17 +38,17 @@ abstract class MemberController extends RestController
      * contract's error envelope.
      *
      * @param callable(int, int): (array<string,mixed>|WP_REST_Response|WP_Error) $action
-     *        Receives (wpUserId, fcUserId).
+     *        Receives (accountId, fcUserId).
      */
     protected function asMember(callable $action, int $successStatus = 200): WP_REST_Response|WP_Error
     {
-        $wpUserId = get_current_user_id();
-        $fcUserId = Guard::userId($wpUserId);
+        $accountId = Auth::accountId();
+        $fcUserId  = Guard::userId($accountId);
 
         if (null === $fcUserId) {
-            // Signed in to WordPress but with no member profile — a trainer or
-            // an admin hitting a member endpoint, or an account that predates
-            // the plugin. Not a 500, and not silently empty either.
+            // Signed in, but with no member profile — a trainer or an
+            // administrator hitting a member endpoint. Not a 500, and not
+            // silently empty either.
             return $this->responseError(
                 'fc_no_member_profile',
                 __('This account does not have a member profile.', 'fitnessclub'),
@@ -56,7 +57,7 @@ abstract class MemberController extends RestController
         }
 
         try {
-            $result = $action($wpUserId, $fcUserId);
+            $result = $action($accountId, $fcUserId);
         } catch (DomainException $e) {
             return $e->toWpError();
         }
@@ -105,11 +106,18 @@ abstract class MemberController extends RestController
     }
 
     /**
-     * Permission callback: a signed-in member with the capability.
+     * Permission callback: a signed-in account whose role grants the capability.
+     *
+     * The authority here is Auth\Capabilities, not WordPress — `current_user_can()`
+     * would answer for a wp-admin session that has nothing to do with this app.
+     * The capability *slugs* are the same ones the WordPress roles used to carry,
+     * so no route's string changed when the authority did.
      */
     protected static function requireCapability(string $capability): bool|WP_Error
     {
-        if (!is_user_logged_in()) {
+        $account = Auth::account();
+
+        if (null === $account) {
             return new WP_Error(
                 'fc_not_authenticated',
                 __('You need to be signed in.', 'fitnessclub'),
@@ -117,7 +125,18 @@ abstract class MemberController extends RestController
             );
         }
 
-        if (!current_user_can($capability)) {
+        // A state that had no representation at all under WordPress roles: an
+        // account can now be switched off without being deleted, and a live
+        // session must stop working the moment it is.
+        if (!$account->isActive()) {
+            return new WP_Error(
+                'fc_account_inactive',
+                __('This account is not active.', 'fitnessclub'),
+                ['status' => 403]
+            );
+        }
+
+        if (!$account->can($capability)) {
             return new WP_Error(
                 'fc_forbidden',
                 __('You are not allowed to do that.', 'fitnessclub'),

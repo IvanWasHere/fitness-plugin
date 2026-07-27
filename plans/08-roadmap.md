@@ -85,6 +85,21 @@ seeder produces the prototype's exact dataset — including Alex Morgan assigned
 **both** Sarah Chen and Mike Torres, so multi-trainer paths are exercised from
 day one rather than discovered in Phase 3.
 
+> ### ⟳ W1.2R / W1.3R — Plugin-owned identity, 2026-07-27
+>
+> **W1.2 and W1.3 below describe a WordPress-backed identity that no longer
+> exists.** Roles, capabilities, `wp_signon`, the auth cookie and the `wp_rest`
+> nonce were all replaced by `fc_accounts` + `fc_sessions` + the plugin's own
+> CSRF token. A WordPress administrator has no access to the app without a plugin
+> account. The `Guard` work in W1.2 survives unchanged — it never called a
+> WordPress identity function — and only the id it is handed changed name.
+>
+> The decision and its costs are recorded as
+> [D4a](00-architecture.md#d4a--identity-the-plugin-owns-its-accounts-supersedes-half-of-d4-2026-07-27);
+> the schema is in [01](01-database.md#identity--relationships); the build notes
+> are at the end of this document. Read those, not the two sections below, for
+> how auth works today.
+
 ### W1.2 Roles, capabilities, Guard (2 d) — ✅ done
 `RoleProvider`, capability constants (including `fc_edit_user_health` for admins —
 Q10), `Guard` with `trainerOwnsClient` / **`trainerAssignedResource`** /
@@ -845,3 +860,134 @@ matcher (`minimatch`). Not accepted lightly:
 
 0.6 GitHub Actions CI (run both gates + migration idempotency), 0.7 `git init` /
 local env note. Then Phase 1 proper.
+
+---
+
+## Build notes — plugin-owned identity (W1.2R/W1.3R), 2026-07-27
+
+Requested change: *"admins for the fitness plugin are different from wordpress
+admins, so an admin logged in as wp admin would still need to separately log in
+to a plugin"*, plus generated first-admin credentials shown once, plus three
+example accounts. Decisions taken up front: a **fully separate credential
+system** (not a second WordPress account), WordPress admins get **nothing**
+without a plugin account, one example account **per role**, generated passwords
+keep the readable shape with added entropy, and the dev database is **wiped and
+re-seeded** rather than backfilled.
+
+Recorded as [D4a](00-architecture.md#d4a--identity-the-plugin-owns-its-accounts-supersedes-half-of-d4-2026-07-27).
+
+### What the change actually cost, measured
+
+Narrower in code than in schema, which is the opposite of the intuition. Only
+four choke points read WordPress identity — `MemberController::asMember()`,
+`MemberController::requireCapability()`, `AuthController::requireSession/Guest`
+and `AppRouter::currentRole()` — but **13 of 29 migrations** carried a
+`*_wp_user_id` column. `Guard`, the class everyone expects to be the hard part,
+needed four SQL literals and a parameter rename: it calls no identity function
+at all, so it was always pure SQL over whatever id it was handed.
+
+### The pieces that got deleted, and why that is the interesting part
+
+- **`Ajax/NonceProvider`** existed because a `wp_rest` nonce expires on its own
+  12–24 hour clock **independently of the session** — the app silently stopped
+  saving while still looking signed in — and a REST refresh route is rejected
+  before it can run, so the refresh had to go through admin-ajax. Our CSRF token
+  is minted with the session row and lives exactly as long as it. There is no
+  state where the session is good and the token is stale, so there is nothing to
+  refresh: session death is now a clean 401 and the login panel.
+- **`AuthServiceProvider::bridgeLoggedInCookie()`** existed because
+  `wp_create_nonce()` reads the session token out of `$_COOKIE` and
+  `wp_set_auth_cookie()` never populates it, so a nonce minted later in the login
+  request was bound to the wrong session. Ours is generated in memory in the same
+  request. No round trip, no bridge.
+- **`RoleProvider`** — leaving the WP roles in place would have left a second,
+  stale authority that granted nothing but read as if it did.
+
+That is ~120 lines of PHP and ~90 of client code that stopped existing. The
+client's whole retry-on-stale-nonce path went with them.
+
+### Decisions worth keeping
+
+- **`password_hash()`, not `wp_hash_password()`.** The latter is a *pluggable*
+  function: any plugin or a host's mu-plugin may redefine it, which would change
+  the hashing of the table this plugin owns without the plugin knowing. For a
+  credential store whose premise is independence from WordPress, delegating the
+  one irreplaceable operation to a function a third party may replace is
+  self-defeating. (Also: it fires `check_password` with a `$user_id` that would
+  be an fc_accounts id in a slot every listener reads as a wp_users id, and on
+  WP < 6.8 it produces phpass hashes.)
+- **The bcrypt pre-hash is keyed on a fixed literal, never `wp_salt()`.**
+  Rotating salts in `wp-config.php` is routine and offered as a one-click button
+  by several security plugins; keyed on them, every password in `fc_accounts`
+  would become unverifiable the moment somebody pressed it, with no recovery but
+  a site-wide forced reset.
+- **A dummy `password_verify()` on unknown logins.** Owning the hash introduced a
+  timing oracle `wp_signon()` never had: an unknown login returns in
+  microseconds, a known one spends ~390 ms in bcrypt, and no amount of careful
+  wording hides that. The dummy hash has to be a *valid* one — verifying against
+  a malformed hash returns immediately, which is the fast path it exists to
+  avoid.
+- **`SameSite=Lax`, not `Strict`.** Lax is the structural CSRF defence and it is
+  free, because every state-changing route here is a non-GET. Strict would
+  additionally withhold the cookie when a member clicks the password-reset link
+  in their email, which is a flow this plugin has.
+- **The CSRF token is bound to the session** (`fc_sessions.csrf_hash`). Plain
+  double-submit is defeated by anything that can set a cookie on the parent
+  domain — a sibling subdomain is same-site — and the binding is what closes it.
+- **The token rides in the beacon's JSON body, not the query string.** The old
+  `?_wpnonce=` fallback wrote a bearer value into access logs, `Referer` headers
+  and every proxy in between.
+- **Reset redemption is a conditional `UPDATE` with `rows_affected` checked**,
+  not read-then-write. A mail client that prefetches links plus the human
+  clicking one is two concurrent redemptions, and that race is not theoretical.
+- **Never filter `determine_current_user`** with an account id, however tempting
+  it is to make `current_user_can()` "just work". `fc_accounts.id = 7` and
+  `wp_users.ID = 7` are unrelated rows. Instead `wp_set_current_user(0)` runs on
+  our REST namespace and on the app render, so anything missed in the conversion
+  fails closed rather than honouring a wp-admin session.
+
+### Bootstrap: where it had to live, and why not two other places
+
+`plugin/activation.php` runs **before** the migrations, so it cannot touch
+`fc_accounts`. And `Manager::run()` short-circuits on a fresh install, so an
+upgrade step would have worked on this dev database and silently done nothing on
+every new site — the failure mode that tests clean. So `AccountBootstrap` carries
+its own option guard and runs from `UpgradeProvider` on `init`.
+
+It creates four accounts — the first administrator plus one example of each role
+— and holds their plaintext passwords in a **15-minute transient** that the admin
+notice renders and deletes in the same request. Refresh and they are gone, as
+asked. The cost, stated rather than hidden: four plaintext passwords sit in
+`wp_options` for up to fifteen minutes, which is why the TTL is short, the delete
+is unconditional, and the notice says to change them.
+
+`passFalcon` on its own is one dictionary word behind a public login endpoint —
+about twelve bits against a format anyone can read in the source. The four-
+character suffix (`passFalcon7K3Q`) takes it to roughly thirty-six while staying
+short enough to copy off a screen; the alphabet omits `0/O/1/l`.
+
+### Two things the conversion exposed in the test harness
+
+1. **Signing in creates rows.** `ensureProfileRow()` heals accounts made outside
+   the app, so *any* member login writes an `fc_users` row — which then blocks
+   the account's deletion through the new `ON DELETE RESTRICT`. Teardown now
+   removes profiles before accounts, and the FK is what made a pre-existing
+   sloppiness visible.
+2. **A rate-limit bucket keyed on a constant is a time bomb.** The
+   forgot-password test used a hard-coded unknown address; the per-address bucket
+   is a one-hour transient, so it passed three times an hour and then reported a
+   broken endpoint. Now randomised per run.
+
+*Exit criteria met.* Database wiped and rebuilt to **32 tables**; four bootstrap
+accounts created with the credentials shown once and gone on refresh; login,
+CSRF rejection (`fc_csrf_missing` / `fc_csrf_mismatch`), flat credential errors
+and the W1.6 dashboard all driven end to end against the dev site as a seeded
+member. **The requirement verified directly:** signed in to wp-admin as a
+WordPress administrator with `manage_options` and no plugin account, `/fitness/`
+resolves to the *user* SPA (the login screen) and
+`GET /user/dashboard` answers 401. Gate: **phpcs 0 errors, phpunit 131 tests /
+602 assertions, `ui/` typecheck + lint + format + build green.**
+
+**Not verified:** the member SPA has still not been eyeballed in a browser — the
+dev browser session is a WordPress administrator, which by construction now sees
+only the login panel, and signing in as a member means typing a password.

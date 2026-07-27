@@ -2,6 +2,7 @@
 
 namespace FitnessClub\Services;
 
+use FitnessClub\Auth\Auth;
 use FitnessClub\Support\UserClock;
 
 if (!defined('ABSPATH')) {
@@ -76,7 +77,7 @@ final class DashboardService
      *                           one it set up.
      * @return array<string,mixed>
      */
-    public function forUser(int $wpUserId, int $fcUserId, ?string $today = null): array
+    public function forUser(int $accountId, int $fcUserId, ?string $today = null): array
     {
         $today   = $today ?? UserClock::today($fcUserId);
         $profile = $this->profile($fcUserId);
@@ -87,7 +88,7 @@ final class DashboardService
             'generated_at' => gmdate('c'),
             'date'         => $today,
             'greeting'     => [
-                'name'        => $this->firstName($profile, $wpUserId),
+                'name'        => $this->firstName($profile, $accountId),
                 'streak_days' => $streak,
             ],
             'stats' => [
@@ -102,7 +103,7 @@ final class DashboardService
             'nutrition'        => $this->nutrition($fcUserId, $today),
             'weekly_chart'     => $this->progress->weeklySeries($fcUserId, $today),
             'monthly_stats'    => $this->progress->monthlyStats($fcUserId, $today),
-            'recent_activity'  => $this->activity->feed($wpUserId, 5),
+            'recent_activity'  => $this->activity->feed($accountId, 5),
             'message_previews' => $this->messagePreviews($fcUserId),
         ];
     }
@@ -376,18 +377,20 @@ final class DashboardService
     }
 
     /**
+     * The member's first name for the greeting, falling back to their account's
+     * display name when the profile row has none.
+     *
      * @param array<string,mixed> $profile
      */
-    private function firstName(array $profile, int $wpUserId): string
+    private function firstName(array $profile, int $accountId): string
     {
         $name = trim((string) ($profile['display_name'] ?? ''));
 
         if ('' === $name) {
-            $user = get_userdata($wpUserId);
-            $name = $user ? (string) $user->display_name : '';
+            $name = trim(Auth::accounts()->find($accountId)?->displayName ?? '');
         }
 
-        $first = explode(' ', trim($name))[0] ?? '';
+        $first = explode(' ', $name)[0] ?? '';
 
         return '' === $first ? __('there', 'fitnessclub') : $first;
     }

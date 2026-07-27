@@ -24,8 +24,14 @@ if (!defined('ABSPATH')) {
  *   trainerAssignedResource() — only the trainer who created the row. WRITES to
  *                               plans, workout assignments, food plans and notes.
  *
- * Every method takes a WordPress user id (the identity anchor) and resolves the
- * internal fc_users.id / fc_trainers.id itself. Joins use raw $wpdb (the wpBones
+ * Every method takes an **fc_accounts.id** (the identity anchor) and resolves the
+ * internal fc_users.id / fc_trainers.id itself. That anchor used to be a
+ * WordPress user id; the shape of this class did not change with it, because it
+ * calls no identity function at all — it is pure SQL over whatever id it is
+ * handed, which is exactly why the conversion touched four literals and no
+ * logic.
+ *
+ * Joins use raw $wpdb (the wpBones
  * builder has no join, D5); table names use the sniff-approved {$wpdb->prefix} form
  * and are never built from request data; values are placeholder-prepared.
  */
@@ -35,14 +41,14 @@ final class Guard
      * Does this trainer actively coach this client? True for any assignment in
      * `active` status — the shared-read rule.
      *
-     * @param int $trainerWpUserId WordPress user id of the trainer.
+     * @param int $trainerAccountId fc_accounts.id of the trainer.
      * @param int $clientUserId    fc_users.id of the client.
      */
-    public static function trainerCoachesClient(int $trainerWpUserId, int $clientUserId): bool
+    public static function trainerCoachesClient(int $trainerAccountId, int $clientUserId): bool
     {
         global $wpdb;
 
-        if ($trainerWpUserId <= 0 || $clientUserId <= 0) {
+        if ($trainerAccountId <= 0 || $clientUserId <= 0) {
             return false;
         }
 
@@ -50,9 +56,9 @@ final class Guard
             "SELECT ut.id
                FROM {$wpdb->prefix}fc_user_trainers ut
                JOIN {$wpdb->prefix}fc_trainers t ON t.id = ut.trainer_id
-              WHERE t.wp_user_id = %d AND ut.user_id = %d AND ut.status = 'active'
+              WHERE t.account_id = %d AND ut.user_id = %d AND ut.status = 'active'
               LIMIT 1",
-            $trainerWpUserId,
+            $trainerAccountId,
             $clientUserId
         ));
 
@@ -66,11 +72,11 @@ final class Guard
      *
      * @param string $resource One of the keys in self::ownableByTrainer().
      */
-    public static function trainerAssignedResource(int $trainerWpUserId, string $resource, int $resourceId): bool
+    public static function trainerAssignedResource(int $trainerAccountId, string $resource, int $resourceId): bool
     {
         global $wpdb;
 
-        if ($trainerWpUserId <= 0 || $resourceId <= 0) {
+        if ($trainerAccountId <= 0 || $resourceId <= 0) {
             return false;
         }
 
@@ -80,7 +86,7 @@ final class Guard
         }
         [$table, $ownerColumn] = $map[$resource];
 
-        $trainerId = self::trainerId($trainerWpUserId);
+        $trainerId = self::trainerId($trainerAccountId);
         if (null === $trainerId) {
             return false;
         }
@@ -96,22 +102,22 @@ final class Guard
     }
 
     /**
-     * Does this WordPress user own this workout session?
+     * Does this account own this workout session?
      */
-    public static function ownsSession(int $wpUserId, int $sessionId): bool
+    public static function ownsSession(int $accountId, int $sessionId): bool
     {
-        return self::userOwns($wpUserId, 'workout_sessions', 'user_id', $sessionId);
+        return self::userOwns($accountId, 'workout_sessions', 'user_id', $sessionId);
     }
 
     /**
-     * Is this WordPress user a party to this message thread? True for the client on
+     * Is this account a party to this message thread? True for the client on
      * the thread OR the trainer on it — both sides read and post.
      */
-    public static function participatesInThread(int $wpUserId, int $threadId): bool
+    public static function participatesInThread(int $accountId, int $threadId): bool
     {
         global $wpdb;
 
-        if ($wpUserId <= 0 || $threadId <= 0) {
+        if ($accountId <= 0 || $threadId <= 0) {
             return false;
         }
 
@@ -120,22 +126,22 @@ final class Guard
                FROM {$wpdb->prefix}fc_message_threads th
                JOIN {$wpdb->prefix}fc_users u    ON u.id = th.user_id
                JOIN {$wpdb->prefix}fc_trainers t ON t.id = th.trainer_id
-              WHERE th.id = %d AND (u.wp_user_id = %d OR t.wp_user_id = %d)
+              WHERE th.id = %d AND (u.account_id = %d OR t.account_id = %d)
               LIMIT 1",
             $threadId,
-            $wpUserId,
-            $wpUserId
+            $accountId,
+            $accountId
         ));
 
         return null !== $found;
     }
 
     /**
-     * Generic "does this WordPress user own this row" check, by resource key.
+     * Generic "does this account own this row" check, by resource key.
      *
      * @param string $resource One of the keys in self::ownableByUser().
      */
-    public static function userOwnsResource(int $wpUserId, string $resource, int $resourceId): bool
+    public static function userOwnsResource(int $accountId, string $resource, int $resourceId): bool
     {
         $map = self::ownableByUser();
         if (!isset($map[$resource])) {
@@ -143,42 +149,42 @@ final class Guard
         }
         [$table, $column] = $map[$resource];
 
-        return self::userOwns($wpUserId, $table, $column, $resourceId);
+        return self::userOwns($accountId, $table, $column, $resourceId);
     }
 
     /**
-     * Resolve fc_users.id for a WordPress user, or null.
+     * Resolve fc_users.id for an account, or null.
      */
-    public static function userId(int $wpUserId): ?int
+    public static function userId(int $accountId): ?int
     {
         global $wpdb;
 
-        if ($wpUserId <= 0) {
+        if ($accountId <= 0) {
             return null;
         }
 
         $id = $wpdb->get_var($wpdb->prepare(
-            "SELECT id FROM {$wpdb->prefix}fc_users WHERE wp_user_id = %d LIMIT 1",
-            $wpUserId
+            "SELECT id FROM {$wpdb->prefix}fc_users WHERE account_id = %d LIMIT 1",
+            $accountId
         ));
 
         return null === $id ? null : (int) $id;
     }
 
     /**
-     * Resolve fc_trainers.id for a WordPress user, or null.
+     * Resolve fc_trainers.id for an account, or null.
      */
-    public static function trainerId(int $wpUserId): ?int
+    public static function trainerId(int $accountId): ?int
     {
         global $wpdb;
 
-        if ($wpUserId <= 0) {
+        if ($accountId <= 0) {
             return null;
         }
 
         $id = $wpdb->get_var($wpdb->prepare(
-            "SELECT id FROM {$wpdb->prefix}fc_trainers WHERE wp_user_id = %d LIMIT 1",
-            $wpUserId
+            "SELECT id FROM {$wpdb->prefix}fc_trainers WHERE account_id = %d LIMIT 1",
+            $accountId
         ));
 
         return null === $id ? null : (int) $id;
@@ -192,15 +198,15 @@ final class Guard
      * public methods, from hard-coded literals or the ownableByUser() map, never
      * from request data — which is what makes interpolating them safe.
      */
-    private static function userOwns(int $wpUserId, string $table, string $column, int $resourceId): bool
+    private static function userOwns(int $accountId, string $table, string $column, int $resourceId): bool
     {
         global $wpdb;
 
-        if ($wpUserId <= 0 || $resourceId <= 0) {
+        if ($accountId <= 0 || $resourceId <= 0) {
             return false;
         }
 
-        $userId = self::userId($wpUserId);
+        $userId = self::userId($accountId);
         if (null === $userId) {
             return false;
         }

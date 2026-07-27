@@ -35,7 +35,7 @@ return new class extends Migration {
   sodium_mg decimal(7,2) DEFAULT NULL,
   barcode varchar(32) DEFAULT NULL,
   source varchar(20) NOT NULL DEFAULT 'system',
-  created_by_wp_user_id bigint(20) unsigned DEFAULT NULL,
+  created_by_account_id bigint(20) unsigned DEFAULT NULL,
   is_verified tinyint(1) NOT NULL DEFAULT 0,
   created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,

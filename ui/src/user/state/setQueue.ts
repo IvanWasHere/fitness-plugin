@@ -21,7 +21,7 @@ import type { SetPayload } from '../api/types';
  *     does not drop what was already lifted.
  *   - **Flushed via `sendBeacon` on pagehide**, because a normal fetch started
  *     during unload is cancelled. Beacons cannot set headers, which is why
- *     `ApiClient.beaconUrl()` puts the nonce in the query string.
+ *     `ApiClient.beaconBody()` folds the CSRF token into the JSON body.
  */
 
 const STORAGE_PREFIX = 'fc:setqueue:';
@@ -176,7 +176,7 @@ export class SetQueue {
     const url = this.api.beaconUrl(`sessions/${this.sessionId}/sets`);
 
     for (const item of this.items) {
-      navigator.sendBeacon(url, new Blob([JSON.stringify(item)], { type: 'application/json' }));
+      navigator.sendBeacon(url, this.api.beaconBody({ ...item }));
     }
   }
 

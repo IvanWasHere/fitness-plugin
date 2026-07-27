@@ -9,8 +9,13 @@ if (!defined('ABSPATH')) {
 /**
  * Table: fc_users
  *
- * Profile extension of a WP user. `wp_user_id` is the identity anchor; `id` is an
- * internal surrogate and is never exposed as "the user id" by the API.
+ * The member profile. `account_id` points at the fc_accounts row that signs in;
+ * `id` is an internal surrogate and is never exposed as "the user id" by the API.
+ *
+ * The split is deliberate: an account is *who you are*, this table is *what you
+ * are as a member*. A trainer or an administrator has an account and no row
+ * here, which is why every member endpoint answers `fc_no_member_profile`
+ * rather than inventing an empty profile.
  *
  * @see plans/01-database.md
  */
@@ -21,7 +26,7 @@ return new class extends Migration {
             'fc_users',
             "(
   id bigint(20) unsigned NOT NULL auto_increment,
-  wp_user_id bigint(20) unsigned NOT NULL,
+  account_id bigint(20) unsigned NOT NULL,
   display_name varchar(100) DEFAULT NULL,
   phone varchar(32) DEFAULT NULL,
   avatar_url varchar(500) DEFAULT NULL,
@@ -42,8 +47,15 @@ return new class extends Migration {
   created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY  (id),
-  UNIQUE KEY uq_wp_user (wp_user_id)
+  UNIQUE KEY uq_account (account_id)
             ) {$this->charsetCollate};"
         );
+
+        // RESTRICT, not CASCADE: a dozen tables reference the account as
+        // provenance, so deleting one must fail loudly rather than quietly
+        // taking a person's entire history with it. Accounts are tombstoned
+        // (status = 'deleted'), never removed.
+        $this->engine('fc_users');
+        $this->foreign('fc_users', 'account_id', 'fc_accounts', 'id', 'RESTRICT');
     }
 };

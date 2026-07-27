@@ -9,7 +9,7 @@ if (!defined('ABSPATH')) {
 /**
  * Table: fc_messages
  *
- * `sender_wp_user_id` gives one authoritative sender instead of the original
+ * `sender_account_id` gives one authoritative sender instead of the original
  * user_id + trainer_id + direction trio; `direction` is kept as a denormalised
  * convenience for the weekly quota query.
  *
@@ -26,7 +26,7 @@ return new class extends Migration {
             "(
   id bigint(20) unsigned NOT NULL auto_increment,
   thread_id bigint(20) unsigned NOT NULL,
-  sender_wp_user_id bigint(20) unsigned NOT NULL,
+  sender_account_id bigint(20) unsigned NOT NULL,
   direction varchar(20) NOT NULL DEFAULT 'user_to_trainer',
   message text DEFAULT NULL,
   attachments longtext DEFAULT NULL,

@@ -2,6 +2,8 @@
 
 namespace FitnessClub\Database\Seeders;
 
+use FitnessClub\Auth\Account;
+use FitnessClub\Auth\AccountRepository;
 use FitnessClub\WPBones\Database\DB;
 
 if (!defined('ABSPATH')) {
@@ -87,38 +89,49 @@ abstract class Seeder
     }
 
     /**
-     * Find or create a WordPress user, returning its ID. Never overwrites an
-     * existing account's password or role.
+     * The password every demo account gets.
+     *
+     * A known constant, because a demo account nobody can sign in to is not a
+     * demo account — and because these are only ever created by an explicit
+     * `wp fitnessclub seed --demo`, never on activation. It is long enough to
+     * clear the `password_min_length` floor.
      */
-    protected function wpUser(string $login, string $email, string $displayName, string $role): int
+    public const DEMO_PASSWORD = 'demo-password-2026';
+
+    /**
+     * Find or create a plugin account, returning its fc_accounts.id.
+     *
+     * Never touches an existing account's password or role: re-running the
+     * seeder against a database somebody has been using must not silently reset
+     * their credentials.
+     */
+    protected function account(string $login, string $email, string $displayName, string $role): int
     {
-        $user = get_user_by('login', $login) ?: get_user_by('email', $email);
+        $accounts = new AccountRepository();
 
-        if ($user) {
-            if (!in_array($role, (array) $user->roles, true)) {
-                $user->add_role($role);
-            }
-
-            return (int) $user->ID;
+        $existing = $accounts->findByIdentifier($login) ?? $accounts->findByEmail($email);
+        if (null !== $existing) {
+            return $existing->id;
         }
 
-        $id = wp_insert_user([
-            'user_login'   => $login,
-            'user_email'   => $email,
-            'user_pass'    => wp_generate_password(24),
+        return $accounts->create([
+            'login'        => $login,
+            'email'        => $email,
+            'password'     => self::DEMO_PASSWORD,
             'display_name' => $displayName,
-            'first_name'   => explode(' ', $displayName)[0],
-            'last_name'    => explode(' ', $displayName)[1] ?? '',
             'role'         => $role,
+            'status'       => Account::STATUS_ACTIVE,
+            'timezone'     => 'UTC',
+            'locale'       => 'en_US',
         ]);
+    }
 
-        if (is_wp_error($id)) {
-            $this->note("  ! could not create WP user {$login}: " . $id->get_error_message());
-
-            return 0;
-        }
-
-        return (int) $id;
+    /**
+     * The account id behind a demo login, or 0.
+     */
+    protected function accountId(string $login): int
+    {
+        return (new AccountRepository())->findByIdentifier($login)?->id ?? 0;
     }
 
     protected function now(): string

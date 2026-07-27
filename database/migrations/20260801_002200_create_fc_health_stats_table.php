@@ -43,7 +43,7 @@ return new class extends Migration {
   stress_score tinyint(4) DEFAULT NULL,
   notes text DEFAULT NULL,
   source varchar(20) NOT NULL DEFAULT 'manual',
-  last_edited_by_wp_user_id bigint(20) unsigned DEFAULT NULL,
+  last_edited_by_account_id bigint(20) unsigned DEFAULT NULL,
   created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY  (id),

@@ -2,6 +2,7 @@
 
 namespace FitnessClub\Providers;
 
+use FitnessClub\Cli\AccountCommand;
 use FitnessClub\Cli\SeedCommand;
 use FitnessClub\WPBones\Support\ServiceProvider;
 
@@ -26,5 +27,9 @@ class CliServiceProvider extends ServiceProvider
         }
 
         \WP_CLI::add_command('fitnessclub seed', SeedCommand::class);
+
+        // The recovery path. Because the plugin owns its credentials, a site
+        // that loses its only administrator password has no other way in.
+        \WP_CLI::add_command('fitnessclub account', AccountCommand::class);
     }
 }

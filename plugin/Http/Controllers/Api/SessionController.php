@@ -38,7 +38,7 @@ final class SessionController extends MemberController
      */
     public function start(WP_REST_Request $request): WP_REST_Response|WP_Error
     {
-        return $this->asMember(function (int $wpUserId, int $fcUserId) use ($request) {
+        return $this->asMember(function (int $accountId, int $fcUserId) use ($request) {
             $blocked = $this->requireFeature($fcUserId, 'can_log_workouts');
             if (null !== $blocked) {
                 return $blocked;
@@ -62,7 +62,7 @@ final class SessionController extends MemberController
      */
     public function active(): WP_REST_Response|WP_Error
     {
-        return $this->asMember(function (int $wpUserId, int $fcUserId): WP_REST_Response {
+        return $this->asMember(function (int $accountId, int $fcUserId): WP_REST_Response {
             $session = $this->sessions->active($fcUserId);
 
             return null === $session ? $this->response(null, 204) : $this->response($session);
@@ -74,7 +74,7 @@ final class SessionController extends MemberController
      */
     public function show(WP_REST_Request $request): WP_REST_Response|WP_Error
     {
-        return $this->asMember(fn(int $wpUserId, int $fcUserId): array => $this->sessions->rehydrate(
+        return $this->asMember(fn(int $accountId, int $fcUserId): array => $this->sessions->rehydrate(
             $fcUserId,
             (int) $request->get_param('id')
         ));
@@ -85,7 +85,7 @@ final class SessionController extends MemberController
      */
     public function index(WP_REST_Request $request): WP_REST_Response|WP_Error
     {
-        return $this->asMember(fn(int $wpUserId, int $fcUserId): WP_REST_Response => $this->collection(
+        return $this->asMember(fn(int $accountId, int $fcUserId): WP_REST_Response => $this->collection(
             $this->sessions->history($fcUserId, [
                 'page'     => $request->get_param('page'),
                 'per_page' => $request->get_param('per_page'),
@@ -98,7 +98,7 @@ final class SessionController extends MemberController
      */
     public function transition(WP_REST_Request $request): WP_REST_Response|WP_Error
     {
-        return $this->asMember(function (int $wpUserId, int $fcUserId) use ($request): array {
+        return $this->asMember(function (int $accountId, int $fcUserId) use ($request): array {
             $sessionId = (int) $request->get_param('id');
 
             return 'pause' === $request->get_param('action')
@@ -112,7 +112,7 @@ final class SessionController extends MemberController
      */
     public function cursor(WP_REST_Request $request): WP_REST_Response|WP_Error
     {
-        return $this->asMember(fn(int $wpUserId, int $fcUserId): array => $this->sessions->moveCursor(
+        return $this->asMember(fn(int $accountId, int $fcUserId): array => $this->sessions->moveCursor(
             $fcUserId,
             (int) $request->get_param('id'),
             (int) $request->get_param('exercise_index'),
@@ -125,7 +125,7 @@ final class SessionController extends MemberController
      */
     public function logSet(WP_REST_Request $request): WP_REST_Response|WP_Error
     {
-        return $this->asMember(fn(int $wpUserId, int $fcUserId): array => $this->sessions->logSet(
+        return $this->asMember(fn(int $accountId, int $fcUserId): array => $this->sessions->logSet(
             $fcUserId,
             (int) $request->get_param('id'),
             (int) $request->get_param('exercise_id'),
@@ -145,8 +145,8 @@ final class SessionController extends MemberController
      */
     public function complete(WP_REST_Request $request): WP_REST_Response|WP_Error
     {
-        return $this->asMember(fn(int $wpUserId, int $fcUserId): array => $this->sessions->complete(
-            $wpUserId,
+        return $this->asMember(fn(int $accountId, int $fcUserId): array => $this->sessions->complete(
+            $accountId,
             $fcUserId,
             (int) $request->get_param('id')
         ));
@@ -157,7 +157,7 @@ final class SessionController extends MemberController
      */
     public function abandon(WP_REST_Request $request): WP_REST_Response|WP_Error
     {
-        return $this->asMember(fn(int $wpUserId, int $fcUserId): array => $this->sessions->abandon(
+        return $this->asMember(fn(int $accountId, int $fcUserId): array => $this->sessions->abandon(
             $fcUserId,
             (int) $request->get_param('id')
         ));
@@ -168,7 +168,7 @@ final class SessionController extends MemberController
      */
     public function review(WP_REST_Request $request): WP_REST_Response|WP_Error
     {
-        return $this->asMember(function (int $wpUserId, int $fcUserId) use ($request): array {
+        return $this->asMember(function (int $accountId, int $fcUserId) use ($request): array {
             $payload = [];
 
             foreach (['notes', 'perceived_exertion', 'difficulty_rating', 'sets'] as $field) {

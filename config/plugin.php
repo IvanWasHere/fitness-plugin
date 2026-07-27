@@ -137,11 +137,14 @@ return [
   |
   */
 
-  'ajax' => [
-    // Nonce refresh for long-lived SPA sessions — see the class docblock for
-    // why this cannot be a REST route.
-    \FitnessClub\Ajax\NonceProvider::class,
-  ],
+  /*
+  | Empty since the plugin stopped using WordPress nonces. The one action that
+  | lived here refreshed a `wp_rest` nonce through admin-ajax, because a nonce
+  | expires on its own clock while the session is still valid and a REST refresh
+  | route is rejected before it can run. The plugin's CSRF token lives exactly as
+  | long as its session, so there is nothing to refresh. See Auth\Csrf.
+  */
+  'ajax' => [],
 
   /*
   |--------------------------------------------------------------------------
@@ -156,7 +159,7 @@ return [
 
   'providers' => [
     \FitnessClub\Providers\UpgradeProvider::class,
-    \FitnessClub\Providers\AuthServiceProvider::class,
+    \FitnessClub\Providers\AuthProvider::class,
     \FitnessClub\Providers\ApiServiceProvider::class,
     \FitnessClub\Providers\RewriteServiceProvider::class,
     \FitnessClub\Providers\ScheduleProvider::class,
