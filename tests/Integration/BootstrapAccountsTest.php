@@ -22,12 +22,21 @@ final class BootstrapAccountsTest extends IntegrationTestCase
     /** @var int[] Accounts created by the bootstrap, cleaned up here. */
     private array $bootstrapped = [];
 
+    /** The real install's list of generated accounts, restored in teardown. */
+    private mixed $realGeneratedOption = null;
+
     protected function setUp(): void
     {
         parent::setUp();
 
         // The dev database has already been bootstrapped, so each test starts
         // from the "nothing here yet" state and puts it back afterwards.
+        //
+        // The generated-accounts option is *saved*, not just cleared: running
+        // the bootstrap overwrites it, and leaving it pointing at the accounts
+        // this test then deletes would empty the real settings screen.
+        $this->realGeneratedOption = get_option(AccountBootstrap::GENERATED_OPTION);
+
         delete_option(AccountBootstrap::DONE_OPTION);
         delete_transient(AccountBootstrap::CREDENTIALS_TRANSIENT);
     }
@@ -43,6 +52,12 @@ final class BootstrapAccountsTest extends IntegrationTestCase
 
         delete_transient(AccountBootstrap::CREDENTIALS_TRANSIENT);
         update_option(AccountBootstrap::DONE_OPTION, 1, false);
+
+        if (false === $this->realGeneratedOption) {
+            delete_option(AccountBootstrap::GENERATED_OPTION);
+        } else {
+            update_option(AccountBootstrap::GENERATED_OPTION, $this->realGeneratedOption, false);
+        }
 
         parent::tearDown();
     }
@@ -111,6 +126,51 @@ final class BootstrapAccountsTest extends IntegrationTestCase
                 'Generated passwords clear the minimum the API enforces.'
             );
         }
+    }
+
+    /**
+     * The settings screen lists the generated accounts, and stops listing one
+     * the moment its row is gone — which is the whole contract of that list.
+     */
+    public function testGeneratedAccountsAreListedUntilTheRowIsDeleted(): void
+    {
+        global $wpdb;
+
+        $this->assertTrue($this->runBootstrapOnAnEmptyInstall());
+        $credentials = AccountBootstrap::takeCredentials();
+        $this->rememberAccounts($credentials);
+
+        $listed = AccountBootstrap::generatedAccounts();
+        $this->assertCount(4, $listed);
+        $this->assertSame(
+            array_column($credentials, 'login'),
+            array_column($listed, 'login'),
+            'Listed in creation order, so the first administrator is first.'
+        );
+
+        // Delete one the way the settings screen does.
+        $victim = (int) $listed[2]['id'];
+        $wpdb->delete($wpdb->prefix . 'fc_users', ['account_id' => $victim]);
+        $wpdb->delete($wpdb->prefix . 'fc_trainers', ['account_id' => $victim]);
+        $wpdb->delete($wpdb->prefix . 'fc_accounts', ['id' => $victim]);
+
+        $after = AccountBootstrap::generatedAccounts();
+
+        $this->assertCount(3, $after);
+        $this->assertNotContains($victim, array_map('intval', array_column($after, 'id')));
+
+        // Still flagged as generated: the option is a record of what was
+        // created, and forgetting the id would be a second thing to keep in
+        // sync. Existence is decided by the table.
+        $this->assertTrue(AccountBootstrap::isGenerated($victim));
+    }
+
+    public function testAccountsCreatedByHandAreNotMarkedAsGenerated(): void
+    {
+        $this->assertFalse(
+            AccountBootstrap::isGenerated($this->makeAccount()),
+            'Only the bootstrap marks accounts, so the settings screen cannot offer to delete a real one.'
+        );
     }
 
     public function testCredentialsAreShownOnceAndThenGone(): void

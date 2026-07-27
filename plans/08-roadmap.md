@@ -991,3 +991,63 @@ resolves to the *user* SPA (the login screen) and
 **Not verified:** the member SPA has still not been eyeballed in a browser — the
 dev browser session is a WordPress administrator, which by construction now sees
 only the login panel, and signing in as a member means typing a password.
+
+### Follow-up — the wp-admin settings screen, 2026-07-27
+
+Requested: *"plugin should have its own options page in the root not under
+Settings, there admins could set urlRoot endpoint after domain.com/{rootPlugin}
+and also example users should be shown there until they are deleted from db"*.
+
+**Top-level menu**, not a child of Settings — `config/menus.php`, position 26,
+`dashicons-heart`. This is now the only place in the plugin where a WordPress
+capability decides anything, and it has to be: `admin.php` calls
+`auth_redirect()` before any plugin callback runs, so a wp-admin page cannot be
+gated on a plugin account however much D4a would prefer it.
+
+**Two things live there**, and both belong in wp-admin rather than in the SPA
+for the same underlying reason — they are what you need *before* you can use the
+app:
+
+- **The app URL.** The SPA cannot own the setting that decides where the SPA is
+  served. Validation rejects an empty slug, the reserved WordPress paths, and a
+  slug an existing page already occupies (which one wins there depends on rewrite
+  rule order, and that is not something an administrator should discover by
+  clicking).
+- **The generated accounts**, listed until their row is gone from the database.
+  They exist precisely because nobody could sign in yet, so the screen that lists
+  them cannot require signing in.
+
+**Three things worth keeping from the build.**
+
+1. **Form handling goes on `load-{$hook}`, not the `post` verb.** wpBones
+   dispatches the `post` route inside the page render — by which point wp-admin
+   has printed its header and `wp_safe_redirect()` can only emit "Cannot modify
+   header information". Found by clicking the button, not by reading: the first
+   attempt reset the password correctly and then rendered two PHP warnings
+   instead of a confirmation. A settings screen must redirect after a write, or a
+   refresh re-submits it — and one of these actions deletes an account.
+2. **Which accounts are "generated" is an option, not a column.** It is a fact
+   about the *installation*, not about the account — the row is an ordinary
+   account in every other respect, and a flag on it would invite code to treat it
+   as a lesser one. The screen intersects the recorded ids with the rows that
+   still exist, so deleting an account is all it takes to remove it from the
+   list, from anywhere: the screen, the CLI, or SQL.
+3. **The delete button refuses the last administrator.** There is no WordPress
+   account to fall back on, so that click would lock everyone out of the app with
+   no route back except WP-CLI. It also refuses any account the bootstrap did not
+   create: real accounts have history behind them, and a settings screen is the
+   wrong place to destroy it.
+
+*Verified in the browser:* the page renders; a password reset shows the new
+credential once and is gone on refresh; changing the slug to `club` and back
+moves the app (`/club/` 200 + `/fitness/` 404, then the reverse) because the
+change sets the flush flag and the redirect is the request that consumes it. The
+delete guards were exercised directly rather than clicked — the button carries a
+JavaScript `confirm()`, and driving a modal dialog through the browser extension
+wedges the session. Gate: **phpcs 0 errors, phpunit 133 tests / 610 assertions.**
+
+**One rough edge fixed on the way:** `BootstrapAccountsTest` runs the real
+bootstrap, which overwrites the generated-accounts option, and then deletes the
+accounts it made — leaving the *actual* install's settings screen empty. The
+suite now saves and restores that option. A test that quietly edits the
+development site is worse than a failing one.

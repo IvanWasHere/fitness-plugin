@@ -46,6 +46,18 @@ final class AccountBootstrap
     public const ACTIVATOR_OPTION = 'fitnessclub_bootstrap_activator';
     public const CREDENTIALS_TRANSIENT = 'fitnessclub_bootstrap_credentials';
 
+    /**
+     * Ids of the accounts this class created.
+     *
+     * An option rather than a column on `fc_accounts`, because "the installer
+     * generated this one" is a fact about the *installation*, not about the
+     * account — the row is an ordinary account in every other respect, and a
+     * flag on it would invite code to treat it as a lesser one. The settings
+     * screen intersects this list with the rows that still exist, so deleting an
+     * account is all it takes to make it disappear from the list.
+     */
+    public const GENERATED_OPTION = 'fitnessclub_generated_accounts';
+
     /** How long the plaintext credentials may sit in the options table. */
     private const CREDENTIALS_TTL = 15 * MINUTE_IN_SECONDS;
 
@@ -89,6 +101,7 @@ final class AccountBootstrap
         $created[] = self::make($accounts, 'user', Capabilities::ROLE_USER, __('Example Member', 'fitnessclub'));
 
         update_option(self::DONE_OPTION, 1, false);
+        update_option(self::GENERATED_OPTION, array_column($created, 'id'), false);
         set_transient(self::CREDENTIALS_TRANSIENT, $created, self::CREDENTIALS_TTL);
     }
 
@@ -166,9 +179,63 @@ final class AccountBootstrap
     }
 
     /**
+     * The accounts this class created that still exist.
+     *
+     * The intersection is the point: an administrator who deletes one — from the
+     * settings screen, the CLI or the database directly — makes it vanish from
+     * the list without anything having to remember to update a second record.
+     *
+     * @return array<int,array<string,mixed>>
+     */
+    public static function generatedAccounts(): array
+    {
+        global $wpdb;
+
+        $ids = array_map('intval', (array) get_option(self::GENERATED_OPTION, []));
+        $ids = array_values(array_filter($ids));
+
+        if ([] === $ids) {
+            return [];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($ids), '%d'));
+
+        // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- placeholders only.
+        $sql = "SELECT id, login, email, display_name, role, status, created_at, last_login_at
+                  FROM {$wpdb->prefix}fc_accounts
+                 WHERE id IN ({$placeholders})
+                 ORDER BY id ASC";
+
+        // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- prepared on this line.
+        return $wpdb->get_results($wpdb->prepare($sql, ...$ids), ARRAY_A) ?: [];
+    }
+
+    /**
+     * Was this account created by the bootstrap?
+     */
+    public static function isGenerated(int $accountId): bool
+    {
+        $ids = array_map('intval', (array) get_option(self::GENERATED_OPTION, []));
+
+        return in_array($accountId, $ids, true);
+    }
+
+    /**
+     * A generated password in the readable `pass{Word}{4}` shape.
+     *
+     * Public because the settings screen regenerates one when an administrator
+     * loses the original, and two generators drifting apart is how you end up
+     * with one that quietly stops meeting the password-length floor.
+     */
+    public static function generatePassword(): string
+    {
+        return 'pass' . self::word() . self::suffix();
+    }
+
+    /**
      * Create one account and return its plaintext credentials for display.
      *
-     * @return array{login:string,password:string,role:string,label:string}
+     * @return array{id:int,login:string,password:string,role:string,label:string}
      */
     private static function make(
         AccountRepository $accounts,
@@ -177,9 +244,9 @@ final class AccountBootstrap
         string $label
     ): array {
         $login    = self::uniqueLogin($accounts, $prefix);
-        $password = 'pass' . self::word() . self::suffix();
+        $password = self::generatePassword();
 
-        $accounts->create([
+        $id = $accounts->create([
             'login'        => $login,
             'password'     => $password,
             'display_name' => $label,
@@ -190,6 +257,7 @@ final class AccountBootstrap
         ]);
 
         return [
+            'id'       => $id,
             'login'    => $login,
             'password' => $password,
             'role'     => $role,
