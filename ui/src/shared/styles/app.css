@@ -2426,15 +2426,27 @@
 }
 
 /* The seven-tab bar scrolls rather than wrapping: seven labels do not fit a
-   phone, and a wrapped second row moves the content down unpredictably. */
-.fc-tabs {
+   phone, and a wrapped second row moves the content down unpredictably.
+ *
+ * **Its own class, not a second `.fc-tabs`.** W3.4 slice 2 defined this as a
+ * bare `.fc-tabs` — the same selector the auth panel's segmented control uses,
+ * and later in the file — so the login and registration tabs inherited a
+ * scrolling underlined strip on top of their pill container: content-sized
+ * instead of half each, a green underline inside a rounded box. Nothing about
+ * the auth rules changed, which is why it survived review; the clobbering was
+ * entirely in the cascade.
+ *
+ * This is the same mistake W2.4 recorded when the activity filter reused
+ * `.fc-tab` and stretched four chips across 1400px, and it has the same fix: a
+ * control that is not the segmented control gets its own name. */
+.fc-tabstrip {
   display: flex;
   gap: 4px;
   overflow-x: auto;
   border-bottom: 1px solid var(--border);
 }
 
-.fc-tabs .fc-tab {
+.fc-tabstrip .fc-tab {
   flex: 0 0 auto;
   background: none;
   border: 0;
@@ -2444,7 +2456,7 @@
   white-space: nowrap;
 }
 
-.fc-tabs .fc-tab[aria-selected='true'] {
+.fc-tabstrip .fc-tab[aria-selected='true'] {
   background: none;
   border-bottom-color: var(--accent);
   color: var(--accent);

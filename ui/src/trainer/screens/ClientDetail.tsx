@@ -98,7 +98,10 @@ export function ClientDetail() {
           person changes how you read everything below. */}
       <CoTrainers client={data} />
 
-      <div className="fc-tabs fc-mb-16" role="tablist">
+      {/* `fc-tabstrip`, not `fc-tabs`: the latter is the auth panel's segmented
+          control, and sharing the name overwrote the login and registration
+          tabs. */}
+      <div className="fc-tabstrip fc-mb-16" role="tablist">
         {TABS.map((entry) => (
           <button
             key={entry.key}

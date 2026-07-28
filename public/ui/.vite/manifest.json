@@ -1,70 +1,70 @@
 {
-  "_ExerciseEditor-ika1DBra.js": {
-    "file": "assets/ExerciseEditor-ika1DBra.js",
+  "_ExerciseEditor-CYfgQdU3.js": {
+    "file": "assets/ExerciseEditor-CYfgQdU3.js",
     "name": "ExerciseEditor",
     "imports": [
-      "_Modal-DbFILSXU.js"
+      "_Modal-CLlXyohO.js"
     ]
   },
-  "_Modal-DUOYf37c.css": {
-    "file": "assets/Modal-DUOYf37c.css",
-    "src": "_Modal-DUOYf37c.css"
+  "_Modal-BfqO3FAE.css": {
+    "file": "assets/Modal-BfqO3FAE.css",
+    "src": "_Modal-BfqO3FAE.css"
   },
-  "_Modal-DbFILSXU.js": {
-    "file": "assets/Modal-DbFILSXU.js",
+  "_Modal-CLlXyohO.js": {
+    "file": "assets/Modal-CLlXyohO.js",
     "name": "Modal",
     "css": [
-      "assets/Modal-DUOYf37c.css"
+      "assets/Modal-BfqO3FAE.css"
     ]
   },
-  "_ProgressChartGrid-CD6VHsFD.js": {
-    "file": "assets/ProgressChartGrid-CD6VHsFD.js",
+  "_ProgressChartGrid-CcdFH_BA.js": {
+    "file": "assets/ProgressChartGrid-CcdFH_BA.js",
     "name": "ProgressChartGrid",
     "imports": [
-      "_Modal-DbFILSXU.js"
+      "_Modal-CLlXyohO.js"
     ],
     "dynamicImports": [
       "src/shared/components/charts/ProgressCharts.tsx"
     ]
   },
   "src/admin/main.tsx": {
-    "file": "assets/admin-CNEyvJHc.js",
+    "file": "assets/admin-Cy0JfcJB.js",
     "name": "admin",
     "src": "src/admin/main.tsx",
     "isEntry": true,
     "imports": [
-      "_Modal-DbFILSXU.js",
-      "_ExerciseEditor-ika1DBra.js"
+      "_Modal-CLlXyohO.js",
+      "_ExerciseEditor-CYfgQdU3.js"
     ]
   },
   "src/shared/components/charts/ProgressCharts.tsx": {
-    "file": "assets/ProgressCharts-9O5y4fkh.js",
+    "file": "assets/ProgressCharts-C2QvXk1W.js",
     "name": "ProgressCharts",
     "src": "src/shared/components/charts/ProgressCharts.tsx",
     "isDynamicEntry": true,
     "imports": [
-      "_Modal-DbFILSXU.js"
+      "_Modal-CLlXyohO.js"
     ]
   },
   "src/trainer/main.tsx": {
-    "file": "assets/trainer-mEWGeAnB.js",
+    "file": "assets/trainer-Dxrdc-Td.js",
     "name": "trainer",
     "src": "src/trainer/main.tsx",
     "isEntry": true,
     "imports": [
-      "_Modal-DbFILSXU.js",
-      "_ProgressChartGrid-CD6VHsFD.js",
-      "_ExerciseEditor-ika1DBra.js"
+      "_Modal-CLlXyohO.js",
+      "_ProgressChartGrid-CcdFH_BA.js",
+      "_ExerciseEditor-CYfgQdU3.js"
     ]
   },
   "src/user/main.tsx": {
-    "file": "assets/user-BCkkL9_J.js",
+    "file": "assets/user-Chofz84c.js",
     "name": "user",
     "src": "src/user/main.tsx",
     "isEntry": true,
     "imports": [
-      "_Modal-DbFILSXU.js",
-      "_ProgressChartGrid-CD6VHsFD.js"
+      "_Modal-CLlXyohO.js",
+      "_ProgressChartGrid-CcdFH_BA.js"
     ]
   }
 }

@@ -1333,6 +1333,21 @@ use them.
   already sends `quota: null` to a trainer, because a reply spends nobody's plan.
   The `Conversation` pane is exported separately so the client record can embed
   the trainer's own thread inline, which is what 06 §2 specifies.
+- **A slice-2 CSS regression that reached the login screen.** Slice 2 styled the
+  client record's seven-tab bar as a bare `.fc-tabs` — the same selector the auth
+  panel's segmented control has used since W1.3, and later in the file. So the
+  **login and registration tabs** silently took on the trainer strip: `flex: 0 0
+  auto` instead of `flex: 1`, so "Sign in" and "Create account" sized to their
+  labels instead of splitting the width, and `.fc-tabs .fc-tab[aria-selected]`
+  (0,2,0) beat `.fc-tab` (0,1,0) whatever the order, replacing the filled pill
+  with a green underline drawn *inside* the pill container. Nothing in the auth
+  rules changed — they are byte-identical to `a3c5bfb` — which is why it survived
+  review: the whole defect was in the cascade, on a screen no trainer package
+  opens. The strip is now `.fc-tabstrip`, which also drops the pill background
+  and 4px padding it had been inheriting by accident. This is the third time this
+  file has been bitten by a shared class name (W1.5's `#fc-app *` specificity,
+  W2.4's `.fc-tab` reuse for the activity filter) and it has the same fix each
+  time: a control that is not the segmented control gets its own name.
 - **The profile states capacity rather than implying it.** "2 of 40 clients" with
   the reason underneath, because a queue that simply goes quiet reads as a
   platform fault. `max_clients = 0` is *unconfigured*, never "full". The card
