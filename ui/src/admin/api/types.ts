@@ -79,19 +79,8 @@ export interface AdminDashboard {
   inactive_members: number;
 }
 
-export interface WorkoutExerciseRow {
-  id?: number;
-  exercise_name: string;
-  exercise_type?: string;
-  muscle_groups?: string[];
-  instructions?: string | null;
-  notes?: string | null;
-  video_url?: string | null;
-  thumbnail_url?: string | null;
-  default_sets?: number;
-  default_reps?: number;
-  default_weight_kg?: number;
-  default_rest_seconds?: number;
-  metric?: string;
-  order_index?: number;
-}
+/**
+ * The exercise row shape lives with the editor that owns it — one definition,
+ * so the admin form and the trainer builder cannot drift on what a row is.
+ */
+export type { ExerciseRow as WorkoutExerciseRow } from '@shared/components/ExerciseEditor';

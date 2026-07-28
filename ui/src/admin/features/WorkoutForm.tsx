@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { Icon } from '@shared/components/Icon';
+import { ExerciseEditor, type ExerciseRow } from '@shared/components/ExerciseEditor';
 import { Button, Skeleton } from '@shared/components/ui';
 import { useAdminRecord } from '../api/queries';
-import type { AdminRow, WorkoutExerciseRow } from '../api/types';
+import type { AdminRow } from '../api/types';
 
 /**
  * The workout editor with its nested exercise list (plans/05-admin-app.md, W2.5).
@@ -13,13 +13,9 @@ import type { AdminRow, WorkoutExerciseRow } from '../api/types';
  * session silently lost its link to the movement it recorded and a member's
  * "Bench Press over time" chart emptied out.
  *
- * So ids are carried through the form and submitted with each row. The server
- * updates rows that have one, inserts rows that do not, and deletes only what
- * the payload actually dropped.
- *
- * **Order is the array order.** Reordering needs no endpoint and no
- * `order_index` field in the UI: the server writes each row's position from its
- * index in the submitted list.
+ * The list itself is `@shared/components/ExerciseEditor` as of W3.4 slice 3 —
+ * the trainer's workout builder posts the same rows against the same
+ * upsert-by-id rule, and this form keeps only the metadata around it.
  */
 export function WorkoutForm({
   row,
@@ -38,8 +34,7 @@ export function WorkoutForm({
   const source = full ?? row;
 
   const [fields, setFields] = useState<Record<string, unknown>>({});
-  const [exercises, setExercises] = useState<WorkoutExerciseRow[] | null>(null);
-  const [dragging, setDragging] = useState<number | null>(null);
+  const [exercises, setExercises] = useState<ExerciseRow[] | null>(null);
 
   // Seed once the record arrives; `??` rather than an effect so there is no
   // frame where the form renders empty over loaded data.
@@ -51,24 +46,9 @@ export function WorkoutForm({
     return String(source?.[key] ?? '');
   };
 
-  const list: WorkoutExerciseRow[] =
-    exercises ?? (source?.exercises as WorkoutExerciseRow[] | undefined) ?? [];
+  const list: ExerciseRow[] = exercises ?? (source?.exercises as ExerciseRow[] | undefined) ?? [];
 
   const set = (key: string, next: unknown) => setFields((f) => ({ ...f, [key]: next }));
-
-  const setExercise = (index: number, patch: Partial<WorkoutExerciseRow>) =>
-    setExercises(list.map((item, i) => (i === index ? { ...item, ...patch } : item)));
-
-  const move = (from: number, to: number) => {
-    if (to < 0 || to >= list.length || from === to) {
-      return;
-    }
-
-    const next = [...list];
-    const [moved] = next.splice(from, 1);
-    next.splice(to, 0, moved);
-    setExercises(next);
-  };
 
   if (row && isLoading) {
     return <Skeleton height={280} />;
@@ -180,126 +160,7 @@ export function WorkoutForm({
         </div>
       </div>
 
-      <h4 className="fc-text-sm fc-text-muted fc-uppercase fc-mb-12">Exercises ({list.length})</h4>
-
-      <ol className="fc-exercise-editor">
-        {list.map((exercise, index) => (
-          <li
-            key={exercise.id ?? `new-${index}`}
-            draggable
-            onDragStart={() => setDragging(index)}
-            onDragEnd={() => setDragging(null)}
-            onDragOver={(event) => event.preventDefault()}
-            onDrop={() => {
-              if (dragging !== null) {
-                move(dragging, index);
-                setDragging(null);
-              }
-            }}
-            className={dragging === index ? 'fc-dragging' : ''}
-          >
-            <span className="fc-drag-handle" aria-hidden="true">
-              <Icon name="menu" size={14} />
-            </span>
-
-            <input
-              aria-label={`Exercise ${index + 1} name`}
-              value={exercise.exercise_name ?? ''}
-              placeholder="Exercise name"
-              onChange={(e) => setExercise(index, { exercise_name: e.target.value })}
-            />
-
-            <input
-              aria-label="Sets"
-              type="number"
-              className="fc-input-tiny"
-              value={exercise.default_sets ?? 3}
-              onChange={(e) => setExercise(index, { default_sets: Number(e.target.value) })}
-            />
-            <input
-              aria-label="Reps"
-              type="number"
-              className="fc-input-tiny"
-              value={exercise.default_reps ?? 10}
-              onChange={(e) => setExercise(index, { default_reps: Number(e.target.value) })}
-            />
-            <input
-              aria-label="Weight (kg)"
-              type="number"
-              step="0.5"
-              className="fc-input-tiny"
-              value={exercise.default_weight_kg ?? 0}
-              onChange={(e) => setExercise(index, { default_weight_kg: Number(e.target.value) })}
-            />
-            {/* Rest and metric are W2.5 additions: the prototype's editor had
-                neither, and the player cannot run a workout without them. */}
-            <input
-              aria-label="Rest (seconds)"
-              type="number"
-              className="fc-input-tiny"
-              value={exercise.default_rest_seconds ?? 60}
-              onChange={(e) => setExercise(index, { default_rest_seconds: Number(e.target.value) })}
-            />
-            <select
-              aria-label="Metric"
-              value={exercise.metric ?? 'reps'}
-              onChange={(e) => setExercise(index, { metric: e.target.value })}
-            >
-              <option value="reps">reps</option>
-              <option value="seconds">seconds</option>
-              <option value="distance">distance</option>
-            </select>
-
-            {/* Keyboard equivalents for the drag handle: a drag-only reorder is
-                unusable without a mouse. */}
-            <button
-              type="button"
-              className="fc-btn fc-btn--icon"
-              aria-label={`Move ${exercise.exercise_name || 'exercise'} up`}
-              disabled={index === 0}
-              onClick={() => move(index, index - 1)}
-            >
-              <Icon name="arrowUp" size={12} />
-            </button>
-            <button
-              type="button"
-              className="fc-btn fc-btn--icon"
-              aria-label={`Move ${exercise.exercise_name || 'exercise'} down`}
-              disabled={index === list.length - 1}
-              onClick={() => move(index, index + 1)}
-            >
-              <Icon name="arrowDown" size={12} />
-            </button>
-            <button
-              type="button"
-              className="fc-btn fc-btn--icon fc-btn--danger"
-              aria-label={`Remove ${exercise.exercise_name || 'exercise'}`}
-              onClick={() => setExercises(list.filter((_, i) => i !== index))}
-            >
-              <Icon name="x" size={12} />
-            </button>
-          </li>
-        ))}
-      </ol>
-
-      <Button
-        icon="plus"
-        onClick={() =>
-          setExercises([
-            ...list,
-            {
-              exercise_name: '',
-              default_sets: 3,
-              default_reps: 10,
-              default_weight_kg: 0,
-              default_rest_seconds: 60,
-              metric: 'reps',
-            },
-          ])
-        }
-      >
-        Add exercise
-      </Button>
+      <ExerciseEditor value={list} onChange={setExercises} />
 
       {error && <p className="fc-text-sm fc-text-danger fc-mt-8">{error}</p>}
 

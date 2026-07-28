@@ -1,3 +1,5 @@
+import type { ExerciseRow } from '@shared/components/ExerciseEditor';
+
 /**
  * Wire types for `/trainer/*` (plans/02-api-contract.md, W3.4).
  *
@@ -181,10 +183,83 @@ export interface TrainerWorkout {
   workout_type: string | null;
   difficulty: string | null;
   estimated_duration_minutes: number;
+  calories_burn_estimate: number | null;
   muscle_groups: string[];
   equipment: string[];
+  cover_image_url: string | null;
+  video_url: string | null;
   is_active: boolean;
   exercise_count: number | null;
+  /** Yours to edit. The platform library is assignable by everyone, editable by nobody. */
   is_mine: boolean;
   is_platform: boolean;
+}
+
+/** `GET /trainer/workouts/{id}` — the list row plus its ordered exercises. */
+export interface TrainerWorkoutDetail extends TrainerWorkout {
+  exercises: ExerciseRow[];
+}
+
+/**
+ * A trainer-authored plan.
+ *
+ * `features` and `max_trainers` are **read-only**: they decide platform-wide
+ * entitlements, and a trainer granting themselves `has_video_workouts` would be
+ * selling something the platform never agreed to. They are in the payload so the
+ * builder can say what the plan grants, not so it can change it.
+ */
+export interface TrainerPlan {
+  id: number;
+  plan_name: string;
+  description: string | null;
+  plan_type: string;
+  difficulty: string;
+  currency: string;
+  price_weekly: number | null;
+  price_monthly: number | null;
+  price_quarterly: number | null;
+  price_yearly: number | null;
+  weekly_sessions: number | null;
+  duration_weeks: number | null;
+  max_messages_per_week: number;
+  sort_order: number;
+  is_active: boolean;
+  active_subscribers: number;
+  features: Record<string, unknown>;
+  max_trainers: number;
+}
+
+export interface TrainerFoodPlan {
+  id: number;
+  plan_name: string;
+  description: string | null;
+  daily_calories: number | null;
+  meal_count: number | null;
+  is_active: boolean;
+}
+
+/**
+ * `GET /trainer/profile` — the record the directory shows users (Q4).
+ *
+ * `rating`, `rating_count`, `client_count` and `status` are read-only: a rating
+ * a trainer can set is not a rating, and account status is an administrator's
+ * decision. `hourly_rate` is display-only metadata (Q2 — trainers are traced,
+ * not paid) and must never reach a calculation.
+ */
+export interface TrainerProfile {
+  trainer_id: number;
+  display_name: string | null;
+  email: string | null;
+  bio: string | null;
+  specialization: string | null;
+  avatar_url: string | null;
+  phone: string | null;
+  hourly_rate: number | null;
+  currency: string | null;
+  rating: number | null;
+  rating_count: number;
+  max_clients: number;
+  accepting_clients: boolean;
+  client_count: number;
+  status: string;
 }

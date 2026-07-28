@@ -250,18 +250,39 @@ final class TrainerLibraryService
             $trainerId
         ), ARRAY_A) ?: [];
 
-        return ['items' => array_map(static fn(array $row): array => [
-            'id'          => (int) $row['id'],
-            'plan_name'   => $row['plan_name'],
-            'description' => $row['description'],
-            'currency'    => $row['currency'],
-            'price_monthly'   => null === $row['price_monthly'] ? null : round((float) $row['price_monthly'], 2),
-            'price_quarterly' => null === $row['price_quarterly'] ? null : round((float) $row['price_quarterly'], 2),
-            'price_yearly'    => null === $row['price_yearly'] ? null : round((float) $row['price_yearly'], 2),
-            'max_messages_per_week' => (int) $row['max_messages_per_week'],
-            'is_active'   => (bool) $row['is_active'],
-            'active_subscribers' => (int) $row['active_subscribers'],
-        ], $rows)];
+        return ['items' => array_map(static function (array $row): array {
+            $features = json_decode((string) $row['features'], true);
+
+            return [
+                'id'          => (int) $row['id'],
+                'plan_name'   => $row['plan_name'],
+                'description' => $row['description'],
+                'plan_type'   => $row['plan_type'],
+                'difficulty'  => $row['difficulty'],
+                'currency'    => $row['currency'],
+                // Every price tier the editor can write, including the weekly
+                // one. A form that can set a field it cannot read back blanks it
+                // on the next save — the round trip has to be closed on both
+                // sides or not opened at all.
+                'price_weekly'    => null === $row['price_weekly'] ? null : round((float) $row['price_weekly'], 2),
+                'price_monthly'   => null === $row['price_monthly'] ? null : round((float) $row['price_monthly'], 2),
+                'price_quarterly' => null === $row['price_quarterly'] ? null : round((float) $row['price_quarterly'], 2),
+                'price_yearly'    => null === $row['price_yearly'] ? null : round((float) $row['price_yearly'], 2),
+                'weekly_sessions' => null === $row['weekly_sessions'] ? null : (int) $row['weekly_sessions'],
+                'duration_weeks'  => null === $row['duration_weeks'] ? null : (int) $row['duration_weeks'],
+                'max_messages_per_week' => (int) $row['max_messages_per_week'],
+                'sort_order'  => (int) $row['sort_order'],
+                'is_active'   => (bool) $row['is_active'],
+                'active_subscribers' => (int) $row['active_subscribers'],
+                // Read-only, and returned precisely *because* it is not
+                // writable: `planFields()` refuses `features` and `max_trainers`
+                // so a trainer cannot grant themselves platform entitlements. A
+                // screen that could not show them either would leave the trainer
+                // guessing what they are selling.
+                'features'     => is_array($features) ? $features : [],
+                'max_trainers' => (int) $row['max_trainers'],
+            ];
+        }, $rows)];
     }
 
     /**
@@ -726,6 +747,11 @@ final class TrainerLibraryService
             'workout_type' => $row['workout_type'],
             'difficulty'   => $row['difficulty'],
             'estimated_duration_minutes' => (int) $row['estimated_duration_minutes'],
+            // Writable by `workoutFields()`, so it is readable here for the same
+            // round-trip reason the plan list carries every price tier.
+            'calories_burn_estimate' => null === $row['calories_burn_estimate']
+                ? null
+                : (int) $row['calories_burn_estimate'],
             'muscle_groups' => is_array($muscles) ? $muscles : [],
             'equipment'     => is_array($equipment) ? $equipment : [],
             'cover_image_url' => $row['cover_image_url'],
@@ -803,6 +829,27 @@ final class TrainerLibraryService
             $fields['currency'] = sanitize_text_field((string) $payload['currency']);
         }
 
+        // Descriptive, not entitlement-granting, so a trainer may set them —
+        // unlike `features`. A value outside the vocabulary falls back to the
+        // column default rather than raising a 400: these arrive from a
+        // `<select>`, so an unknown one is a client bug or a probe, and neither
+        // is worth losing the rest of somebody's edit over (the same rule
+        // W3.3 applies to ticket category and priority).
+        $vocabularies = [
+            'plan_type'  => ['combined' => 1, 'workout' => 1, 'nutrition' => 1],
+            'difficulty' => ['beginner' => 1, 'intermediate' => 1, 'advanced' => 1],
+        ];
+
+        foreach ($vocabularies as $key => $allowed) {
+            if (array_key_exists($key, $payload)) {
+                $value = sanitize_text_field((string) $payload[$key]);
+
+                $fields[$key] = isset($allowed[$value])
+                    ? $value
+                    : (string) array_key_first($allowed);
+            }
+        }
+
         foreach (['price_weekly', 'price_monthly', 'price_quarterly', 'price_yearly'] as $key) {
             if (array_key_exists($key, $payload)) {
                 $fields[$key] = null === $payload[$key] || '' === $payload[$key]
@@ -811,9 +858,21 @@ final class TrainerLibraryService
             }
         }
 
-        foreach (['max_messages_per_week', 'weekly_sessions', 'duration_weeks', 'sort_order'] as $key) {
+        foreach (['max_messages_per_week', 'sort_order'] as $key) {
             if (array_key_exists($key, $payload)) {
                 $fields[$key] = max(0, (int) $payload[$key]);
+            }
+        }
+
+        // These two are nullable in the schema and an empty box means "not
+        // specified", not "zero per week". Casting '' to 0 the way the NOT NULL
+        // columns above do would turn every plan that leaves them blank into one
+        // that promises no sessions at all.
+        foreach (['weekly_sessions', 'duration_weeks'] as $key) {
+            if (array_key_exists($key, $payload)) {
+                $fields[$key] = null === $payload[$key] || '' === $payload[$key]
+                    ? null
+                    : max(0, (int) $payload[$key]);
             }
         }
 

@@ -1,4 +1,11 @@
 {
+  "_ExerciseEditor-ika1DBra.js": {
+    "file": "assets/ExerciseEditor-ika1DBra.js",
+    "name": "ExerciseEditor",
+    "imports": [
+      "_Modal-DbFILSXU.js"
+    ]
+  },
   "_Modal-DUOYf37c.css": {
     "file": "assets/Modal-DUOYf37c.css",
     "src": "_Modal-DUOYf37c.css"
@@ -10,8 +17,8 @@
       "assets/Modal-DUOYf37c.css"
     ]
   },
-  "_ProgressChartGrid-DBOEmadx.js": {
-    "file": "assets/ProgressChartGrid-DBOEmadx.js",
+  "_ProgressChartGrid-CD6VHsFD.js": {
+    "file": "assets/ProgressChartGrid-CD6VHsFD.js",
     "name": "ProgressChartGrid",
     "imports": [
       "_Modal-DbFILSXU.js"
@@ -21,12 +28,13 @@
     ]
   },
   "src/admin/main.tsx": {
-    "file": "assets/admin-DPDVda6M.js",
+    "file": "assets/admin-CNEyvJHc.js",
     "name": "admin",
     "src": "src/admin/main.tsx",
     "isEntry": true,
     "imports": [
-      "_Modal-DbFILSXU.js"
+      "_Modal-DbFILSXU.js",
+      "_ExerciseEditor-ika1DBra.js"
     ]
   },
   "src/shared/components/charts/ProgressCharts.tsx": {
@@ -39,23 +47,24 @@
     ]
   },
   "src/trainer/main.tsx": {
-    "file": "assets/trainer-DZVEqnGy.js",
+    "file": "assets/trainer-mEWGeAnB.js",
     "name": "trainer",
     "src": "src/trainer/main.tsx",
     "isEntry": true,
     "imports": [
       "_Modal-DbFILSXU.js",
-      "_ProgressChartGrid-DBOEmadx.js"
+      "_ProgressChartGrid-CD6VHsFD.js",
+      "_ExerciseEditor-ika1DBra.js"
     ]
   },
   "src/user/main.tsx": {
-    "file": "assets/user-B1qamePB.js",
+    "file": "assets/user-BCkkL9_J.js",
     "name": "user",
     "src": "src/user/main.tsx",
     "isEntry": true,
     "imports": [
       "_Modal-DbFILSXU.js",
-      "_ProgressChartGrid-DBOEmadx.js"
+      "_ProgressChartGrid-CD6VHsFD.js"
     ]
   }
 }

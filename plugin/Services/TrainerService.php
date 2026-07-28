@@ -561,6 +561,12 @@ final class TrainerService
 
         EntitlementService::flush((int) $row['user_id']);
 
+        // The conversation is part of accepting somebody, not a thing either
+        // side has to go and create: without this both parties reach a messaging
+        // screen with no thread on it and no way to open one. Idempotent, so a
+        // re-accept keeps the existing history.
+        (new MessageService())->ensureThread((int) $row['user_id'], $trainerId);
+
         $this->notifyClient(
             (int) $row['user_id'],
             __('Your trainer request was accepted', 'fitnessclub'),

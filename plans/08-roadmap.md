@@ -1264,6 +1264,109 @@ tab shows weight and body fat derived from the progress payload — the fuller
 health record needs its own endpoint with access logging (Q10), which does not
 exist yet.
 
+#### Slice 3 — builders, profile and messaging ✅ **complete 2026-07-29**
+
+The trainer's own library — workout builder, plan builder, food plans — plus the
+profile and messaging. Almost entirely front-end: slice 1 built every endpoint
+these screens need, and the three server changes below were found by trying to
+use them.
+
+**Build notes.**
+
+- **A messaging feature nobody could reach.** Nothing in the plugin created
+  `fc_message_threads` rows. Every path — `threads()`, `thread()`, `send()` —
+  starts from an existing thread, and the only ones in existence were the demo
+  seeder's. So W3.1 worked perfectly against the fixtures and **not at all for a
+  client accepted through the app**: both sides opened Messages, saw an empty
+  list, and had no way to start a conversation. `MessageService::ensureThread()`
+  now runs at **accept**, which is when the relationship begins and the first
+  point at which both parties are known. Idempotent on `uq_thread`, so a
+  re-accept reuses the existing history and two concurrent accepts cannot race.
+  Creating it lazily on first send was the alternative and is worse: it needs an
+  endpoint keyed on a *pair* rather than a thread id, and leaves the other side
+  looking at nothing until somebody speaks first. Asserted from both sides,
+  because the thread is what each of them sees the other through.
+- **Read/write asymmetry in the plan payload.** `planFields()` accepted
+  `price_weekly`, `weekly_sessions`, `duration_weeks` and `sort_order`;
+  `plans()` returned none of them. A priced plan therefore renders with an empty
+  price box, and a client that resubmits what it read writes the omission back
+  as null. Fixed on the read side, and the test asserts the symmetry rather than
+  one screen's use of it — the builder happens to send only changed fields,
+  which limits this to display, but that is the client's choice and not the
+  contract's guarantee. `calories_burn_estimate` had the same shape on the
+  workout payload.
+- **Two nullable columns were being flattened to zero.** `weekly_sessions` and
+  `duration_weeks` are nullable and went through the same `max(0, (int))` cast as
+  the NOT NULL columns, so an empty box wrote `0` — a plan that promises no
+  sessions rather than one that does not say. They now take null, like the price
+  tiers, and the same rule is stated in the UI: empty is *not offered*, 0 is
+  *free*.
+- **`plan_type` and `difficulty` were unwritable**, though 06 §3 asks for them.
+  They are descriptive rather than entitlement-granting, so they were added — with
+  the W3.3 fallback rule rather than a 400, since they arrive from a `<select>`
+  and an unknown value is a client bug or a probe, neither worth discarding the
+  rest of somebody's edit over.
+- **The exercise editor is now shared.** The admin form owned the drag-reorder
+  list; the trainer builder needed the same rows against the same upsert-by-id
+  contract, and that rule is subtle enough that a second copy would have drifted
+  from it — the argument that already put `replaceExercises` in one place on the
+  server and `ProgressChartGrid` in one place on the client.
+- **Metadata and exercises save together**, in one `PUT /trainer/workouts/{id}`
+  rather than a metadata write plus `PUT .../exercises`. Two requests can
+  half-succeed and leave a workout whose name says one thing and whose contents
+  say another.
+- **A platform workout is read-only, and says so before it is typed into.** The
+  server would answer 403 to the save, so the form disables rather than letting a
+  trainer spend a minute on a request that cannot land. The library offers
+  "Duplicate" in place of "Edit"; the copy strips exercise ids, because they
+  belong to the source's rows.
+- **The feature-flag editor 06 §3 asks for is deliberately not built.** Slice 1
+  decided `features` and `max_trainers` are not a trainer's to set — granting
+  yourself `has_video_workouts` is selling something the platform never agreed
+  to — and that outranks the older line. They are now returned **read-only** so
+  the builder can state what the plan grants; a screen that showed neither would
+  leave the trainer guessing what they are selling.
+- **Messaging is one component for two readers.** The endpoints are account-keyed
+  and symmetric — `MessageService` resolves the caller and returns the
+  counterpart — so the screen and its hooks moved to `@shared`, parameterised
+  only by who the other person is. The quota note needed no condition: the wire
+  already sends `quota: null` to a trainer, because a reply spends nobody's plan.
+  The `Conversation` pane is exported separately so the client record can embed
+  the trainer's own thread inline, which is what 06 §2 specifies.
+- **The profile states capacity rather than implying it.** "2 of 40 clients" with
+  the reason underneath, because a queue that simply goes quiet reads as a
+  platform fault. `max_clients = 0` is *unconfigured*, never "full". The card
+  deliberately reads the **saved** profile, not the form: it describes what the
+  directory is doing right now, and an unticked box that has not been saved has
+  not changed that.
+
+*Exit criterion met*, verified in the browser as `sarah.chen` against the seeded
+dev site. The workout builder loaded Upper Body Power with all eight exercises;
+moving Bench Press down and saving left **ids 1 and 2 swapped in position but
+identical in identity**, `MAX(id)` unmoved at 44 and all **24 exercise logs still
+linked** — the W2.5 upsert rule holding through the new route. A plan created,
+priced at 49.99 monthly and 129 quarterly with weekly and yearly left empty,
+stored **NULL rather than 0** for the untouched tiers, and a second edit changing
+only the description left every other field intact. The profile read 2 of 40
+clients, open to requests, 4.9 from 132 clients. Messages listed **a client**
+rather than a trainer with no client-side change, sent, and rendered inline on the
+client record with no back button. No console errors. Every row this pass created
+— one message, its notification, one plan — was removed afterwards and the
+exercise order restored. Gate: **phpcs 0 errors, phpunit 274 tests / 1605
+assertions, `ui/` typecheck + lint + format + build green.**
+
+**Deferred, and named rather than dropped:** the **food-plan meal editor** (06 §5
+and the Phase-4 line both mark it deferrable; `fc_food_plan_meals` exists, the
+endpoints do not, so it is a service and routes rather than a screen) and the
+**exercise library** (same Phase-4 line). Also: **attached workouts and food
+plans on a plan** — 06 §3 lists them but no join table exists in the 29
+migrations, so they need schema before they need a screen; **canned responses**
+and **attaching a workout to a message** (`POST /messages/attachments` uploads an
+image, not a resource reference); the **workout preview as the client sees it**;
+and the trainer **Support** view (§7). The Health tab still shows only what the
+progress payload carries — the fuller record needs its own endpoint with Q10
+access logging.
+
 #### Full package scope
 All `/trainer/*` endpoints with **both** ownership guards — shared read across
 trainers (Q13), private write to your own assignments — then dashboard, client

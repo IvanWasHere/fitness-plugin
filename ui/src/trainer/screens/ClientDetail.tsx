@@ -4,6 +4,8 @@ import {
   LazyProgressCharts,
   type ProgressChartData,
 } from '@shared/components/charts/ProgressChartGrid';
+import { useThreads } from '@shared/api/messages';
+import { Conversation } from '@shared/features/Messages';
 import { Icon } from '@shared/components/Icon';
 import { Modal } from '@shared/components/Modal';
 import {
@@ -116,7 +118,7 @@ export function ClientDetail() {
       {tab === 'workouts' && <WorkoutsTab clientId={clientId} client={data} />}
       {tab === 'nutrition' && <NutritionTab clientId={clientId} />}
       {tab === 'health' && <HealthTab clientId={clientId} />}
-      {tab === 'messages' && <MessagesTab />}
+      {tab === 'messages' && <MessagesTab clientId={clientId} />}
       {tab === 'notes' && <NotesTab clientId={clientId} />}
     </>
   );
@@ -563,17 +565,38 @@ function HealthTab({ clientId }: { clientId: number }) {
 }
 
 /**
+ * The trainer's own thread with this client, inline (06 §2, W3.4 slice 3).
+ *
  * Messaging reuses W3.1's API unchanged — a trainer's thread with this client is
- * the same resource the member sees from the other side. Wiring the thread pane
- * in is the next slice; pointing at it is more useful than an empty tab.
+ * the same resource the member sees from the other side — and the pane is the
+ * same `Conversation` the standalone Messages screen renders.
+ *
+ * The thread is found by `user_id` rather than fetched by id, because there is
+ * no "thread for this client" endpoint and the conversation list is already
+ * polled and cached. It is **this trainer's thread only**: `GET /messages/threads`
+ * is scoped to the caller, so a co-trainer's conversation with the same client
+ * is not in the list to be found — which is the rule 06 states for this tab and
+ * the one place in the client record where shared read does not apply.
  */
-function MessagesTab() {
-  return (
-    <EmptyState title="Messages">
-      Your conversation with this client uses the same threads as the member app. The inline pane
-      arrives with the next slice of the trainer app.
-    </EmptyState>
-  );
+function MessagesTab({ clientId }: { clientId: number }) {
+  const { data, isLoading } = useThreads();
+
+  if (isLoading) {
+    return <Skeleton height={280} />;
+  }
+
+  const thread = data?.items.find((item) => item.user_id === clientId) ?? null;
+
+  if (!thread) {
+    return (
+      <EmptyState title="No conversation yet">
+        A conversation opens when you accept a client. This one predates that, so there is no thread
+        to write in — a message from them will not create one either.
+      </EmptyState>
+    );
+  }
+
+  return <Conversation thread={thread} counterpart="Client" />;
 }
 
 /**

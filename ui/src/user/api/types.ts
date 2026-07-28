@@ -592,54 +592,18 @@ export interface ConsistencyCalendar {
  * The allowance is **per thread**: a member coached by two trainers has a
  * separate one for each (Q3).
  */
-export interface MessageQuota {
-  limit: number | null;
-  used: number;
-  remaining: number | null;
-  resets_at: string | null;
-}
-
-export interface ThreadSummary {
-  id: number;
-  trainer_id: number;
-  user_id: number;
-  counterpart_name: string | null;
-  counterpart_avatar: string | null;
-  preview: string | null;
-  last_message_at: string | null;
-  unread_count: number;
-  status: string;
-  /** Null when the caller is the trainer — replying spends nobody's plan. */
-  quota: MessageQuota | null;
-}
-
-export type MessageDirection = 'user_to_trainer' | 'trainer_to_user';
-
-export interface Message {
-  id: number;
-  thread_id: number;
-  sender_account_id: number;
-  direction: MessageDirection;
-  message: string | null;
-  attachments: string[];
-  is_read: boolean;
-  created_at: string | null;
-}
-
-export interface ThreadDetail {
-  thread: Omit<ThreadSummary, 'preview' | 'last_message_at'>;
-  messages: Message[];
-  has_more: boolean;
-  /** Pass back as `before` to page further into the history. */
-  oldest_id: number | null;
-}
-
-/** `GET /messages/poll` — ids only, so an idle poll costs almost nothing. */
-export interface MessagePoll {
-  messages: Array<{ id: number; thread_id: number }>;
-  latest_id: number;
-  unread_total: number;
-}
+/**
+ * Messaging wire types live with the hooks that use them, in
+ * `@shared/api/messages` — one definition for both readers of a symmetric API.
+ */
+export type {
+  Message,
+  MessageDirection,
+  MessagePoll,
+  MessageQuota,
+  ThreadDetail,
+  ThreadSummary,
+} from '@shared/api/messages';
 
 // ----------------------------------------------------------------- billing
 

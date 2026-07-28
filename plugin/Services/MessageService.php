@@ -289,6 +289,57 @@ final class MessageService
     }
 
     /**
+     * Make sure a member and a trainer have a conversation to use.
+     *
+     * **Nothing created threads before this (W3.4 slice 3).** Every read path —
+     * `threads()`, `thread()`, `send()` — starts from an existing row, and the
+     * only rows in existence were the ones the demo seeder wrote. So messaging
+     * worked perfectly against the fixtures and not at all for a client accepted
+     * through the app: both sides saw an empty conversation list with no way to
+     * start one, and W3.1's whole feature was unreachable for real users.
+     *
+     * The thread is created at **accept**, which is the moment the coaching
+     * relationship begins and the first point at which both parties are known.
+     * The alternative — creating one lazily on the first send — needs a
+     * "start conversation" endpoint that takes a *pair* rather than a thread id,
+     * and leaves the other side looking at nothing until somebody speaks first.
+     *
+     * Idempotent: `uq_thread (user_id, trainer_id)` is what actually guarantees
+     * one conversation per pair, so this leans on the index rather than on the
+     * select above it, and a re-accept after a lapsed relationship reuses the
+     * existing thread with its history intact.
+     */
+    public function ensureThread(int $fcUserId, int $trainerId): int
+    {
+        global $wpdb;
+
+        $find = "SELECT id FROM {$wpdb->prefix}fc_message_threads
+                  WHERE user_id = %d AND trainer_id = %d";
+
+        $existing = (int) $wpdb->get_var($wpdb->prepare($find, $fcUserId, $trainerId));
+
+        if ($existing > 0) {
+            return $existing;
+        }
+
+        $now = gmdate('Y-m-d H:i:s');
+
+        // INSERT IGNORE, not insert(): two accepts racing must not raise, and
+        // the unique index is the authority on which one wins.
+        $wpdb->query($wpdb->prepare(
+            "INSERT IGNORE INTO {$wpdb->prefix}fc_message_threads
+                    (user_id, trainer_id, status, created_at, updated_at)
+             VALUES (%d, %d, 'open', %s, %s)",
+            $fcUserId,
+            $trainerId,
+            $now,
+            $now
+        ));
+
+        return (int) $wpdb->get_var($wpdb->prepare($find, $fcUserId, $trainerId));
+    }
+
+    /**
      * `GET /messages/unread-count` — the nav badge.
      */
     public function unreadCount(int $accountId): int

@@ -12,8 +12,12 @@ import type {
   ClientSummary,
   TrainerCapacity,
   TrainerDashboard,
+  TrainerFoodPlan,
   TrainerNote,
+  TrainerPlan,
+  TrainerProfile,
   TrainerWorkout,
+  TrainerWorkoutDetail,
 } from './types';
 
 /**
@@ -33,6 +37,10 @@ export const trainerKeys = {
   notes: (id: number) => ['trainer', 'client', id, 'notes'] as const,
   requests: ['trainer', 'requests'] as const,
   workouts: ['trainer', 'workouts'] as const,
+  workout: (id: number) => ['trainer', 'workout', id] as const,
+  plans: ['trainer', 'plans'] as const,
+  foodPlans: ['trainer', 'food-plans'] as const,
+  profile: ['trainer', 'profile'] as const,
 };
 
 export function useTrainerDashboard(): UseQueryResult<TrainerDashboard, ApiError> {
@@ -183,6 +191,163 @@ export function useClientActions(clientId: number) {
   });
 
   return { assign, unassign, addNote, deleteNote };
+}
+
+/**
+ * One workout with its ordered exercises — what the builder edits.
+ *
+ * Kept out of `useTrainerWorkouts` deliberately: the list is fetched on every
+ * assign dialog and carries only counts, so loading every workout's exercises
+ * with it would pay for the builder on screens that never open it.
+ */
+export function useTrainerWorkout(
+  id: number | null,
+): UseQueryResult<TrainerWorkoutDetail, ApiError> {
+  const { api } = useSession();
+
+  return useQuery({
+    queryKey: trainerKeys.workout(id ?? 0),
+    queryFn: () => api.get<TrainerWorkoutDetail>(`trainer/workouts/${id}`),
+    enabled: id !== null && id > 0,
+  });
+}
+
+export function useWorkoutActions() {
+  const { api } = useSession();
+  const queryClient = useQueryClient();
+
+  const settle = () => {
+    void queryClient.invalidateQueries({ queryKey: ['trainer'] });
+  };
+
+  const create = useMutation<TrainerWorkoutDetail, ApiError, Record<string, unknown>>({
+    mutationFn: (body) => api.post('trainer/workouts', body),
+    onSuccess: settle,
+  });
+
+  // Metadata and exercises go up together: `PUT /trainer/workouts/{id}` takes
+  // both, so one save is one transaction rather than a metadata write that can
+  // succeed while the exercise write fails.
+  const update = useMutation<
+    TrainerWorkoutDetail,
+    ApiError,
+    { id: number; body: Record<string, unknown> }
+  >({
+    mutationFn: ({ id, body }) => api.put(`trainer/workouts/${id}`, body),
+    onSuccess: settle,
+  });
+
+  const remove = useMutation<{ ok: boolean }, ApiError, number>({
+    mutationFn: (id) => api.delete(`trainer/workouts/${id}`),
+    onSuccess: settle,
+  });
+
+  return { create, update, remove };
+}
+
+export function useTrainerPlans(): UseQueryResult<{ items: TrainerPlan[] }, ApiError> {
+  const { api } = useSession();
+
+  return useQuery({
+    queryKey: trainerKeys.plans,
+    queryFn: () => api.get<{ items: TrainerPlan[] }>('trainer/plans'),
+  });
+}
+
+export function usePlanActions() {
+  const { api } = useSession();
+  const queryClient = useQueryClient();
+
+  const settle = () => {
+    void queryClient.invalidateQueries({ queryKey: trainerKeys.plans });
+  };
+
+  const create = useMutation<{ id: number }, ApiError, { plan_name: string }>({
+    mutationFn: (body) => api.post('trainer/plans', body),
+    onSuccess: settle,
+  });
+
+  const update = useMutation<
+    { ok: boolean },
+    ApiError,
+    { id: number; body: Record<string, unknown> }
+  >({
+    mutationFn: ({ id, body }) => api.put(`trainer/plans/${id}`, body),
+    onSuccess: settle,
+  });
+
+  const remove = useMutation<{ ok: boolean }, ApiError, number>({
+    mutationFn: (id) => api.delete(`trainer/plans/${id}`),
+    onSuccess: settle,
+  });
+
+  return { create, update, remove };
+}
+
+export function useFoodPlans(): UseQueryResult<{ items: TrainerFoodPlan[] }, ApiError> {
+  const { api } = useSession();
+
+  return useQuery({
+    queryKey: trainerKeys.foodPlans,
+    queryFn: () => api.get<{ items: TrainerFoodPlan[] }>('trainer/food-plans'),
+  });
+}
+
+export function useFoodPlanActions() {
+  const { api } = useSession();
+  const queryClient = useQueryClient();
+
+  const settle = () => {
+    void queryClient.invalidateQueries({ queryKey: trainerKeys.foodPlans });
+  };
+
+  const create = useMutation<{ id: number }, ApiError, { plan_name: string }>({
+    mutationFn: (body) => api.post('trainer/food-plans', body),
+    onSuccess: settle,
+  });
+
+  const update = useMutation<
+    { ok: boolean },
+    ApiError,
+    { id: number; body: Record<string, unknown> }
+  >({
+    mutationFn: ({ id, body }) => api.put(`trainer/food-plans/${id}`, body),
+    onSuccess: settle,
+  });
+
+  const remove = useMutation<{ ok: boolean }, ApiError, number>({
+    mutationFn: (id) => api.delete(`trainer/food-plans/${id}`),
+    onSuccess: settle,
+  });
+
+  return { create, update, remove };
+}
+
+export function useTrainerProfile(): UseQueryResult<TrainerProfile, ApiError> {
+  const { api } = useSession();
+
+  return useQuery({
+    queryKey: trainerKeys.profile,
+    queryFn: () => api.get<TrainerProfile>('trainer/profile'),
+  });
+}
+
+export function useProfileActions() {
+  const { api } = useSession();
+  const queryClient = useQueryClient();
+
+  const save = useMutation<TrainerProfile, ApiError, Record<string, unknown>>({
+    mutationFn: (body) => api.put('trainer/profile', body),
+    // The response *is* the fresh profile, so it is written straight into the
+    // cache: a refetch would repaint the form from a second request and briefly
+    // show the trainer their pre-save values back.
+    onSuccess: (profile) => {
+      queryClient.setQueryData(trainerKeys.profile, profile);
+      void queryClient.invalidateQueries({ queryKey: trainerKeys.requests });
+    },
+  });
+
+  return { save };
 }
 
 export function useRequests(): UseQueryResult<

@@ -15,7 +15,6 @@ import type {
   HealthSummary,
   Meal,
   MealInput,
-  Message,
   Measurements,
   MeasurementsInput,
   NotificationList,
@@ -32,10 +31,8 @@ import type {
   Plan,
   Session,
   Subscription,
-  ThreadDetail,
   Ticket,
   TicketList,
-  ThreadSummary,
   UnreadCount,
   WaterState,
   WorkoutDetail,
@@ -597,95 +594,14 @@ export function useConsistencyCalendar(
 // ---------------------------------------------------------------- messaging
 
 /**
- * The conversation list (W3.1).
+ * Messaging hooks live in `@shared/api/messages` as of W3.4 slice 3.
  *
- * Polled on an interval rather than pushed: real-time is WebSockets and
- * assumption 5 defers that past launch. Fifteen seconds is the contract's
- * figure — frequent enough that a reply feels prompt, rare enough that an idle
- * tab is not a load generator.
+ * The endpoints are account-keyed and symmetric — a member sees their trainers,
+ * a trainer sees their clients, through the same routes — so a member-only copy
+ * of these hooks would have been the same requests under a second name. The nav
+ * badge is re-exported because `App.tsx` reads it from here.
  */
-export function useThreads(): UseQueryResult<
-  { items: ThreadSummary[]; unread_total: number },
-  ApiError
-> {
-  const { api } = useSession();
-
-  return useQuery({
-    queryKey: queryKeys.threads,
-    queryFn: () => api.get<{ items: ThreadSummary[]; unread_total: number }>('messages/threads'),
-    refetchInterval: 15_000,
-  });
-}
-
-/**
- * One conversation.
- *
- * Also polled, but only while it is open — an unmounted query stops, so the
- * poll follows the screen the member is actually looking at.
- */
-export function useThread(threadId: number | null): UseQueryResult<ThreadDetail, ApiError> {
-  const { api } = useSession();
-
-  return useQuery({
-    queryKey: queryKeys.thread(threadId ?? 0),
-    queryFn: () => api.get<ThreadDetail>(`messages/threads/${threadId}`),
-    enabled: threadId !== null && threadId > 0,
-    refetchInterval: 15_000,
-  });
-}
-
-export function useMessageActions(threadId: number | null) {
-  const { api } = useSession();
-  const queryClient = useQueryClient();
-
-  const settle = () => {
-    void queryClient.invalidateQueries({ queryKey: ['messages'] });
-    void queryClient.invalidateQueries({ queryKey: queryKeys.dashboard });
-  };
-
-  const send = useMutation<
-    { message: Message; quota: unknown },
-    ApiError,
-    { message: string; attachments?: string[] }
-  >({
-    mutationFn: (body) => api.post(`messages/threads/${threadId}`, body),
-    onSuccess: settle,
-  });
-
-  /**
-   * Marking read is fire-and-forget from the UI's point of view, but it still
-   * settles the caches: the nav badge and the thread list both show a count the
-   * member has just cleared otherwise.
-   */
-  const markRead = useMutation<{ ok: boolean; unread_total: number }, ApiError, number>({
-    mutationFn: (id) => api.post(`messages/threads/${id}/read`),
-    onSuccess: settle,
-  });
-
-  return { send, markRead };
-}
-
-/**
- * The messages nav badge.
- *
- * Polls `GET /messages/unread-count` — a single indexed SUM — rather than
- * mounting the thread list app-wide. The badge only needs a number, and
- * refetching every conversation every fifteen seconds to derive one would be
- * the expensive way to get it. Seeded from the boot payload so it is right on
- * first paint.
- */
-export function useUnreadMessages(): number {
-  const { api, boot } = useSession();
-
-  const { data } = useQuery({
-    queryKey: ['messages', 'unread-count'],
-    queryFn: () => api.get<{ unread_total: number }>('messages/unread-count'),
-    initialData: { unread_total: boot.counts?.unread_messages ?? 0 },
-    refetchInterval: 15_000,
-  });
-
-  return data?.unread_total ?? 0;
-}
+export { useMessageActions, useThread, useThreads, useUnreadMessages } from '@shared/api/messages';
 
 // ----------------------------------------------------------------- billing
 

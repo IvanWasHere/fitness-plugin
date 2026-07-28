@@ -3,6 +3,7 @@
 namespace FitnessClub\Tests\Integration;
 
 use FitnessClub\Auth\Capabilities;
+use FitnessClub\Services\MessageService;
 use WP_REST_Request;
 use WP_REST_Response;
 
@@ -430,6 +431,177 @@ final class TrainerApiTest extends IntegrationTestCase
         $this->assertSame(200, $this->post("/trainer/requests/{$requestId}/accept", [])->get_status());
     }
 
+    /**
+     * Accepting opens the conversation.
+     *
+     * Nothing created `fc_message_threads` rows before W3.4 slice 3, so every
+     * client accepted through the app reached a messaging screen with no thread
+     * on it and no way to open one — W3.1 worked only against the seeded
+     * fixtures. Asserted from **both** sides, because the thread is what each of
+     * them sees the other through.
+     */
+    public function testAcceptingAClientOpensAConversationBothSidesCanSee(): void
+    {
+        $member = $this->seedMember();
+        $coach  = $this->seedTrainer();
+
+        $this->link($member['fc_user_id'], $coach['trainer_id'], 'pending');
+        $this->signIn($coach['account_id']);
+
+        $this->assertSame([], $this->get('/messages/threads')->get_data()['items']);
+
+        $requestId = $this->get('/trainer/requests')->get_data()['items'][0]['id'];
+        $this->post("/trainer/requests/{$requestId}/accept", []);
+
+        $trainerSide = $this->get('/messages/threads')->get_data()['items'];
+
+        $this->assertCount(1, $trainerSide);
+        $this->assertSame($member['fc_user_id'], $trainerSide[0]['user_id']);
+        // A trainer's replies are not metered — the quota is the member's.
+        $this->assertNull($trainerSide[0]['quota']);
+
+        $this->signIn($member['account_id']);
+        $memberSide = $this->get('/messages/threads')->get_data()['items'];
+
+        $this->assertCount(1, $memberSide);
+        $this->assertSame($trainerSide[0]['id'], $memberSide[0]['id']);
+    }
+
+    /**
+     * Opening a conversation twice does not open two.
+     *
+     * `uq_thread` is the guarantee; this asserts the service leans on it rather
+     * than on a check that a concurrent accept could slip past.
+     */
+    public function testEnsuringAThreadTwiceReusesTheSameOne(): void
+    {
+        $member  = $this->seedMember();
+        $coach   = $this->seedTrainer();
+        $service = new MessageService();
+
+        $first  = $service->ensureThread($member['fc_user_id'], $coach['trainer_id']);
+        $second = $service->ensureThread($member['fc_user_id'], $coach['trainer_id']);
+
+        $this->assertGreaterThan(0, $first);
+        $this->assertSame($first, $second);
+    }
+
+    // ------------------------------------------------------------------ plans
+
+    /**
+     * Every field the plan endpoint accepts, it hands back.
+     *
+     * The builder seeds its form from `GET /trainer/plans`, so a field the
+     * update accepts but the list omits renders as an empty box on a plan that
+     * has a value — a priced plan showing no price. The screen sends only the
+     * fields it changed, which limits the blast radius to display; a client that
+     * resubmits what it read would write the omission back as null. This asserts
+     * the symmetry itself rather than one client's use of it, which is why it
+     * saves twice and the second save echoes the whole payload back.
+     */
+    public function testEveryWritablePlanFieldSurvivesASecondEdit(): void
+    {
+        $coach = $this->seedTrainer();
+        $this->signIn($coach['account_id']);
+
+        $planId = $this->post('/trainer/plans', ['plan_name' => 'Round Trip'])->get_data()['id'];
+
+        $written = [
+            'description'     => 'Twice a week, twelve weeks.',
+            'plan_type'       => 'workout',
+            'difficulty'      => 'advanced',
+            'currency'        => 'EUR',
+            'price_weekly'    => 9.5,
+            'price_monthly'   => 30,
+            'price_quarterly' => 85,
+            'price_yearly'    => 300,
+            'weekly_sessions' => 2,
+            'duration_weeks'  => 12,
+            'max_messages_per_week' => 7,
+            'sort_order'      => 3,
+        ];
+
+        $this->put("/trainer/plans/{$planId}", $written);
+
+        $plan = $this->planById($planId);
+
+        foreach ($written as $key => $value) {
+            $this->assertEquals($value, $plan[$key], "{$key} did not survive the first save");
+        }
+
+        // The second save is the one that matters: the editor resubmits what it
+        // read, so anything the list dropped is now written back as null.
+        $this->put("/trainer/plans/{$planId}", $plan + ['plan_name' => 'Round Trip']);
+
+        $again = $this->planById($planId);
+
+        foreach ($written as $key => $value) {
+            $this->assertEquals($value, $again[$key], "{$key} was lost on the second save");
+        }
+    }
+
+    /**
+     * `features` and `max_trainers` are readable and not writable.
+     *
+     * They decide platform-wide entitlements, so a trainer setting
+     * `has_video_workouts` on their own plan would be selling something the
+     * platform never agreed to. The screen still needs to *show* what the plan
+     * grants, which is why they are in the payload at all.
+     */
+    public function testATrainerCanReadButNotGrantPlanFeatures(): void
+    {
+        global $wpdb;
+
+        $coach = $this->seedTrainer();
+        $this->signIn($coach['account_id']);
+
+        $planId = $this->post('/trainer/plans', ['plan_name' => 'Granted'])->get_data()['id'];
+
+        $wpdb->update(
+            $wpdb->prefix . 'fc_plans',
+            ['features' => wp_json_encode(['can_message' => true]), 'max_trainers' => 2],
+            ['id' => $planId]
+        );
+
+        $this->put("/trainer/plans/{$planId}", [
+            'features'     => ['has_video_workouts' => true, 'can_message' => true],
+            'max_trainers' => 99,
+        ]);
+
+        $plan = $this->planById($planId);
+
+        $this->assertSame(['can_message' => true], $plan['features']);
+        $this->assertSame(2, $plan['max_trainers']);
+    }
+
+    /**
+     * A value outside the vocabulary falls back rather than 400s.
+     *
+     * These arrive from a `<select>`, so an unknown one is a client bug or a
+     * probe — neither worth discarding the rest of somebody's edit over.
+     */
+    public function testAnUnknownPlanEnumFallsBackInsteadOfFailing(): void
+    {
+        $coach = $this->seedTrainer();
+        $this->signIn($coach['account_id']);
+
+        $planId = $this->post('/trainer/plans', ['plan_name' => 'Enum'])->get_data()['id'];
+
+        $response = $this->put("/trainer/plans/{$planId}", [
+            'difficulty'  => 'godlike',
+            'plan_type'   => '; DROP TABLE plans',
+            'description' => 'Saved anyway.',
+        ]);
+
+        $this->assertSame(200, $response->get_status());
+
+        $plan = $this->planById($planId);
+
+        $this->assertSame('beginner', $plan['difficulty']);
+        $this->assertSame('combined', $plan['plan_type']);
+        $this->assertSame('Saved anyway.', $plan['description']);
+    }
+
     // ---------------------------------------------------------------- profile
 
     public function testAProfileUpdateCannotSetItsOwnRating(): void
@@ -524,6 +696,20 @@ final class TrainerApiTest extends IntegrationTestCase
         $this->noisy[]      = $accountId;
 
         return ['account_id' => $accountId, 'trainer_id' => $trainerId];
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    private function planById(int $planId): array
+    {
+        foreach ($this->get('/trainer/plans')->get_data()['items'] as $plan) {
+            if ((int) $plan['id'] === $planId) {
+                return $plan;
+            }
+        }
+
+        $this->fail("Plan {$planId} is not in the trainer's own list.");
     }
 
     private function link(int $fcUserId, int $trainerId, string $status = 'active'): void
