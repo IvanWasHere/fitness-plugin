@@ -1613,9 +1613,32 @@
   font-size: 13px;
 }
 
+/* "The second child is the title, and the title takes the slack."
+ *
+ * Seven of the eight lists here are built date-then-title, so the positional
+ * selector holds. The trainer's roster row is not — it reads name, then an
+ * optional `primary` tag, then the date — so `nth-child(2)` picked whichever of
+ * those happened to be second: the **tag**, stretched into a green bar across
+ * the row, or on a coach with no tag the **date**, which took the slack and went
+ * bold. Two different wrong renderings from one rule, decided by a conditional.
+ *
+ * A row can now name its own growing element, and doing so switches the
+ * positional rule off for that row. Left in place rather than converted
+ * everywhere: the other seven are correct, and rewriting them to prove a point
+ * is seven screens to re-eyeball for no change in output. */
 .fc-history-list li > span:nth-child(2) {
   flex: 1;
   font-weight: 600;
+}
+
+.fc-history-list li > .fc-history-list__grow {
+  flex: 1;
+  font-weight: 600;
+}
+
+.fc-history-list li:has(> .fc-history-list__grow) > span:nth-child(2) {
+  flex: 0 0 auto;
+  font-weight: inherit;
 }
 
 .fc-measure-grid {

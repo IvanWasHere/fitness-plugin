@@ -1348,6 +1348,17 @@ use them.
   file has been bitten by a shared class name (W1.5's `#fc-app *` specificity,
   W2.4's `.fc-tab` reuse for the activity filter) and it has the same fix each
   time: a control that is not the segmented control gets its own name.
+- **A positional selector that rendered two different wrong rows.**
+  `.fc-history-list li > span:nth-child(2)` encodes "the second child is the
+  title, and the title takes the slack". Seven of the eight lists are built
+  date-then-title and satisfy it; the trainer's roster row reads name, optional
+  `primary` tag, date — so the rule picked whichever happened to be second. With
+  the tag present it stretched a green pill into a bar across the row; without it
+  the **date** took the slack and went bold. One rule, one conditional, two wrong
+  renderings. A row can now declare its own `fc-history-list__grow`, which
+  switches the positional rule off for that row via `:has()`. The other seven
+  were left alone deliberately — they are correct, and rewriting them to prove a
+  point is seven screens to re-eyeball for no change in output.
 - **The profile states capacity rather than implying it.** "2 of 40 clients" with
   the reason underneath, because a queue that simply goes quiet reads as a
   platform fault. `max_clients = 0` is *unconfigured*, never "full". The card

@@ -168,7 +168,10 @@ function Overview({ client }: { client: Client }) {
         <ul className="fc-history-list">
           {client.trainers.map((trainer) => (
             <li key={trainer.trainer_id}>
-              <span>{trainer.display_name}</span>
+              {/* This row reads name-first, unlike the date-first lists the
+                  positional rule was written for, so it names its own growing
+                  element instead of letting `nth-child(2)` guess. */}
+              <span className="fc-history-list__grow">{trainer.display_name}</span>
               {trainer.is_primary && <Tag tone="green">primary</Tag>}
               <span className="fc-text-xs fc-text-muted">since {trainer.assigned_date}</span>
             </li>
