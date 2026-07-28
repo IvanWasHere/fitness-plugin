@@ -570,7 +570,8 @@ final class TrainerService
         $this->notifyClient(
             (int) $row['user_id'],
             __('Your trainer request was accepted', 'fitnessclub'),
-            (string) $this->trainerName($trainerId)
+            (string) $this->trainerName($trainerId),
+            'system'
         );
 
         return ['id' => $requestId, 'status' => 'active'];
@@ -602,7 +603,8 @@ final class TrainerService
         $this->notifyClient(
             (int) $row['user_id'],
             __('Your trainer request was declined', 'fitnessclub'),
-            null === $reason ? '' : (string) $reason
+            null === $reason ? '' : (string) $reason,
+            'system'
         );
 
         return ['id' => $requestId, 'status' => 'declined'];
@@ -877,8 +879,25 @@ final class TrainerService
         ));
     }
 
-    private function notifyClient(int $clientUserId, string $title, string $body): void
-    {
+    /**
+     * Tell a client something.
+     *
+     * **The type is a parameter because it was wrong before it was one.** Every
+     * call hardcoded `workout`, including "Your trainer request was accepted" —
+     * and W2.4 honours preferences at the *write*, so a member who had switched
+     * workout notifications off was never told a trainer had taken them on. The
+     * row was not filed under the wrong heading; it was never created.
+     *
+     * A coaching-relationship event is `system`: it is not training activity,
+     * and it is not something a member switching off workout reminders meant to
+     * decline.
+     */
+    private function notifyClient(
+        int $clientUserId,
+        string $title,
+        string $body,
+        string $type = 'workout'
+    ): void {
         global $wpdb;
 
         $accountId = (int) $wpdb->get_var($wpdb->prepare(
@@ -887,7 +906,7 @@ final class TrainerService
         ));
 
         if ($accountId > 0) {
-            (new NotificationService())->notify($accountId, 'workout', $title, $body);
+            (new NotificationService())->notify($accountId, $type, $title, $body);
         }
     }
 

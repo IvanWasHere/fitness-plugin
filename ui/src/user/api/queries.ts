@@ -7,6 +7,7 @@ import type {
   Collection,
   ConsistencyCalendar,
   Dashboard,
+  Directory,
   ExerciseProgression,
   Food,
   HealthInput,
@@ -15,6 +16,7 @@ import type {
   HealthSummary,
   Meal,
   MealInput,
+  MyTrainers,
   Measurements,
   MeasurementsInput,
   NotificationList,
@@ -32,6 +34,7 @@ import type {
   Session,
   Subscription,
   Ticket,
+  TrainerProfileView,
   TicketList,
   UnreadCount,
   WaterState,
@@ -602,6 +605,99 @@ export function useConsistencyCalendar(
  * badge is re-exported because `App.tsx` reads it from here.
  */
 export { useMessageActions, useThread, useThreads, useUnreadMessages } from '@shared/api/messages';
+
+// --------------------------------------------------------------- directory
+
+/**
+ * The trainer directory (Q4/Q14, W3.5).
+ *
+ * The `eligibility` block rides along with the list rather than being fetched
+ * separately, so the cards and their call-to-action are always drawn from one
+ * consistent answer — a member cannot be shown a "Request" button computed from
+ * a payload older than the one that says their last slot is gone.
+ */
+export function useDirectory(
+  search: string,
+  specialization: string,
+): UseQueryResult<Directory, ApiError> {
+  const { api } = useSession();
+
+  return useQuery({
+    queryKey: ['directory', search, specialization],
+    queryFn: () =>
+      api.get<Directory>('trainers', {
+        ...(search ? { q: search } : {}),
+        ...(specialization ? { specialization } : {}),
+      }),
+  });
+}
+
+export function useTrainerProfile(
+  trainerId: number | null,
+): UseQueryResult<TrainerProfileView, ApiError> {
+  const { api } = useSession();
+
+  return useQuery({
+    queryKey: ['directory', 'trainer', trainerId ?? 0],
+    queryFn: () => api.get<TrainerProfileView>(`trainers/${trainerId}`),
+    enabled: trainerId !== null && trainerId > 0,
+  });
+}
+
+export function useMyTrainers(): UseQueryResult<MyTrainers, ApiError> {
+  const { api } = useSession();
+
+  return useQuery({
+    queryKey: ['my-trainers'],
+    queryFn: () => api.get<MyTrainers>('user/trainers'),
+  });
+}
+
+/**
+ * Requesting, withdrawing, leaving and choosing a primary.
+ *
+ * All four invalidate the directory *and* My Trainers, because every one of
+ * them moves the slot count the eligibility block reports — a request that
+ * succeeded while the directory still says "1 of 2 used" is the same class of
+ * stale-badge bug W2.4 fixed for notifications.
+ */
+export function useTrainerRequests() {
+  const { api } = useSession();
+  const queryClient = useQueryClient();
+
+  const settle = () => {
+    void queryClient.invalidateQueries({ queryKey: ['directory'] });
+    void queryClient.invalidateQueries({ queryKey: ['my-trainers'] });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.dashboard });
+  };
+
+  const request = useMutation<
+    { id: number; status: string },
+    ApiError,
+    { trainerId: number; message?: string }
+  >({
+    mutationFn: ({ trainerId, message }) =>
+      api.post(`trainers/${trainerId}/request`, message ? { message } : {}),
+    onSuccess: settle,
+  });
+
+  const withdraw = useMutation<{ ok: boolean }, ApiError, number>({
+    mutationFn: (trainerId) => api.delete(`trainers/${trainerId}/request`),
+    onSuccess: settle,
+  });
+
+  const leave = useMutation<{ ok: boolean }, ApiError, number>({
+    mutationFn: (trainerId) => api.delete(`user/trainers/${trainerId}`),
+    onSuccess: settle,
+  });
+
+  const setPrimary = useMutation<{ ok: boolean }, ApiError, number>({
+    mutationFn: (trainerId) => api.post(`user/trainers/${trainerId}/primary`),
+    onSuccess: settle,
+  });
+
+  return { request, withdraw, leave, setPrimary };
+}
 
 // ----------------------------------------------------------------- billing
 

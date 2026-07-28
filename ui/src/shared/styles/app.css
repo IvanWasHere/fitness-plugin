@@ -938,6 +938,14 @@
   flex-wrap: wrap;
 }
 
+/* Takes the slack in a flex row. `min-width: 0` because a flex child defaults
+   to `min-width: auto`, which refuses to shrink below its content — without it
+   `.fc-truncate` inside one never truncates and the row overflows instead. */
+.fc-grow {
+  flex: 1;
+  min-width: 0;
+}
+
 .fc-gap-4 {
   gap: 4px;
 }

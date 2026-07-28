@@ -14,6 +14,8 @@ import { Messages } from './screens/Messages';
 import { Notifications } from './screens/Notifications';
 import { Subscription } from './screens/Subscription';
 import { Support } from './screens/Support';
+import { TrainerProfile } from './screens/TrainerProfile';
+import { Trainers } from './screens/Trainers';
 import { Nutrition } from './screens/Nutrition';
 import { Progress } from './screens/Progress';
 import { Workouts } from './screens/Workouts';
@@ -48,6 +50,9 @@ const NAV: NavItem[] = [
   { to: '/progress', label: 'Progress', icon: 'activity' },
   { to: '/messages', label: 'Messages', icon: 'mail', badge: 'messages' },
   { to: '/notifications', label: 'Alerts', icon: 'bell', badge: 'notifications' },
+  // Main navigation, not just onboarding: with multiple trainers allowed
+  // (Q3), adding a coach is an ongoing action rather than a setup step.
+  { to: '/trainers', label: 'Trainers', icon: 'user' },
   { to: '/subscription', label: 'Plan', icon: 'target' },
   { to: '/support', label: 'Support', icon: 'bell' },
 ];
@@ -110,6 +115,8 @@ function Chrome() {
           <Route path="/progress" element={<Progress />} />
           <Route path="/messages" element={<Messages />} />
           <Route path="/notifications" element={<Notifications />} />
+          <Route path="/trainers" element={<Trainers />} />
+          <Route path="/trainers/:id" element={<TrainerProfile />} />
           <Route path="/subscription" element={<Subscription />} />
           <Route path="/support" element={<Support />} />
           {/* Auth routes are rendered by the panel above when signed out; a

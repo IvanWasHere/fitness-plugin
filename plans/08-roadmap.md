@@ -1401,7 +1401,7 @@ builder, messages, private notes, profile, and the **client request queue** (Q4:
 accept/decline/capacity). Assignment-conflict warnings. Food-plan builder and
 exercise library deferrable to Phase 4 (−10 d). No earnings screen (Q2).
 
-### W3.5 Trainer directory & requests, user side (3 d, see [04](04-user-app.md))
+### W3.5 Trainer directory & requests, user side — ✅ **complete 2026-07-29**
 Directory with specialization filter and capacity/accepting gating, public trainer
 profile, request form with optional message, "My Trainers" in profile, request
 rate limiting, notifications both directions. Reachable from main navigation, not
@@ -1416,6 +1416,79 @@ from W3.2, so sequence W3.5 after it.
 
 Q2, Q3, Q4, Q13, Q14 and Q15 are all settled. Only **Q16** (grandfathering on
 downgrade — planned yes) remains, and it does not block the build.
+
+**Build notes.**
+
+- **The projection is the feature.** These are the only endpoints where one
+  member reads another account's record, so `TrainerDirectoryService::present()`
+  is the single place a trainer becomes public — and the test asserts what is
+  *absent* (`email`, `phone`, `account_id`) rather than what is present, because
+  the way this leaks is somebody adding a column and splatting the row. A second
+  query building its own column list would leak from whichever one was forgotten.
+- **A nullable column that would have hidden the whole directory.**
+  `fc_trainers.max_clients` is `DEFAULT NULL`, and the listing filter first read
+  `max_clients = 0 OR client_count < max_clients`. In SQL that evaluates to NULL
+  for every trainer who has never configured a limit — and a NULL `HAVING` drops
+  the row, so the directory would have been **empty on a fresh install** while
+  being perfectly correct on the seeded one. `TrainerService::capacity()` already
+  treats NULL and 0 alike; the filter now does too, and a test pins it.
+- **Eligibility is computed once, on the server.** The three CTA states come from
+  the `eligibility` block rather than being inferred from a subscription object,
+  so the button and the endpoint that would refuse it cannot disagree. Every
+  mutation returns the recomputed block, which is why requesting flips the
+  screen to `limit_reached` without a refetch.
+- **A pending request spends the slot immediately** (Q14) — the rule that stops a
+  one-trainer plan queueing five requests and keeping whichever lands first.
+  Withdrawing gives it back. Both directions are tested and both were driven in
+  the browser.
+- **`limit_reached` is not an error, and a plan with no slots is not a full
+  one.** Grandfathering (Q16) makes "2 of 1 used" a state somebody reaches by
+  changing plan, so the copy never implies a mistake. Separately, the seeded free
+  tier has `max_trainers: 0`, where "end a coaching relationship to free a slot"
+  is advice the member cannot act on — they have none. That gets its own copy:
+  the plan does not include a trainer.
+- **The rate limit counts rows, not a transient.** 3 outstanding and 10 in a
+  rolling week are statements about requests that exist, so a cache eviction must
+  not hand somebody a fresh ten. Rolling rather than calendar, for the reason the
+  messaging quota is: a boundary the member cannot see is one they cannot plan
+  around.
+- **Leaving and withdrawing are one endpoint and two terminal states.** Which
+  happened is decided by the row's status, not by the caller, so a client cannot
+  withdraw an active relationship into the wrong state. `inactive`,
+  `withdrawn` and `declined` stay distinct — collapsing them loses the ability to
+  tell "we stopped working together" from "I changed my mind" from "they said
+  no".
+- **Ending the primary relationship promotes another.** Otherwise a member with
+  two coaches drops to zero primaries and the dashboard reads "no trainer" while
+  somebody is actively coaching them.
+- **A notification nobody would ever have received.** `TrainerService::notifyClient`
+  hardcoded type `workout` for *every* message including "Your trainer request was
+  accepted" — and W2.4 honours preferences at the **write**, so a member who had
+  switched workout notifications off was not told a trainer had taken them on.
+  The row was not misfiled; it was never created. Relationship events are `system`
+  now, and the type is a parameter so the next caller has to choose one.
+
+*Exit criterion met*, verified in the browser as Sam Wilson (Pro, one slot free)
+against the seeded dev site: the directory listed all four coaches with ratings,
+bios and capacity, Lisa Park correctly tagged **YOUR COACH** rather than offered
+a request that would 409, and the header read "1 of 2 trainer slots used".
+Requesting Mike Torres with a 61-character message stored the message intact,
+raised a **`system`** notification on his account, moved the screen to "2 of 2"
+with every Request button disabled and the upgrade CTA shown — then withdrawing
+returned it to "1 of 2" and re-enabled them, all without a manual refresh. No
+console errors. The request row and its notification were removed afterwards.
+Gate: **phpcs 0 errors, phpunit 289 tests / 1716 assertions, `ui/` typecheck +
+lint + format + build green.**
+
+**Deferred:** **My Trainers lives on `/trainers` as a second panel, not under
+`/profile`** as [04](04-user-app.md) has it — the member app has no profile
+screen yet, and inventing one to host half a list is a larger change than this
+package. Coaches you have and coaches you might have are one subject and share
+one slot counter, so they sit together; when the profile screen lands this can
+move or link. Also deferred: **auto-decline after N days** (09 §4.4 asks for it;
+it needs a scheduled job and a policy on how long is too long) and the
+**onboarding** trainer-request step, which belongs with the unbuilt
+`/onboarding` wizard.
 
 **Phase 3 exit:** money flows, trainers coach, users can get help.
 

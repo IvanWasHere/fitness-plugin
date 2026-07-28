@@ -3,6 +3,7 @@
 use FitnessClub\Http\Controllers\Api\AdminController;
 use FitnessClub\Http\Controllers\Api\AuthController;
 use FitnessClub\Http\Controllers\Api\BillingController;
+use FitnessClub\Http\Controllers\Api\DirectoryController;
 use FitnessClub\Http\Controllers\Api\HealthController;
 use FitnessClub\Http\Controllers\Api\MessageController;
 use FitnessClub\Http\Controllers\Api\NotificationController;
@@ -1469,4 +1470,88 @@ Route::post('/foods', NutritionController::class . '@createFood', [
         'sugar_g'       => ['type' => ['number', 'null'], 'minimum' => 0],
         'sodium_mg'     => ['type' => ['number', 'null'], 'minimum' => 0],
     ],
+]);
+
+/*
+|--------------------------------------------------------------------------
+| Trainer directory & requests — /trainers/*, /user/trainers/* (Q4/Q14)
+|--------------------------------------------------------------------------
+|
+| The only endpoints in the plugin where one member reads another account's
+| record, so they answer with a **strict public projection** — never email,
+| phone or client list. `TrainerDirectoryService::present()` is the single
+| place that projection is built, because a directory leaks a phone number
+| from whichever query somebody forgot to update.
+|
+| Browsing is open to any signed-in member, including one with no plan:
+| whether they may *request* is a Q14 question answered by the `eligibility`
+| block, and hiding the directory from the people it is meant to sell to
+| removes the clearest upgrade prompt in the product.
+|
+| The caller's own id always comes from the session. A request endpoint that
+| took a user id would spend somebody else's trainer slot.
+|
+*/
+
+$trainerIdArg = [
+    'trainerId' => [
+        'required'          => true,
+        'type'              => 'integer',
+        'minimum'           => 1,
+        'sanitize_callback' => 'absint',
+    ],
+];
+
+Route::get('/trainers', DirectoryController::class . '@index', [
+    'permission_callback' => [DirectoryController::class, 'canRead'],
+    'args'                => [
+        'q' => [
+            'type'              => 'string',
+            'sanitize_callback' => 'sanitize_text_field',
+        ],
+        'specialization' => [
+            'type'              => 'string',
+            'sanitize_callback' => 'sanitize_text_field',
+        ],
+    ],
+]);
+
+// Registered before `/trainers/(?P<id>\d+)` so the literal path is not
+// swallowed by the numeric pattern. WordPress matches in registration order.
+Route::get('/trainers/(?P<id>\d+)', DirectoryController::class . '@show', [
+    'permission_callback' => [DirectoryController::class, 'canRead'],
+    'args'                => $idArg,
+]);
+
+Route::post('/trainers/(?P<id>\d+)/request', DirectoryController::class . '@requestTrainer', [
+    'permission_callback' => [DirectoryController::class, 'canRead'],
+    'args'                => $idArg + [
+        // Optional, and capped at the column width rather than silently
+        // truncated by MySQL: the stored value and the validated one have to be
+        // the same string.
+        'message' => [
+            'type'              => ['string', 'null'],
+            'maxLength'         => 500,
+            'sanitize_callback' => 'sanitize_textarea_field',
+        ],
+    ],
+]);
+
+Route::delete('/trainers/(?P<id>\d+)/request', DirectoryController::class . '@withdraw', [
+    'permission_callback' => [DirectoryController::class, 'canRead'],
+    'args'                => $idArg,
+]);
+
+Route::get('/user/trainers', DirectoryController::class . '@mine', [
+    'permission_callback' => [DirectoryController::class, 'canRead'],
+]);
+
+Route::delete('/user/trainers/(?P<trainerId>\d+)', DirectoryController::class . '@leave', [
+    'permission_callback' => [DirectoryController::class, 'canRead'],
+    'args'                => $trainerIdArg,
+]);
+
+Route::post('/user/trainers/(?P<trainerId>\d+)/primary', DirectoryController::class . '@setPrimary', [
+    'permission_callback' => [DirectoryController::class, 'canRead'],
+    'args'                => $trainerIdArg,
 ]);

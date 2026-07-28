@@ -605,6 +605,75 @@ export type {
   ThreadSummary,
 } from '@shared/api/messages';
 
+// --------------------------------------------------------------- directory
+
+/**
+ * Why the member can or cannot request another trainer (Q14).
+ *
+ * Decided by the server next to the rule that enforces it, so the CTA and the
+ * endpoint that answers it can never disagree. `trainers_allowed: null` means
+ * unlimited, **not** zero.
+ */
+export interface TrainerEligibility {
+  can_request: boolean;
+  reason: 'subscription_required' | 'limit_reached' | null;
+  trainers_used: number;
+  trainers_allowed: number | null;
+}
+
+/**
+ * The public projection of a trainer — the whole of what one member may see
+ * about another account. No email, no phone, no client list.
+ */
+export interface DirectoryTrainer {
+  trainer_id: number;
+  display_name: string | null;
+  avatar_url: string | null;
+  bio: string | null;
+  specialization: string | null;
+  rating: number | null;
+  rating_count: number;
+  client_count: number;
+  /** Null when no limit is configured. */
+  max_clients: number | null;
+  accepting_clients: boolean;
+  has_capacity: boolean;
+  /** This member's own relationship with them, if any. */
+  my_status: 'pending' | 'active' | null;
+  hourly_rate: number | null;
+  currency: string | null;
+}
+
+export interface TrainerProfileView extends DirectoryTrainer {
+  eligibility: TrainerEligibility;
+}
+
+export interface Directory {
+  items: DirectoryTrainer[];
+  specializations: string[];
+  eligibility: TrainerEligibility;
+}
+
+export interface MyTrainer {
+  id: number;
+  trainer_id: number;
+  display_name: string | null;
+  avatar_url: string | null;
+  specialization: string | null;
+  rating: number | null;
+  rating_count: number;
+  status: 'active' | 'pending';
+  is_primary: boolean;
+  requested_at: string | null;
+  assigned_date: string | null;
+  request_message: string | null;
+}
+
+export interface MyTrainers {
+  items: MyTrainer[];
+  eligibility: TrainerEligibility;
+}
+
 // ----------------------------------------------------------------- billing
 
 export type BillingCycle = 'weekly' | 'monthly' | 'quarterly' | 'yearly';
