@@ -55,7 +55,15 @@ final class Auth
 
         self::$resolved = true;
 
+        // Cookie first. A browser that has one gains nothing from a bearer
+        // token, and checking the cookie first means the SPA path never pays for
+        // the API path's existence.
         $session = self::sessions()->resolve(SessionCookie::read());
+
+        if (null === $session) {
+            $session = self::bearerSession();
+        }
+
         if (null === $session) {
             return null;
         }
@@ -72,9 +80,67 @@ final class Auth
         self::$session = $session;
         self::$account = $account;
 
-        self::sessions()->touch($session);
+        // Only a real session row slides its idle window. A bearer caller's
+        // grant is touched when it refreshes, not on every API call.
+        if (SessionStore::KIND_COOKIE === ($session['kind'] ?? SessionStore::KIND_COOKIE)) {
+            self::sessions()->touch($session);
+        }
 
         return self::$account;
+    }
+
+    /**
+     * Resolve an `Authorization: Bearer` access token (D4, W4.2).
+     *
+     * Two checks, and the second is the one that matters. The JWT is verified
+     * cryptographically — signature, expiry, issuer, audience, type — and then
+     * **the grant behind it is checked against the database**. A JWT cannot be
+     * revoked, so without that second step signing out would leave the token
+     * working for up to fifteen more minutes, and a password reset prompted by
+     * "somebody else is in my account" would not remove them.
+     *
+     * The shape returned matches a session row so that everything downstream —
+     * `session()`, the CSRF gate, the controllers — needs no idea which door the
+     * caller came through.
+     *
+     * @return array<string,mixed>|null
+     */
+    private static function bearerSession(): ?array
+    {
+        $token = BearerToken::fromRequest();
+
+        if (null === $token) {
+            return null;
+        }
+
+        $claims = Jwt::verifyAccessToken($token);
+
+        if (null === $claims) {
+            return null;
+        }
+
+        if (!self::sessions()->grantIsLive($claims['session_id'])) {
+            return null;
+        }
+
+        return [
+            'id'         => $claims['session_id'],
+            'account_id' => $claims['account_id'],
+            'kind'       => SessionStore::KIND_REFRESH,
+            // No CSRF binding: see Csrf, which exempts bearer callers because a
+            // token that is not sent ambiently cannot be forged cross-site.
+            'csrf_hash'  => '',
+            'remember'   => 1,
+        ];
+    }
+
+    /** Did this request authenticate with a bearer token rather than a cookie? */
+    public static function isBearer(): bool
+    {
+        $session = self::session();
+
+        return null !== $session
+            && SessionStore::KIND_REFRESH === ($session['kind'] ?? SessionStore::KIND_COOKIE);
     }
 
     public static function accountId(): int

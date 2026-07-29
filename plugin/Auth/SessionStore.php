@@ -29,6 +29,12 @@ if (!defined('ABSPATH')) {
  */
 final class SessionStore
 {
+    /** A browser session, authenticated by cookie. */
+    public const KIND_COOKIE = 'cookie';
+
+    /** An API refresh token, authenticated by bearer (W4.2). */
+    public const KIND_REFRESH = 'refresh';
+
     /**
      * Create a session and return the cookie value plus its CSRF token.
      *
@@ -55,6 +61,7 @@ final class SessionStore
 
         $wpdb->insert($wpdb->prefix . 'fc_sessions', [
             'account_id'          => $accountId,
+            'kind'                => self::KIND_COOKIE,
             'selector'            => $selector,
             'token_hash'          => hash('sha256', $verifier),
             'csrf_hash'           => hash('sha256', $csrf),
@@ -77,11 +84,68 @@ final class SessionStore
     }
 
     /**
-     * Resolve a cookie value to its live session row.
+     * Issue an API refresh token (W4.2).
      *
-     * @return array{id:int,account_id:int,csrf_hash:string,remember:int,expires_at:string,last_seen_at:string}|null
+     * The same split token as a browser session, in the same table, so that
+     * `revoke()`, `revokeAllFor()` and `gc()` cover it without a second
+     * implementation — which matters most for `revokeAllFor()`, called on
+     * password change. A separate table would have meant remembering to revoke
+     * mobile grants there too, and the failure mode of forgetting is a password
+     * reset that does not actually lock anybody out.
+     *
+     * No CSRF token: a bearer credential is not sent ambiently by a browser, so
+     * there is no cross-site request to forge.
+     *
+     * @return array{token:string,session_id:int,expires_at:int}
      */
-    public function resolve(?string $cookie): ?array
+    public function issueRefreshToken(int $accountId): array
+    {
+        global $wpdb;
+
+        $auth     = (array) FitnessClub()->config('fitnessclub.auth', []);
+        $selector = bin2hex(random_bytes(16));
+        $verifier = bin2hex(random_bytes(32));
+
+        $idleDays     = max(1, (int) ($auth['api_refresh_idle_days'] ?? 30));
+        $absoluteDays = max($idleDays, (int) ($auth['api_refresh_absolute_days'] ?? 180));
+
+        $now      = time();
+        $expires  = $now + ($idleDays * DAY_IN_SECONDS);
+        $absolute = $now + ($absoluteDays * DAY_IN_SECONDS);
+
+        $wpdb->insert($wpdb->prefix . 'fc_sessions', [
+            'account_id'          => $accountId,
+            'kind'                => self::KIND_REFRESH,
+            'selector'            => $selector,
+            'token_hash'          => hash('sha256', $verifier),
+            'csrf_hash'           => null,
+            'remember'            => 1,
+            'ip_hash'             => RateLimiter::ipHash(),
+            'user_agent'          => self::userAgent(),
+            'issued_at'           => gmdate('Y-m-d H:i:s', $now),
+            'last_seen_at'        => gmdate('Y-m-d H:i:s', $now),
+            'expires_at'          => gmdate('Y-m-d H:i:s', $expires),
+            'absolute_expires_at' => gmdate('Y-m-d H:i:s', $absolute),
+        ]);
+
+        return [
+            'token'      => $selector . '.' . $verifier,
+            'session_id' => (int) $wpdb->insert_id,
+            'expires_at' => $expires,
+        ];
+    }
+
+    /**
+     * Resolve a token value to its live session row.
+     *
+     * `$kind` is checked rather than merely returned, so a refresh token cannot
+     * be presented as a session cookie or the other way round. They live in one
+     * table and are the same shape; only this check keeps them from being
+     * interchangeable.
+     *
+     * @return array{id:int,account_id:int,kind:string,csrf_hash:string,remember:int,expires_at:string,last_seen_at:string}|null
+     */
+    public function resolve(?string $cookie, string $kind = self::KIND_COOKIE): ?array
     {
         global $wpdb;
 
@@ -96,7 +160,7 @@ final class SessionStore
         }
 
         $row = $wpdb->get_row($wpdb->prepare(
-            "SELECT id, account_id, token_hash, csrf_hash, remember, expires_at,
+            "SELECT id, account_id, kind, token_hash, csrf_hash, remember, expires_at,
                     absolute_expires_at, last_seen_at, revoked_at
                FROM {$wpdb->prefix}fc_sessions
               WHERE selector = %s
@@ -105,6 +169,10 @@ final class SessionStore
         ), ARRAY_A);
 
         if (!$row) {
+            return null;
+        }
+
+        if ($kind !== (string) $row['kind']) {
             return null;
         }
 
@@ -126,11 +194,43 @@ final class SessionStore
         return [
             'id'           => (int) $row['id'],
             'account_id'   => (int) $row['account_id'],
+            'kind'         => (string) $row['kind'],
             'csrf_hash'    => (string) $row['csrf_hash'],
             'remember'     => (int) $row['remember'],
             'expires_at'   => (string) $row['expires_at'],
             'last_seen_at' => (string) $row['last_seen_at'],
         ];
+    }
+
+    /**
+     * Is this refresh-token row still live?
+     *
+     * Used on every API request that presents an access token. The JWT itself is
+     * stateless and unrevokable, so this is what makes signing out actually sign
+     * somebody out: the access token stays cryptographically valid for up to its
+     * fifteen minutes, but the grant behind it is gone and the request is
+     * refused.
+     */
+    public function grantIsLive(int $sessionId): bool
+    {
+        global $wpdb;
+
+        if ($sessionId <= 0) {
+            return false;
+        }
+
+        return (bool) $wpdb->get_var($wpdb->prepare(
+            "SELECT 1
+               FROM {$wpdb->prefix}fc_sessions
+              WHERE id = %d
+                AND kind = %s
+                AND revoked_at IS NULL
+                AND expires_at > UTC_TIMESTAMP()
+                AND absolute_expires_at > UTC_TIMESTAMP()
+              LIMIT 1",
+            $sessionId,
+            self::KIND_REFRESH
+        ));
     }
 
     /**

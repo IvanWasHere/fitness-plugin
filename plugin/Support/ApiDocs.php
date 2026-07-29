@@ -210,6 +210,42 @@ final class ApiDocs
                 'returns'     => 'The boot payload.',
                 'response'    => 'Boot',
             ],
+            'POST /auth/token' => [
+                'tag'         => 'Authentication',
+                'summary'     => 'Sign in as an external client',
+                'description' => 'For **mobile apps and third-party clients only**. A browser should use '
+                    . '`/auth/login`: it already holds a cookie, and a bearer token in JavaScript is one '
+                    . 'any XSS can exfiltrate and — unlike a cookie — cannot be cleared. Returns a '
+                    . '**15-minute** access token plus a long-lived refresh token; nothing here sets a '
+                    . "cookie.\n\nOff by default. A site that has not enabled it answers **404**, and one "
+                    . 'that enabled it without configuring a signing secret answers **503** — different '
+                    . 'problems with different fixes.',
+                'returns'     => 'An access/refresh pair and the account it belongs to.',
+                'status'      => 200,
+            ],
+            'POST /auth/token/refresh' => [
+                'tag'         => 'Authentication',
+                'summary'     => 'Exchange a refresh token for a new pair',
+                'description' => '**The refresh token is rotated on every use** and the old one is revoked '
+                    . 'immediately — so store the new one. That is what makes a stolen refresh token '
+                    . 'detectable rather than permanent: the thief and the real client race, and whichever '
+                    . 'presents the stale token second is refused, surfacing the theft as a sign-out '
+                    . 'instead of a silent parallel session.',
+                'returns'     => 'A new access/refresh pair. The presented refresh token is now dead.',
+                'status'      => 200,
+            ],
+            'POST /auth/token/revoke' => [
+                'tag'         => 'Authentication',
+                'summary'     => 'Sign an external client out',
+                'description' => 'Takes the refresh token in the body rather than acting on the caller\'s '
+                    . 'access token, so a client can revoke a grant it is not currently using — which is '
+                    . 'what "sign out this device" needs. **Always answers 200**, whether or not the token '
+                    . 'existed: reporting that would make this an oracle for guessing tokens.'
+                    . "\n\nThe access token stays cryptographically valid until it expires, but every "
+                    . 'request re-checks that the grant behind it is live, so it stops working at once.',
+                'returns'     => 'The token no longer works.',
+                'status'      => 200,
+            ],
             'POST /auth/password/forgot' => [
                 'tag'         => 'Authentication',
                 'summary'     => 'Request a password reset',

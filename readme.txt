@@ -16,7 +16,7 @@ FitnessClub turns a WordPress site into a coaching platform. Members track worko
 
 It is **two things bolted together on purpose**:
 
-* 🧠 A **WordPress backend** — 29 custom tables, 118 REST endpoints, roles, capabilities and ownership guards.
+* 🧠 A **WordPress backend** — 29 custom tables, 121 REST endpoints, roles, capabilities and ownership guards.
 * 💻 A **front-end of three React apps** — member, trainer and admin — that talk to that API and nothing else.
 
 That separation is what lets you replace the entire front-end with your own (see *Front-end themes* below) without touching a line of PHP.
@@ -114,7 +114,11 @@ Manual entry works today. The gateway seam, webhooks with signature verification
 
 = Is there a mobile app? =
 
-Not yet. The REST API is designed to serve one, and JWT authentication for external clients is planned.
+Not one we ship — but the API is ready for one. Turn on **JWT API** in Settings → Features and add a signing secret to `wp-config.php`:
+
+    define('FITNESSCLUB_JWT_SECRET', 'a-long-random-string-of-at-least-32-characters');
+
+Clients then sign in at `POST /auth/token` for a 15-minute access token plus a revocable refresh token, and can sync efficiently with `?modified_since=`. It is a **constant, not a setting**, on purpose: an options row lives in a database that gets dumped and restored into staging, and a compromised database read should not also mint valid tokens.
 
 == REST API ==
 
@@ -134,6 +138,9 @@ Base: `/wp-json/fitnessclub/v1/`
 * `GET /auth/me`
 * `POST /auth/password/forgot`
 * `POST /auth/password/reset`
+* `POST /auth/token` — 📱 external clients: sign in for a bearer token
+* `POST /auth/token/refresh` — rotate the pair
+* `POST /auth/token/revoke` — sign a device out
 
 = 🏠 Member dashboard =
 
@@ -350,7 +357,7 @@ Stated plainly rather than discovered:
 
 * 💳 **No Stripe adapter yet.** The gateway seam, webhook handling and subscription lifecycle are built and tested against a fake gateway; the Stripe implementation is not written. Manual payment entry works.
 * 🌍 **Single-site only.** Multisite is not supported.
-* 📱 **No JWT yet**, so no external or mobile clients. Cookie authentication only.
+* 📱 **Mobile/JWT is off by default.** Enable it in Settings → Features *and* define `FITNESSCLUB_JWT_SECRET` in `wp-config.php`. Deletions are not yet part of delta sync — a removed record simply stops being returned.
 * 🎨 **No colour-theme editor.** A front-end theme replaces the whole app; there is no palette or light-mode switcher for the plugin's own apps.
 * 🧾 **No invoice PDFs, no proration** on plan change, and no CSV import/export.
 * 🍱 **No food-plan meal editor** and no exercise library browser.

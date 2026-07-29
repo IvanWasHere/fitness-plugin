@@ -36,6 +36,21 @@ if (!defined('ABSPATH')) {
  * double-submit check is defeated by anything that can set a cookie on the
  * parent domain, and storing the hash here is what closes that.
  *
+ * ## `kind` — cookie sessions and API refresh tokens share this table (W4.2)
+ *
+ * A refresh token is a session by every property that matters here: it is a
+ * long-lived credential, it is a split token, it has an idle and an absolute
+ * expiry, and it must be revocable. Giving it its own table would mean a second
+ * implementation of `revoke`, `revokeAllFor` and `gc` — and the one that would
+ * have drifted is the one that matters, because `revokeAllFor()` runs on password
+ * change. Sharing the table means changing a password kills the mobile session
+ * too, for free and in one place, rather than because somebody remembered.
+ *
+ * `csrf_hash` is therefore nullable: a bearer token is not sent ambiently by a
+ * browser, so there is no cross-site request to forge and nothing to bind.
+ * Storing a meaningless hash to keep the column NOT NULL would be a lie in a
+ * security-relevant field.
+ *
  * @see plans/01-database.md
  */
 return new class extends Migration {
@@ -46,9 +61,10 @@ return new class extends Migration {
             "(
   id bigint(20) unsigned NOT NULL auto_increment,
   account_id bigint(20) unsigned NOT NULL,
+  kind varchar(20) NOT NULL DEFAULT 'cookie',
   selector char(32) NOT NULL,
   token_hash char(64) NOT NULL,
-  csrf_hash char(64) NOT NULL,
+  csrf_hash char(64) DEFAULT NULL,
   remember tinyint(1) NOT NULL DEFAULT 0,
   ip_hash varchar(64) DEFAULT NULL,
   user_agent varchar(255) DEFAULT NULL,

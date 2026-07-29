@@ -6,7 +6,9 @@ use FitnessClub\Auth\Account;
 use FitnessClub\Auth\Auth;
 use FitnessClub\Auth\Capabilities;
 use FitnessClub\Auth\Csrf;
+use FitnessClub\Auth\Jwt;
 use FitnessClub\Auth\PasswordHasher;
+use FitnessClub\Auth\SessionStore;
 use FitnessClub\Auth\TokenService;
 use FitnessClub\Services\AccountMailer;
 use FitnessClub\Services\BootPresenter;
@@ -56,6 +58,28 @@ final class AuthController extends RestController
      * swaps straight from the login panel to the app with no second round trip.
      */
     public function login(WP_REST_Request $request): WP_REST_Response|WP_Error
+    {
+        $account = $this->verifyCredentials($request);
+
+        if ($account instanceof WP_Error) {
+            return $account;
+        }
+
+        return $this->bootResponse($account, (bool) $request->get_param('remember'));
+    }
+
+    /**
+     * Check a login and password, or explain why not.
+     *
+     * Extracted so `login()` and `token()` cannot drift (W4.2). Everything in
+     * here is security-relevant and non-obvious — the dummy verify that stops
+     * the endpoint being an account enumerator, the lockout, the opportunistic
+     * rehash, clearing the throttle on success — and a second copy for the API
+     * would eventually have been missing one of them.
+     *
+     * @return Account|WP_Error
+     */
+    private function verifyCredentials(WP_REST_Request $request): Account|WP_Error
     {
         $limits = $this->limits();
         $ipKey  = RateLimiter::ipHash();
@@ -120,7 +144,178 @@ final class AuthController extends RestController
         // A user who mistyped twice then succeeded should not stay throttled.
         RateLimiter::clear('login', $ipKey);
 
-        return $this->bootResponse($account, (bool) $request->get_param('remember'));
+        return $account;
+    }
+
+    /**
+     * POST /auth/token — sign in as an external client (D4, W4.2).
+     *
+     * The mobile/third-party counterpart to `login()`. Same credentials, same
+     * refusals, different currency: a short access token plus a revocable
+     * refresh token instead of a cookie.
+     *
+     * Nothing here sets a cookie. A client that wanted one would have used
+     * `/auth/login`, and issuing both would leave a browser holding two
+     * credentials of different lifetimes for the same session.
+     */
+    public function token(WP_REST_Request $request): WP_REST_Response|WP_Error
+    {
+        $refusal = $this->requireTokenApi();
+
+        if ($refusal instanceof WP_Error) {
+            return $refusal;
+        }
+
+        $account = $this->verifyCredentials($request);
+
+        if ($account instanceof WP_Error) {
+            return $account;
+        }
+
+        Auth::accounts()->recordSuccessfulLogin($account->id);
+
+        return $this->response($this->tokenPair($account));
+    }
+
+    /**
+     * POST /auth/token/refresh — trade a refresh token for a new pair.
+     *
+     * **The refresh token is rotated on every use**, and the old row is revoked.
+     * That is what makes a stolen refresh token detectable rather than
+     * permanent: the thief and the real client end up racing, and whichever
+     * presents the stale token second is refused, so the theft surfaces as a
+     * sign-out instead of a silent parallel session.
+     *
+     * Rotation is safe here in a way it is not for the browser cookie, where
+     * three parallel `fetch()` calls would race each other — a refresh is a
+     * single deliberate call the client makes when its access token expires.
+     */
+    public function refreshToken(WP_REST_Request $request): WP_REST_Response|WP_Error
+    {
+        $refusal = $this->requireTokenApi();
+
+        if ($refusal instanceof WP_Error) {
+            return $refusal;
+        }
+
+        $presented = (string) $request->get_param('refresh_token');
+        $session   = Auth::sessions()->resolve($presented, SessionStore::KIND_REFRESH);
+
+        if (null === $session) {
+            return $this->responseError(
+                'fc_invalid_refresh_token',
+                __('That refresh token is not valid. Sign in again.', 'fitnessclub'),
+                401
+            );
+        }
+
+        $account = Auth::accounts()->find((int) $session['account_id']);
+
+        if (null === $account || !$account->isActive()) {
+            // The grant outlived the account's right to use it. Revoke rather
+            // than merely refusing, so a suspended account's token is gone
+            // instead of waiting to work again if the suspension is lifted.
+            Auth::sessions()->revoke((int) $session['id']);
+
+            return $this->responseError(
+                'fc_account_inactive',
+                __('This account is not active.', 'fitnessclub'),
+                403
+            );
+        }
+
+        Auth::sessions()->revoke((int) $session['id']);
+
+        return $this->response($this->tokenPair($account));
+    }
+
+    /**
+     * POST /auth/token/revoke — sign an external client out.
+     *
+     * Takes the refresh token in the body rather than acting on the caller's
+     * access token, so a client can revoke a grant it is not currently using —
+     * which is what "sign out this device" needs.
+     *
+     * Always answers 200. A revoke endpoint that reports whether the token
+     * existed is an oracle for guessing tokens, and the caller's intent is
+     * satisfied either way: the token does not work now.
+     */
+    public function revokeToken(WP_REST_Request $request): WP_REST_Response|WP_Error
+    {
+        $refusal = $this->requireTokenApi();
+
+        if ($refusal instanceof WP_Error) {
+            return $refusal;
+        }
+
+        $session = Auth::sessions()->resolve(
+            (string) $request->get_param('refresh_token'),
+            SessionStore::KIND_REFRESH
+        );
+
+        if (null !== $session) {
+            Auth::sessions()->revoke((int) $session['id']);
+        }
+
+        return $this->response(['revoked' => true]);
+    }
+
+    /**
+     * An access/refresh pair plus the identity, so a client needs no second call
+     * to know who it is — the same reason `login()` answers with the boot
+     * payload.
+     *
+     * @return array<string,mixed>
+     */
+    private function tokenPair(Account $account): array
+    {
+        $refresh = Auth::sessions()->issueRefreshToken($account->id);
+
+        return [
+            'access_token'  => Jwt::issueAccessToken($account->id, $refresh['session_id']),
+            'token_type'    => 'Bearer',
+            'expires_in'    => Jwt::ACCESS_TTL_SECONDS,
+            'refresh_token' => $refresh['token'],
+            'refresh_expires_at' => gmdate('c', $refresh['expires_at']),
+            'account'       => [
+                'id'           => $account->id,
+                'display_name' => $account->displayName,
+                'role'         => $account->role,
+            ],
+        ];
+    }
+
+    /**
+     * The token API is off by default and unusable without a signing secret.
+     *
+     * The two refusals are deliberately different. "Disabled" is a setting an
+     * administrator can flip; "not configured" means they flipped it and the
+     * `FITNESSCLUB_JWT_SECRET` constant is missing, which is a different problem
+     * with a different fix — and collapsing them into one message would send
+     * somebody to the wrong screen.
+     */
+    private function requireTokenApi(): ?WP_Error
+    {
+        if (!Jwt::isEnabled()) {
+            // 404 rather than 403: a site that has not enabled the token API has
+            // no token API, and saying "forbidden" would confirm the endpoint
+            // exists here and invite somebody to keep trying.
+            return new WP_Error(
+                'fc_token_api_disabled',
+                __('Token authentication is not enabled on this site.', 'fitnessclub'),
+                ['status' => 404]
+            );
+        }
+
+        if (!Jwt::hasSecret()) {
+            return new WP_Error(
+                'fc_token_api_unconfigured',
+                __('Token authentication is enabled but no signing secret is configured.', 'fitnessclub'),
+                ['status' => 503]
+            );
+        }
+
+        return null;
     }
 
     /**

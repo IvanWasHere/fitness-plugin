@@ -1499,7 +1499,7 @@ it needs a scheduled job and a policy on how long is too long) and the
 | # | Work | Days |
 |---|------|------|
 | 4.1 | **Front-end themes** — WordPress themes shipping React apps, per-role, with the plugin's apps as fallback. **Re-scoped 2026-07-29, see below** | 2 |
-| 4.2 | JWT + mobile API: token/refresh, delta sync (`?modified_since=`), pagination audit, response compression | 3 |
+| 4.2 | JWT + mobile API: token/refresh, delta sync (`?modified_since=`), pagination audit, response compression — ✅ **complete 2026-07-30, see below** | 3 |
 | 4.3 | Performance: query profiling against the volume seed, index tuning, object-cache integration, asset budgets | 2 |
 | 4.4 | i18n: `.pot` generation, JS translation loading, RTL check | 1 |
 | 4.5 | Accessibility audit against WCAG AA, keyboard paths, screen-reader pass | 2 |
@@ -1733,6 +1733,117 @@ phpunit 317 tests / 3005 assertions** (was 301/1742).
 consumes it — and **contract version negotiation**, which was cut along with
 `theme.json` in W4.1 and has nowhere left to live. `docs/theme-development.md`
 states that gap rather than implying a guarantee.
+
+### W4.2 JWT + mobile API — ✅ **complete 2026-07-30**
+
+**Q12 is answered by building this.** The gap register listed "is the mobile app
+real, or is §17 aspirational?" as *determining whether JWT and delta sync ship at
+all*; the owner chose 4.2, which settles it. Recorded in
+[09](09-gap-register.md#4-open-questions).
+
+**The plan's own JWT sketch was stale and was not followed.** `03-backend.md`
+§JWT filters `determine_current_user`, resolves a **WordPress user id**, and
+stores refresh tokens in **user meta**. All three predate D4a: WordPress users are
+not this plugin's identity, and `Auth`'s docblock already forbids the
+`determine_current_user` bridge by name — returning `fc_accounts.id = 7` for
+`wp_users.ID = 7` hands the caller whatever capabilities that unrelated WordPress
+user happens to have. Tokens resolve an **account** id, through `Auth::account()`,
+and refresh tokens live in `fc_sessions`.
+
+**Build notes.**
+
+- **Refresh tokens share `fc_sessions` rather than getting their own table**, and
+  the reason is `revokeAllFor()`. It already runs on password change, so a
+  password reset prompted by "somebody else is in my account" now removes the
+  mobile grant too — for free, in one place. A separate table would have meant a
+  second implementation of revoke/gc and remembering to call it, and the failure
+  mode of forgetting is a password reset that does not actually lock anybody out.
+  Cost: one migration adding `kind`, and `csrf_hash` becomes nullable — because a
+  bearer credential is not sent ambiently, so there is nothing to bind, and
+  storing a meaningless hash to keep the column NOT NULL would be a lie in a
+  security-relevant field. Schema **v2**, applied by the `init` dispatcher rather
+  than waiting for a reactivation.
+- **The access token is the short half on purpose.** A JWT cannot be revoked —
+  that is the whole trade — so it is fifteen minutes, stateless, no database read.
+  Longevity lives in the refresh token, which is deliberately **not** a JWT but an
+  opaque split token, so it *can* be revoked. `plan.md` §14.1's 24-hour access
+  token would have been a 24-hour window after a theft in which nothing could be
+  done.
+- **Every bearer request re-checks that the grant is live.** Without that second
+  step, signing out would leave the token working for up to fifteen more minutes.
+  A test asserts precisely this: after revoking, `Jwt::verifyAccessToken()` still
+  returns claims — the signature is fine — and the request still 401s.
+- **The algorithm is pinned and the claims are checked past what the library
+  does.** `firebase/php-jwt` verifies signature, `exp` and `nbf`; it does not
+  check that the token was meant for *us*, so `iss`, `aud` and a `typ` claim are
+  checked here. Without `typ`, a refresh token could be replayed as an access
+  token. Tests cover `alg: none`, a foreign secret, a foreign audience and expiry.
+- **A CSRF bug the tests caught before it shipped.** The token endpoints are POSTs
+  and went straight into the CSRF gate — which requires a token that comes from a
+  *cookie*. A mobile client has no cookies, so `/auth/token` answered **403 to
+  every caller it exists for**. The exemption list that already covered gateway
+  webhooks now covers `/auth/token*`, and its docblock is rewritten around the
+  actual principle: CSRF exists because browsers attach cookies to cross-site
+  requests unasked, so a route whose authenticity comes from something the caller
+  had to *know* has nothing to forge.
+- **`firebase/php-jwt` v6 is entirely blocked by a security advisory** —
+  composer refuses every release from 6.10.0 to 6.11.1. v7.1.0 is clean and is
+  what is installed. While there, `composer audit` surfaced a **pre-existing
+  high-severity advisory in `wp-coding-standards/wpcs`** (CVE-2026-45293,
+  arbitrary code execution, <3.4.1) — a dev dependency, but one that runs in CI.
+  Bumped to 3.4.1; the audit is now clean and phpcs still reports 0 errors.
+
+**Delta sync — the watermark is the design.** `?modified_since=` is easy; the part
+that matters is that **the server tells the client what timestamp to send next**,
+via `X-FC-Sync-Timestamp`. A client using its own clock is the classic silent
+delta-sync bug: the phone's clock is skewed, and even a perfect clock loses rows
+written *during* the request it just made. Both produce a record that exists on
+the server and never arrives, permanently, because every later sync asks for
+changes after a moment that already passed. The watermark is taken **before** the
+query runs, and stamped on **every** collection — a client's first sync is a full
+fetch, and that is exactly when it needs a starting point. Unparseable input is
+ignored rather than refused, because falling back to a full fetch is
+self-healing; a future timestamp is clamped, because honouring it would return
+nothing forever.
+
+**Pagination audit — two findings.** No endpoint had an unbounded `per_page`,
+which was the risk worth checking. But **eight paged routes declared no
+`default`** for it: the services defaulted to 20 internally, so behaviour was
+right while the *published contract* said otherwise — invisible until the
+generated OpenAPI document made it visible. Fixed in `$pagingArgs`.
+
+The second finding is **not fixed and is named rather than quietly dropped**:
+several collection endpoints do not paginate at all, against this project's own
+cross-cutting rule that every list endpoint does. Bounded ones are fine
+(`/user/trainers` by plan cap, `/messages/threads` by trainer count,
+`/billing/plans`, `/support/faq`) and `/health/stats` caps internally at 400. The
+ones that genuinely grow without bound are **`/trainers`** (with the platform),
+**`/trainer/workouts`**, **`/trainer/plans`**, **`/trainer/food-plans`** (with a
+trainer's library) and **`/progress/records`** (with PRs). Each needs a service
+change plus count query plus headers; they are a follow-up package, not a line
+item here.
+
+**Response compression** is scoped to this plugin's namespace and refuses to act
+when anything else is already compressing — `zlib.output_compression`, an existing
+gzip output handler, or a `Content-Encoding` header already set. A plugin that
+enables gzip globally double-compresses on the hosts that had it configured
+properly, producing a response no client can read on exactly the well-run servers
+you would least expect to break. `gzip;q=0` is honoured as the explicit refusal it
+is, which a substring check reads as consent.
+
+*Exit criterion met by test*: 30 new tests — 20 for the token API, 10 for delta
+sync and compression. Gate: **phpcs 0 errors, phpunit 347 tests / 3115
+assertions** (was 317/3005), `composer audit` clean. The OpenAPI document
+regenerated to **94 paths / 121 operations**, and the docs gate refused to write
+until the three new routes were described, which is the mechanism working.
+
+**Deferred:** `modified_since` is wired on `/workouts` as the reference
+implementation; `/sessions`, `/nutrition/logs` and `/health/stats` reuse the same
+two-line pattern but are not done. **Deletions are not covered by delta sync at
+all** — a removed row simply stops being returned, which is indistinguishable
+from "unchanged" to a client asking only for differences; that needs tombstones
+and its own schema change, and is stated in `DeltaSync`'s docblock and the API
+document rather than left to be discovered. The unpaginated endpoints above.
 
 ---
 

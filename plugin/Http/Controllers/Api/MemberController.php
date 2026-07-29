@@ -4,6 +4,7 @@ namespace FitnessClub\Http\Controllers\Api;
 
 use FitnessClub\Auth\Auth;
 use FitnessClub\Services\EntitlementService;
+use FitnessClub\Support\DeltaSync;
 use FitnessClub\Support\DomainException;
 use FitnessClub\Support\Guard;
 use FitnessClub\WPBones\Routing\API\RestController;
@@ -101,6 +102,13 @@ abstract class MemberController extends RestController
             'X-WP-TotalPages',
             (string) (int) ceil($result['total'] / max(1, $result['per_page']))
         );
+
+        // The delta-sync watermark (W4.2), on **every** collection rather than
+        // only on ones that were asked for a delta — a client's first sync is a
+        // full fetch, and that is exactly when it needs a starting point. If it
+        // had to invent one from its own clock we would have shipped the bug
+        // DeltaSync exists to prevent.
+        DeltaSync::stamp($response, $result['synced_at'] ?? DeltaSync::watermark());
 
         return $response;
     }

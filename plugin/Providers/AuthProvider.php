@@ -86,6 +86,18 @@ class AuthProvider extends ServiceProvider
             return $result;
         }
 
+        // A bearer caller has no CSRF token and needs none (W4.2). CSRF exists
+        // because a browser attaches cookies to cross-site requests *without
+        // being asked*; an `Authorization` header is never sent ambiently, so
+        // there is no cross-site request to forge. Requiring a token here would
+        // make every mobile write impossible while protecting nothing.
+        //
+        // Deliberately `Auth::isBearer()` — the resolved identity — rather than
+        // "is there an Authorization header", which any attacker can also set.
+        if (Auth::isBearer()) {
+            return $result;
+        }
+
         $session = Auth::session();
         $sent    = Csrf::fromRequest($request);
 
@@ -143,18 +155,33 @@ class AuthProvider extends ServiceProvider
     }
 
     /**
-     * Routes whose authenticity is established by a cryptographic signature
-     * rather than by a session (W3.2).
+     * Routes that carry no ambient credential, so there is nothing to forge.
      *
-     * Currently only the payment webhook. Matched on the route path rather than
-     * on a flag in the route definition, because the CSRF gate runs at
-     * `rest_pre_dispatch` — before the route's own callbacks and args are
-     * resolved — so there is nothing else available to read at that point.
+     * CSRF exists because a browser attaches cookies to cross-site requests
+     * *without being asked*. Where a request's authenticity comes from something
+     * the caller had to know or possess — a gateway's signature, a password, a
+     * refresh token — an attacker's page cannot supply it, and demanding a CSRF
+     * token as well only breaks callers that have no cookie jar.
+     *
+     * Kept as an explicit, narrow list rather than a "public routes" concept, so
+     * adding an exemption is a decision somebody has to write down here. Matched
+     * on the path because the gate runs at `rest_pre_dispatch`, before the
+     * route's own callbacks and args are resolved.
+     *
+     * - **`/billing/webhook/*`** (W3.2) — the adapter verifies the gateway's own
+     *   signature before the body is parsed, which is a stronger check than a
+     *   double-submit cookie.
+     * - **`/auth/token*`** (W4.2) — the token endpoints exist *for* clients with
+     *   no cookies. `/auth/token` authenticates with credentials in the body;
+     *   `refresh` and `revoke` require a refresh token the attacker's page has
+     *   no way to know. Without this, the mobile API would 403 every caller it
+     *   was built for — which is exactly how it behaved until the tests said so.
      */
     private function isSignatureVerifiedRoute(WP_REST_Request $request): bool
     {
         $route = ltrim((string) $request->get_route(), '/');
 
-        return str_starts_with($route, self::NAMESPACE_PREFIX . '/billing/webhook/');
+        return str_starts_with($route, self::NAMESPACE_PREFIX . '/billing/webhook/')
+            || str_starts_with($route, self::NAMESPACE_PREFIX . '/auth/token');
     }
 }

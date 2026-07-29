@@ -176,7 +176,7 @@ before Phase 1 ends; the rest before Phase 3.
 | Q8 | Multisite? | Everything | Changes table provisioning throughout |
 | Q9 | Launch locales? | Phase 4 | RTL support is cheap now, expensive later |
 | Q11 | Data retention: how long are sessions, meals, health rows kept? | Phase 4 | Health data under GDPR wants a stated retention period. **Sharpened by Q10**: admin-editable health data makes the audit trail itself retained personal data |
-| Q12 | Is the mobile app real, or is §17 aspirational? | Phase 4 | Determines whether JWT and delta sync ship at all |
+| Q12 | ~~Is the mobile app real, or is §17 aspirational?~~ **Answered 2026-07-30 — build it.** The owner selected W4.2, which is the answer. JWT, refresh rotation and `?modified_since=` shipped; no mobile *client* is being built, but the API is ready for one | W4.2 ✅ | Determines whether JWT and delta sync ship at all |
 | Q16 | **New —** on downgrade to a plan with fewer trainer slots, what happens to existing trainers? | W3.2 | Falls out of Q14. Planned: **grandfather** — block new requests, never auto-sever a coaching relationship. Confirm |
 
 ### 4.1 Q2 — trainers are traced, not paid

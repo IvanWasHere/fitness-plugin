@@ -89,7 +89,39 @@ it is not a UI-only toggle:
 | Support | Tickets |
 | Trainer directory | Browsing and requesting coaches |
 | Open registration | Whether strangers may create accounts |
-| JWT API | External/mobile clients — **not yet implemented** |
+| JWT API | External/mobile clients — see below |
+
+### Turning on the mobile API
+
+Two steps, and **both** are required. Flipping the switch without the secret gets
+you a clear 503 rather than tokens signed with something guessable.
+
+1. Add a signing secret to `wp-config.php`:
+
+   ```php
+   define('FITNESSCLUB_JWT_SECRET', 'at-least-32-random-characters-here');
+   ```
+
+2. Switch on **JWT API** in Settings → Features.
+
+It is a constant rather than a setting on purpose: an options row lives in a
+database that gets dumped, shared with a contractor and restored into staging, and
+a compromised database read should not also be able to mint valid tokens. There is
+no auto-generated fallback for the same reason.
+
+**Changing the secret signs every external client out immediately** — every
+existing access token stops verifying. That is the emergency lever if you ever
+believe tokens have leaked.
+
+What clients get: a **15-minute** access token plus a refresh token valid for 30
+days of use (180 days absolute). The short access token is deliberate — a JWT
+cannot be revoked, so longevity lives in the refresh token, which can be and is.
+Refresh tokens rotate on every use, so a stolen one surfaces as an unexpected
+sign-out rather than a silent second session.
+
+**Signing out works everywhere.** Changing an account's password, or revoking its
+sessions, kills its mobile grants too — they share the session table specifically
+so that cannot be forgotten.
 
 ---
 

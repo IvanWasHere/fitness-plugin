@@ -107,7 +107,8 @@
                         "schema": {
                             "type": "integer",
                             "minimum": 1,
-                            "maximum": 100
+                            "maximum": 100,
+                            "default": 20
                         }
                     },
                     {
@@ -502,7 +503,8 @@
                         "schema": {
                             "type": "integer",
                             "minimum": 1,
-                            "maximum": 100
+                            "maximum": 100,
+                            "default": 20
                         }
                     },
                     {
@@ -1320,6 +1322,190 @@
                 }
             }
         },
+        "/auth/token": {
+            "post": {
+                "summary": "Sign in as an external client",
+                "operationId": "postAuthToken",
+                "tags": [
+                    "Authentication"
+                ],
+                "description": "For **mobile apps and third-party clients only**. A browser should use `/auth/login`: it already holds a cookie, and a bearer token in JavaScript is one any XSS can exfiltrate and — unlike a cookie — cannot be cleared. Returns a **15-minute** access token plus a long-lived refresh token; nothing here sets a cookie.\n\nOff by default. A site that has not enabled it answers **404**, and one that enabled it without configuring a signing secret answers **503** — different problems with different fixes.\n\n**Public.** Refused *with* a session, so a call made while signed in cannot silently swap accounts.",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "user_login": {
+                                        "type": "string"
+                                    },
+                                    "password": {
+                                        "type": "string"
+                                    }
+                                },
+                                "required": [
+                                    "user_login",
+                                    "password"
+                                ]
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "An access/refresh pair and the account it belongs to.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "The request failed validation.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    },
+                    "429": {
+                        "description": "Rate limited. `retry_after` and the `Retry-After` header say how long to wait.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/token/refresh": {
+            "post": {
+                "summary": "Exchange a refresh token for a new pair",
+                "operationId": "postAuthTokenRefresh",
+                "tags": [
+                    "Authentication"
+                ],
+                "description": "**The refresh token is rotated on every use** and the old one is revoked immediately — so store the new one. That is what makes a stolen refresh token detectable rather than permanent: the thief and the real client race, and whichever presents the stale token second is refused, surfacing the theft as a sign-out instead of a silent parallel session.\n\n**Public.** No session required.",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "refresh_token": {
+                                        "type": "string"
+                                    }
+                                },
+                                "required": [
+                                    "refresh_token"
+                                ]
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "A new access/refresh pair. The presented refresh token is now dead.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "The request failed validation.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    },
+                    "429": {
+                        "description": "Rate limited. `retry_after` and the `Retry-After` header say how long to wait.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/token/revoke": {
+            "post": {
+                "summary": "Sign an external client out",
+                "operationId": "postAuthTokenRevoke",
+                "tags": [
+                    "Authentication"
+                ],
+                "description": "Takes the refresh token in the body rather than acting on the caller's access token, so a client can revoke a grant it is not currently using — which is what \"sign out this device\" needs. **Always answers 200**, whether or not the token existed: reporting that would make this an oracle for guessing tokens.\n\nThe access token stays cryptographically valid until it expires, but every request re-checks that the grant behind it is live, so it stops working at once.\n\n**Public.** No session required.",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "refresh_token": {
+                                        "type": "string"
+                                    }
+                                },
+                                "required": [
+                                    "refresh_token"
+                                ]
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "The token no longer works.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "The request failed validation.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    },
+                    "429": {
+                        "description": "Rate limited. `retry_after` and the `Retry-After` header say how long to wait.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/billing/checkout": {
             "post": {
                 "summary": "Start a checkout",
@@ -1444,7 +1630,8 @@
                         "schema": {
                             "type": "integer",
                             "minimum": 1,
-                            "maximum": 100
+                            "maximum": 100,
+                            "default": 20
                         }
                     }
                 ],
@@ -3840,7 +4027,8 @@
                         "schema": {
                             "type": "integer",
                             "minimum": 1,
-                            "maximum": 100
+                            "maximum": 100,
+                            "default": 20
                         }
                     },
                     {
@@ -5162,7 +5350,8 @@
                         "schema": {
                             "type": "integer",
                             "minimum": 1,
-                            "maximum": 100
+                            "maximum": 100,
+                            "default": 20
                         }
                     }
                 ],
@@ -6202,7 +6391,8 @@
                         "schema": {
                             "type": "integer",
                             "minimum": 1,
-                            "maximum": 100
+                            "maximum": 100,
+                            "default": 20
                         }
                     },
                     {
@@ -7342,7 +7532,8 @@
                         "schema": {
                             "type": "integer",
                             "minimum": 1,
-                            "maximum": 100
+                            "maximum": 100,
+                            "default": 20
                         }
                     }
                 ],
@@ -10153,7 +10344,17 @@
                         "schema": {
                             "type": "integer",
                             "minimum": 1,
-                            "maximum": 100
+                            "maximum": 100,
+                            "default": 20
+                        }
+                    },
+                    {
+                        "name": "modified_since",
+                        "in": "query",
+                        "description": "ISO 8601 timestamp. Returns only records changed since then. Send back the X-FC-Sync-Timestamp header from your previous response rather than a locally generated time.",
+                        "schema": {
+                            "type": "string",
+                            "format": "date-time"
                         }
                     },
                     {

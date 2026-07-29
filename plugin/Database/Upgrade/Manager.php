@@ -25,7 +25,7 @@ if (!defined('ABSPATH')) {
 final class Manager
 {
     /** Current schema version. Bump when adding an upgrade step. */
-    public const VERSION = 1;
+    public const VERSION = 2;
 
     public const OPTION_VERSION = 'fitnessclub_db_version';
 
@@ -81,13 +81,40 @@ final class Manager
     |--------------------------------------------------------------------------
     | Upgrade steps — add as the schema evolves
     |--------------------------------------------------------------------------
-    |
-    | private static function to2(): void
-    | {
-    |     global $wpdb;
-    |     $table = DB::getTableName('fc_users');
-    |     $wpdb->query("UPDATE `{$table}` SET activity_level = 'moderate' WHERE activity_level = ''");
-    | }
-    |
     */
+
+    /**
+     * v2 (W4.2) — `fc_sessions` also stores API refresh tokens.
+     *
+     * Adds `kind` and relaxes `csrf_hash` to nullable. Both are things dbDelta
+     * would in fact do on the next activation, but relying on that means the
+     * upgrade only lands when somebody happens to deactivate and reactivate the
+     * plugin — and until then `Auth` would be querying a column that does not
+     * exist. This runs on `init`, so an updated site is correct on its next
+     * request.
+     *
+     * Guarded by an existence check rather than `IF NOT EXISTS`, which MySQL 5.7
+     * does not support for `ADD COLUMN`.
+     */
+    private static function to2(): void
+    {
+        global $wpdb;
+
+        $table = $wpdb->prefix . 'fc_sessions';
+
+        // phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table name is a literal.
+        $columns = $wpdb->get_col("SHOW COLUMNS FROM `{$table}`");
+
+        if (!in_array('kind', (array) $columns, true)) {
+            $wpdb->query(
+                "ALTER TABLE `{$table}` ADD COLUMN kind varchar(20) NOT NULL DEFAULT 'cookie' AFTER account_id"
+            );
+        }
+
+        // Existing rows are all cookie sessions, which is the default — so there
+        // is no backfill to do, and that is worth stating rather than leaving a
+        // reader to wonder whether one was forgotten.
+        $wpdb->query("ALTER TABLE `{$table}` MODIFY csrf_hash char(64) DEFAULT NULL");
+        // phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+    }
 }

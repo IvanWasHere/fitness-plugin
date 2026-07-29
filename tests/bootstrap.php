@@ -40,6 +40,19 @@ $_SERVER['REQUEST_METHOD'] = 'GET';
 // and PHPUnit's CLI request has none.
 $_SERVER['REMOTE_ADDR'] = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
 
+/*
+ * The JWT signing secret (W4.2).
+ *
+ * Defined here rather than in the site's wp-config so the token API is testable
+ * on any checkout without a manual setup step. Note the consequence: with the
+ * constant present, `Jwt::hasSecret()` is always true in the suite, so the
+ * "enabled but unconfigured → 503" branch cannot be reached end to end. That gap
+ * is stated in JwtApiTest rather than papered over.
+ */
+if (!defined('FITNESSCLUB_JWT_SECRET')) {
+    define('FITNESSCLUB_JWT_SECRET', str_repeat('fc-test-signing-secret-', 3));
+}
+
 require $wpLoad;
 
 /*

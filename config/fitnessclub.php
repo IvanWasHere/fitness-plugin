@@ -131,6 +131,14 @@ return [
         // database write on every authenticated request.
         'touch_interval_seconds' => 300,
 
+        // API refresh tokens (W4.2). Much longer than a browser session, because
+        // a phone app that makes you sign in every twelve hours is a phone app
+        // people delete — and unlike a cookie the grant is revocable, so the
+        // longer window is backed by something. The absolute cap still applies:
+        // a refresh token that renewed itself forever would never expire at all.
+        'api_refresh_idle_days'     => 30,
+        'api_refresh_absolute_days' => 180,
+
         // A reset link is a bearer credential sitting in an inbox, so it lives
         // for an hour rather than WordPress' 24.
         'reset_ttl_minutes' => 60,

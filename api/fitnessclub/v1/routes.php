@@ -14,6 +14,7 @@ use FitnessClub\Http\Controllers\Api\SupportController;
 use FitnessClub\Http\Controllers\Api\TrainerController;
 use FitnessClub\Http\Controllers\Api\UserController;
 use FitnessClub\Http\Controllers\Api\WorkoutController;
+use FitnessClub\Support\DeltaSync;
 use FitnessClub\WPBones\Routing\API\Route;
 
 if (!defined('ABSPATH')) {
@@ -84,6 +85,57 @@ Route::post('/auth/login', AuthController::class . '@login', [
             'required' => false,
             'type'     => 'boolean',
             'default'  => false,
+        ],
+    ],
+]);
+
+/*
+| Token authentication for external clients — mobile apps and third-party front
+| ends (D4, W4.2). Off unless `features.jwt_api_enabled` is on *and*
+| FITNESSCLUB_JWT_SECRET is defined; the controller answers 404 or 503 for the
+| two cases, which are different problems with different fixes.
+|
+| `requireGuest()` on purpose: these mint a *new* identity, so a call carrying a
+| session would otherwise be able to swap accounts silently — the same reasoning
+| as /auth/login.
+*/
+Route::post('/auth/token', AuthController::class . '@token', [
+    'permission_callback' => [AuthController::class, 'requireGuest'],
+    'args'                => [
+        'user_login' => [
+            'required'          => true,
+            'type'              => 'string',
+            'description'       => 'Email address or username.',
+            'sanitize_callback' => 'sanitize_text_field',
+        ],
+        'password' => [
+            'required'    => true,
+            'type'        => 'string',
+            'description' => 'Account password. Never sanitised — a password is bytes, not text.',
+        ],
+    ],
+]);
+
+// Not requireGuest: refreshing is something an already-authenticated client does,
+// and a bearer caller holds no session that could be swapped.
+Route::post('/auth/token/refresh', AuthController::class . '@refreshToken', [
+    'permission_callback' => '__return_true',
+    'args'                => [
+        'refresh_token' => [
+            'required'    => true,
+            'type'        => 'string',
+            'description' => 'The refresh token from /auth/token. Rotated on every use.',
+        ],
+    ],
+]);
+
+Route::post('/auth/token/revoke', AuthController::class . '@revokeToken', [
+    'permission_callback' => '__return_true',
+    'args'                => [
+        'refresh_token' => [
+            'required'    => true,
+            'type'        => 'string',
+            'description' => 'The refresh token to revoke. Answers 200 whether or not it existed.',
         ],
     ],
 ]);
@@ -196,6 +248,18 @@ $idArg = [
     ],
 ];
 
+/*
+| Paging, applied to every collection endpoint.
+|
+| `per_page` carries its default here rather than only in the services (W4.2
+| audit). The services were already defaulting to 20, so behaviour is unchanged —
+| but a default that lives only in PHP is invisible to the generated OpenAPI
+| document and to anything that reads the route schema, so the published contract
+| said "no default" for eight endpoints that plainly had one.
+|
+| The `maximum` is the load-bearing one: without it `per_page=100000` is a
+| perfectly valid request.
+*/
 $pagingArgs = [
     'page' => [
         'type'    => 'integer',
@@ -206,12 +270,13 @@ $pagingArgs = [
         'type'    => 'integer',
         'minimum' => 1,
         'maximum' => 100,
+        'default' => 20,
     ],
 ];
 
 Route::get('/workouts', WorkoutController::class . '@index', [
     'permission_callback' => [WorkoutController::class, 'canRead'],
-    'args'                => $pagingArgs + [
+    'args'                => $pagingArgs + DeltaSync::arg() + [
         'status' => [
             'type' => 'string',
             'enum' => ['assigned', 'in_progress', 'completed', 'archived'],

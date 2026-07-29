@@ -3,6 +3,7 @@
 namespace FitnessClub\Http\Controllers\Api;
 
 use FitnessClub\Services\WorkoutService;
+use FitnessClub\Support\DeltaSync;
 use WP_Error;
 use WP_REST_Request;
 use WP_REST_Response;
@@ -41,6 +42,7 @@ final class WorkoutController extends MemberController
                 'q'          => $request->get_param('q'),
                 'page'       => $request->get_param('page'),
                 'per_page'   => $request->get_param('per_page'),
+                DeltaSync::PARAM => $request->get_param(DeltaSync::PARAM),
             ]));
         });
     }

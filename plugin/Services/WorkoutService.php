@@ -2,6 +2,7 @@
 
 namespace FitnessClub\Services;
 
+use FitnessClub\Support\DeltaSync;
 use FitnessClub\Support\DomainException;
 
 if (!defined('ABSPATH')) {
@@ -37,6 +38,12 @@ final class WorkoutService
     {
         global $wpdb;
 
+        // Taken before the queries run, never after: anything written while
+        // they execute is then picked up on the *next* sync rather than falling
+        // into the gap between the read and the timestamp. Re-sending a few rows
+        // is free; missing one is unreproducible.
+        $syncedAt = DeltaSync::watermark();
+
         $limits  = (array) FitnessClub()->config('fitnessclub.limits', []);
         $perPage = (int) ($filters['per_page'] ?? $limits['per_page_default'] ?? 20);
         $perPage = max(1, min((int) ($limits['per_page_max'] ?? 100), $perPage));
@@ -70,6 +77,18 @@ final class WorkoutService
             $like     = '%' . $wpdb->esc_like((string) $filters['q']) . '%';
             $values[] = $like;
             $values[] = $like;
+        }
+
+        // Delta sync (W4.2). Either side changing counts: the workout may have
+        // been edited, or the *assignment* may have — a workout rescheduled for
+        // tomorrow is a change the member must see even though the workout row
+        // itself never moved.
+        $since = DeltaSync::since($filters[DeltaSync::PARAM] ?? null);
+
+        if (null !== $since) {
+            $where[]  = '(w.updated_at > %s OR uw.updated_at > %s)';
+            $values[] = $since;
+            $values[] = $since;
         }
 
         $clause = implode(' AND ', $where);
@@ -107,9 +126,10 @@ final class WorkoutService
                 fn(array $row): array => $this->presentWorkout($row, $resumable[(int) $row['id']] ?? null),
                 $rows ?: []
             ),
-            'total'    => $total,
-            'page'     => $page,
-            'per_page' => $perPage,
+            'total'     => $total,
+            'page'      => $page,
+            'per_page'  => $perPage,
+            'synced_at' => $syncedAt,
         ];
     }
 

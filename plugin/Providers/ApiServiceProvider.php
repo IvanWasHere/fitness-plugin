@@ -6,6 +6,7 @@ use FitnessClub\Auth\Auth;
 use FitnessClub\Support\DashboardCache;
 use FitnessClub\Support\RateLimitException;
 use FitnessClub\Support\RateLimiter;
+use FitnessClub\Support\ResponseCompression;
 use FitnessClub\WPBones\Support\ServiceProvider;
 use WP_REST_Request;
 use WP_REST_Response;
@@ -38,9 +39,39 @@ class ApiServiceProvider extends ServiceProvider
         add_filter('rest_pre_dispatch', [$this, 'throttle'], 10, 3);
         add_filter('rest_post_dispatch', [$this, 'addRetryAfter'], 10, 3);
 
+        // gzip, on `rest_pre_serve_request` so the buffer opens immediately
+        // before the body is written and closes with the request. Scoped to our
+        // namespace: a plugin that compresses globally double-compresses on the
+        // hosts that already had it configured (W4.2).
+        add_filter('rest_pre_serve_request', [$this, 'compressResponse'], 10, 4);
+
         // Cached responses invalidate themselves off `fitnessclub/user_data_changed`
         // rather than every writer knowing what to clear — see DashboardCache.
         DashboardCache::listen();
+    }
+
+    /**
+     * Open a gzip buffer for our own routes, if nothing else is compressing.
+     *
+     * Returns `$served` untouched — this is a filter used as a hook, because it
+     * is the last point at which the response body has not yet been written but
+     * the route is known.
+     *
+     * @param bool             $served  Whether the request has already been served.
+     * @param mixed            $result  The response.
+     * @param WP_REST_Request  $request The request.
+     * @param mixed            $server  WP_REST_Server.
+     * @return bool
+     */
+    public function compressResponse($served, $result, $request, $server)
+    {
+        unset($result, $server);
+
+        if (!$served && $request instanceof WP_REST_Request && $this->isOurRoute($request)) {
+            ResponseCompression::maybeStart();
+        }
+
+        return $served;
     }
 
     /**
