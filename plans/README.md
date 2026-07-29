@@ -12,14 +12,14 @@ disagree, the disagreement is recorded and resolved explicitly in
 
 | # | Document | What it settles |
 |---|----------|-----------------|
-| 00 | [architecture.md](00-architecture.md) | Stack, wpBones conventions, directory layout, the 8 binding decisions |
+| 00 | [architecture.md](00-architecture.md) | Stack, wpBones conventions, directory layout, the 11 binding decisions |
 | 01 | [database.md](01-database.md) | Reconciled schema — 29 tables, migrations, indexes |
 | 02 | [api-contract.md](02-api-contract.md) | Every REST endpoint, keyed to the screen that needs it |
 | 03 | [backend.md](03-backend.md) | Roles/caps, auth (cookie + JWT), services, rate limiting, security |
 | 04 | [user-app.md](04-user-app.md) | Porting the user prototype: 11 screens, the workout player, 6 charts |
 | 05 | [admin-app.md](05-admin-app.md) | Porting the admin prototype: generic CRUD table + 8 resources + what's missing |
 | 06 | [trainer-app.md](06-trainer-app.md) | The third app, which has no prototype — designed from scratch |
-| 07 | [theming.md](07-theming.md) | `theme.json` → CSS custom properties, theme manager |
+| 07 | [theming.md](07-theming.md) | Front-end themes: WordPress themes shipping React apps, per-role, with the plugin's apps as fallback (D11). The palette system it used to describe is deferred |
 | 08 | [roadmap.md](08-roadmap.md) | 4 phases, work packages, sequencing, estimates |
 | 09 | [gap-register.md](09-gap-register.md) | Spec↔prototype conflicts, prototype defects, open questions |
 
@@ -50,7 +50,7 @@ cannot be built. Fixed in [01-database.md](01-database.md).
 no prototype, and `plan.md` §7.2 gives only a component tree. Budgeted in
 [06-trainer-app.md](06-trainer-app.md) as its own phase.
 
-## The 10 binding decisions
+## The 11 binding decisions
 
 Full rationale in [00-architecture.md](00-architecture.md#decisions).
 
@@ -62,10 +62,11 @@ Full rationale in [00-architecture.md](00-architecture.md#decisions).
 | D4 | Auth | Cookie + `X-WP-Nonce` for the SPAs; JWT only for mobile/external | Spec's JWT-everywhere adds a credential to browsers that already have a session |
 | D5 | Data access | `DB::table()` builder for simple; **raw `$wpdb` for joins** (light builder has no `join`) | Eloquent avoided; the builder's scope is confirmed in the docs |
 | D6 | Payments | Adapter interface, Stripe first, manual-entry fallback | Spec says "PayPal, Stripe, or similar" — build the seam, not both gateways |
-| D7 | Theme storage | Bundled defaults in plugin + user themes in `uploads/fitnessclub-themes/` | Spec contradicts itself (`wn_themes/` in-plugin vs `WP_CONTENT_DIR` in the loader); `wp-content/` is often unwritable |
+| D7 | Theme storage | Bundled defaults in plugin + user themes in `uploads/fitnessclub-themes/` — ⚠ **superseded by D11** | Spec contradicts itself (`wn_themes/` in-plugin vs `WP_CONTENT_DIR` in the loader); `wp-content/` is often unwritable |
 | D8 | Money | `DECIMAL(10,2)` + minor-unit ints at the gateway boundary, currency column | Spec has no currency field anywhere |
 | D9 | **Front-end URL** | One **configurable** slug (`example.com/{base}`, default `/fitness`), role-selected SPA, via a `RewriteServiceProvider` | wpBones has no front-end routing — native WP rewrite. ✅ confirmed |
 | D10 | **Front-end build** | **Three Vite React SPAs** (user/trainer/admin), one shared workspace, decoupled from wpBones' webpack | Hard bundle isolation per role; the one part of wpBones we replace. ✅ confirmed |
+| D11 | **What a theme is** | A **WordPress theme that ships React apps** — `wp-content/themes/{x}` with `Fitness Plugin Extension Enabled: true`, picked from a wp-admin dropdown, served per role with the plugin's apps as fallback. Palette system deferred | A theme that can only recolour a fixed app is not what the product is for. `wp-content/themes/` because it survives plugin updates. Cost: the boot payload + REST API become a published contract. ✅ confirmed 2026-07-29 |
 
 ## Assumptions in force
 

@@ -5,6 +5,7 @@ namespace FitnessClub\Providers;
 use FitnessClub\Services\BootPresenter;
 use FitnessClub\Services\ThemeService;
 use FitnessClub\Support\AppRouter;
+use FitnessClub\Support\ThemeExtension;
 use FitnessClub\Support\ViteAssets;
 use FitnessClub\WPBones\Support\ServiceProvider;
 
@@ -35,6 +36,15 @@ class RewriteServiceProvider extends ServiceProvider
         add_filter('query_vars', [$this, 'registerQueryVars']);
         $this->addRewriteRules();
         add_action('template_redirect', [$this, 'maybeRenderApp']);
+
+        // So the opt-in header shows in WordPress's own theme details (D11).
+        // Nothing depends on it — ThemeExtension parses style.css directly,
+        // because WP_Theme caches headers and would answer false on a warm cache.
+        add_filter('extra_theme_headers', static function (array $headers): array {
+            $headers[] = ThemeExtension::HEADER;
+
+            return $headers;
+        });
 
         // One-shot flush requested by activation or an app_base change.
         if (get_option(self::FLUSH_OPTION)) {

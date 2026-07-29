@@ -209,7 +209,8 @@ admin > trainer > user for multi-role accounts (Q17c).
 | `HealthService` | Upsert-by-date, BMI computation, `fc_users.weight_kg` sync |
 | `NotificationService` | Create + fan-out, respects per-user preference toggles |
 | `ActivityService` | Feed writes + audit trail |
-| `ThemeService` | Discovery, validation, merge with defaults, CSS var emission |
+| `ThemeService` | Token merge + CSS var emission. **The palette system it belongs to is deferred** ([D11](00-architecture.md#d11--a-theme-is-a-front-end-not-a-palette-supersedes-d7-extends-d10-2026-07-29)); what remains in use is the existing boot-payload/shell emission |
+| `ThemeExtension` | Front-end theme discovery (`wp_get_themes()` filtered on the `Fitness Plugin Extension Enabled` style.css header), the theme's own Vite manifest, per-role app resolution with fallback to the plugin's SPA (D11) |
 | `AssignmentService` | Trainer↔user request lifecycle (request/accept/decline/withdraw, **subscription + `max_trainers` gate**, trainer capacity, single primary), workout↔user, food-plan↔user, assignment-conflict detection |
 | `TrainerDirectoryService` | Public trainer projection, availability filtering, request rate limits |
 

@@ -37,7 +37,19 @@ return [
         'logo_id' => 0,
     ],
 
+    /*
+    | `extension` is the front-end theme (D11): the stylesheet directory of a
+    | WordPress theme in wp-content/themes that declares
+    | "Fitness Plugin Extension Enabled: true" and ships its own React apps.
+    | Empty — the default — means the plugin serves its own.
+    |
+    | `active`/`overrides` belong to the colour-token system, which is deferred
+    | indefinitely (D11). They stay because ThemeService still reads them to emit
+    | the shell's `--fc-*` block, which is what the plugin's own apps are styled
+    | from today.
+    */
     'theme' => [
+        'extension' => '',
         'active'    => 'default',
         'overrides' => '',
     ],

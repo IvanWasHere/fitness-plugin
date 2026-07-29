@@ -1498,13 +1498,163 @@ it needs a scheduled job and a policy on how long is too long) and the
 
 | # | Work | Days |
 |---|------|------|
-| 4.1 | Theme system: service, validation, contrast checks, admin UI, **light theme** | 4 |
+| 4.1 | **Front-end themes** — WordPress themes shipping React apps, per-role, with the plugin's apps as fallback. **Re-scoped 2026-07-29, see below** | 2 |
 | 4.2 | JWT + mobile API: token/refresh, delta sync (`?modified_since=`), pagination audit, response compression | 3 |
 | 4.3 | Performance: query profiling against the volume seed, index tuning, object-cache integration, asset budgets | 2 |
 | 4.4 | i18n: `.pot` generation, JS translation loading, RTL check | 1 |
 | 4.5 | Accessibility audit against WCAG AA, keyboard paths, screen-reader pass | 2 |
 | 4.6 | Docs: OpenAPI from route schemas, README, admin guide, trainer guide, theme dev guide | 2 |
 | 4.7 | Export/import: CSV per admin resource, GDPR exporter/eraser hooks | 2 |
+
+### W4.1 Front-end themes — re-scoped 2026-07-29
+
+> **What changed.** Every plan document described a theme as a `theme.json` of
+> colours. The owner corrected this before any of it was built: **a theme is a
+> WordPress theme that ships React apps.** Recorded as
+> [D11](00-architecture.md#d11--a-theme-is-a-front-end-not-a-palette-supersedes-d7-extends-d10-2026-07-29).
+>
+> **The palette system is deferred indefinitely** — tokens, JSON validation,
+> contrast checks, the light theme, the theme editor, the `/admin/themes`
+> endpoints. Not built, not scheduled. When a theme is selected everything comes
+> from that theme's app; when one is not, the plugin's apps keep their existing
+> styling. [07](07-theming.md) keeps the design as a record.
+>
+> 4 d → **2 d**, and the five other deliverables the line used to carry are gone.
+
+**Scope.** A theme is a directory in `wp-content/themes/` declaring
+`Fitness Plugin Extension Enabled: true` in `style.css`, with a Vite build under
+`fitnessclub/`. There is **no bespoke manifest**: the plugin reads the theme's own
+`.vite/manifest.json` the way `Support\ViteAssets` already reads the plugin's, so
+whichever of `user`/`trainer`/`admin` it has an entry for, the theme provides.
+
+- `ThemeExtension` — discovery via `wp_get_themes()` filtered on the header (read
+  with `get_file_data()`, not `WP_Theme::get()`, for the caching reason in
+  [07](07-theming.md#discovery-and-selection)), manifest read, `realpath()`
+  containment on asset paths, per-role entry resolution.
+- `Support\ViteAssets::tags()` — ask the selected theme first, fall back to the
+  plugin's manifest. One lookup in front of an existing seam.
+- `theme.extension` in `config/options.php`, empty meaning the plugin's own apps.
+- The **dropdown** on `Http\Controllers\Admin\SettingsController` + its Blade view.
+- A **demo theme fixture** under `tests/`, providing exactly one role — a fallback
+  nothing exercises is a fallback that does not work.
+
+*Done when:* a theme providing only `user` is dropped in `wp-content/themes/`,
+selected from the dropdown, and serves its own member app while trainers and
+admins keep ours. Deleting the theme directory under a running site returns
+everyone to the plugin's apps rather than 500ing.
+
+**Sequencing consequence:** 4.6's OpenAPI documentation is no longer optional.
+The boot payload and REST API are now a contract third-party apps compile against.
+
+#### Status — ⏳ **built, browser pass outstanding, 2026-07-29**
+
+**Build notes.**
+
+- **The fallback is the feature, so the tests are almost all about it.** A swap
+  that works is easy; a swap that degrades correctly when the theme is partial,
+  unbuilt, deleted underneath the site, or shipping a manifest that points
+  outside itself is the thing worth building. Eight of the twelve tests are
+  refusal paths, and every one of them ends in "this role gets the plugin's app"
+  rather than an error — a selected theme is a preference, never a dependency.
+- **`realpath()`, not a `../` string check.** A symlink out of the theme's
+  `fitnessclub/` directory is the same escape written differently, and only
+  resolving the path catches both. The containment check compares against
+  `rtrim($root) . DIRECTORY_SEPARATOR` deliberately: without the trailing
+  separator, `…/fitnessclub-evil` passes as a child of `…/fitnessclub`.
+- **A theme's entry is matched by convention with a fallback.** `src/{role}/main.tsx`
+  is tried first, so a theme built like the plugin matches immediately; failing
+  that, entries are scanned for a matching `name` or a `{role}/main.*` suffix.
+  Requiring a byte-identical source path would make our directory layout a build
+  constraint on every theme rather than a default.
+- **Dev mode short-circuits past themes on purpose.** `FITNESSCLUB_VITE_DEV` is a
+  wp-config switch for developing *this plugin's* apps against its HMR server;
+  honouring a theme there would serve a built bundle to somebody who just turned
+  hot reload on.
+- **An unusable theme is listed with its reason, not hidden.** "My theme does not
+  appear in the dropdown" is a worse support call than "my theme appears and says
+  why it cannot be used". The one case that genuinely cannot be listed is a theme
+  WordPress rejects outright — `wp_get_themes()` returns only error-free themes,
+  so a theme missing `index.php` is invisible here whatever its header says, and
+  the screen states that rather than leaving it to be discovered.
+- **Saving names the roles the theme does *not* cover.** "It works, but trainers
+  still see the stock app" is otherwise found out by a trainer.
+- **`sanitize_text_field`, not `sanitize_title`, on the submitted value.** It is a
+  stylesheet *directory name*: `sanitize_title()` would lowercase `fitnessTheme`
+  into a directory that does not exist. The value is then only accepted if it is
+  a theme currently declaring the header, so a stale POST cannot point the front
+  end anywhere. Clearing it is always accepted — it is the way back, and it has
+  to work when the selected theme is the thing that broke.
+
+**`fitnessTheme`, the demo theme, is the deliverable the fixtures could not be.**
+Built at `wp-content/themes/fitnessTheme` with a real Vite workspace — React 18,
+`outDir: fitnessclub/`, `base: './'` because a theme does not know where it is
+installed and absolute asset URLs would bake in one site's directory name. It
+provides **all three roles**: sign-in and chrome shared in `Shell.tsx`, then the
+member dashboard, the trainer roster and the admin overview, each against one real
+endpoint. Its `README.md` doubles as the theme-developer guide 4.6 owes.
+
+It shipped `user` and `trainer` first and gained `admin` on the owner's
+instruction. Worth noting what that cost: **the demo no longer exercises the
+per-role fallback**, because there is no role left for the plugin to serve. That
+path is still covered — `fc-fixture-apps` provides `user` alone precisely so it
+keeps a test — and the README documents deleting an entry from `input` as the way
+to see it live. A demo that covers everything covers nothing about what happens
+when a theme covers only part.
+
+**The admin role is the one with teeth**, and it is the argument for where the
+selector lives. A broken member app inconveniences members; a broken admin app
+takes away the screen an administrator would use to fix it. Putting the dropdown
+in wp-admin rather than in the admin SPA is what makes replacing the admin app a
+recoverable decision rather than a one-way door.
+
+**The demo build immediately found a hole in the resolver.** Vite hangs the
+stylesheet off the **shared chunk** whenever two entries import the same CSS —
+which is the normal outcome for a theme with more than one app — so the entry's
+own `css` array is *empty* and both apps would have rendered unstyled. The
+manifest read now walks `imports` for CSS as well, and preloads those chunks while
+it is there. The single-entry fixture could never have caught this: it has no
+shared chunk.
+
+**Two traps worth recording.**
+
+1. `wp-settings.php` uses `$plugin` as a global loop variable and `unset()`s it
+   when the loop ends, so any script that loads WordPress at global scope and
+   keeps a `$plugin` of its own silently loses it. The fixture themes appeared
+   undiscoverable until the variable was renamed, which briefly looked like a bug
+   in `register_theme_directory()`.
+2. **`ViteAssetsTest` was environment-dependent and the full suite caught it** —
+   the same defect as W3.2's hardcoded `evt_1` webhook id, and found the same way.
+   It asserted that every role resolves into `/public/ui/assets/`, which D11 makes
+   true only when *no* theme is selected; the moment `fitnessTheme` was selected on
+   the dev install, two of its cases failed. That test is about the plugin's own
+   manifest resolution, so it now pins `theme.extension` to empty for its duration
+   and restores it. A test that passes only because nobody has changed a global
+   yet is not passing for a reason.
+
+*Verified against the real WordPress runtime*: with `fitnessTheme` selected, all
+three roles resolve **from the theme** — `user-q4A3YOwb.js`, `trainer-OqSNO57D.js`
+and `admin-CGQF8sAF.js` — each with the shared chunk preloaded and the shared
+stylesheet linked. Before the admin entry existed, the same check showed `admin`
+resolving to the plugin's `admin-DxhRdYGl.js` with its own `Modal`/`ExerciseEditor`
+chunks, which is the fallback working. Rebuilding the theme changed every hash and
+the plugin picked them up with no change on its side, which is the whole claim for
+reading the theme's own Vite manifest instead of a hand-written file list.
+Selections naming a deleted theme, and a theme whose manifest escapes its own
+directory, both return all three roles to the plugin. The dev site's **Twenty
+Twenty-Five already carries the header** and is correctly listed as unusable with
+"No Vite build found".
+
+*Verified in a browser* at `/fitness/`: the theme's own sign-in screen renders —
+light and violet against the plugin's dark green, so the swap is unmistakable —
+with the brand read from `data-boot` and **no console messages at all**. Gate:
+**phpcs 0 errors, phpunit 301 tests / 1742 assertions** (was 289/1716), green
+*with the theme selected*, which is the stronger claim.
+
+**Outstanding:** the signed-in screens of the demo theme (member dashboard,
+trainer roster, admin overview) have not been eyeballed — that needs a sign-in,
+and the plugin-side feature it would exercise is already covered. `theme.extension`
+is currently set to `fitnessTheme` on the dev install, so **all three** apps now
+come from the theme; the dropdown's first option puts it back.
 
 ---
 

@@ -461,11 +461,7 @@ Plus non-CRUD admin operations:
 | POST | `/admin/users/{id}/trainers/{trainerId}/primary` | Set the primary trainer |
 | POST | `/admin/users/{id}/reset-password` | §13.1 |
 | POST | `/admin/users/{id}/impersonate` | Support tool — **audit-logged**, admins only, off by default |
-| GET | `/admin/themes` | Theme list |
-| POST | `/admin/themes` | Upload theme zip |
-| PUT | `/admin/themes/{slug}` | Edit theme JSON |
-| POST | `/admin/themes/{slug}/activate` | Set active |
-| DELETE | `/admin/themes/{slug}` | Delete (never the bundled default) |
+| ~~GET/POST/PUT/DELETE~~ | ~~`/admin/themes*`~~ | **Removed 2026-07-29.** A theme is a WordPress theme shipping React apps, selected from a dropdown in wp-admin — one option, no REST surface. See [D11](00-architecture.md#d11--a-theme-is-a-front-end-not-a-palette-supersedes-d7-extends-d10-2026-07-29) |
 | GET/PUT | `/admin/settings` | §13.4 general/email/payment/feature toggles, **+ `routing.app_base`** (the front-end slug) |
 | POST | `/admin/settings/flush-rewrites` | Re-flush rewrite rules after an `app_base` change (also fired automatically on save) |
 | GET | `/admin/export/{resource}` | CSV export (§ Phase 4) |

@@ -9,6 +9,7 @@ use FitnessClub\Auth\SessionStore;
 use FitnessClub\Http\Controllers\Controller;
 use FitnessClub\Providers\RewriteServiceProvider;
 use FitnessClub\Support\AppRouter;
+use FitnessClub\Support\ThemeExtension;
 use FitnessClub\WPBones\View\View;
 
 if (!defined('ABSPATH')) {
@@ -88,10 +89,16 @@ class SettingsController extends Controller
         $action    = isset($_POST['fc_action']) ? sanitize_key(wp_unslash($_POST['fc_action'])) : '';
         $appBase   = isset($_POST['app_base']) ? sanitize_title(wp_unslash($_POST['app_base'])) : '';
         $accountId = isset($_POST['account_id']) ? absint(wp_unslash($_POST['account_id'])) : 0;
+        // A stylesheet directory name, not a slug: `sanitize_title()` would
+        // lowercase "fitnessTheme" into a directory that does not exist.
+        $extension = isset($_POST['extension'])
+            ? sanitize_text_field(wp_unslash($_POST['extension']))
+            : '';
         // phpcs:enable WordPress.Security.NonceVerification.Missing
 
         $notice = match ($action) {
             'save_routing'    => $this->saveRouting($appBase),
+            'save_extension'  => $this->saveExtension($extension),
             'delete_account'  => $this->deleteAccount($accountId),
             'reset_password'  => $this->resetPassword($accountId),
             default           => ['type' => 'error', 'message' => __('Unknown action.', 'fitnessclub')],
@@ -164,6 +171,86 @@ class SettingsController extends Controller
                 __('The app now lives at %s', 'fitnessclub'),
                 home_url('/' . $submitted . '/')
             ),
+        ];
+    }
+
+    /**
+     * Choose which React apps are served — the plugin's, or a front-end theme's
+     * (D11).
+     *
+     * The value is only ever accepted if it is a theme that currently declares
+     * the opt-in header, so a stale POST or a hand-edited form cannot point the
+     * front end at an arbitrary directory. An empty value is always valid: it is
+     * how you get back to the plugin's own apps, and it has to keep working even
+     * when the selected theme is the thing that broke.
+     *
+     * @return array{type:string,message:string}
+     */
+    private function saveExtension(string $submitted): array
+    {
+        $current = (string) FitnessClub()->options->get('theme.extension', '');
+
+        if ($submitted === $current) {
+            return ['type' => 'info', 'message' => __('No change.', 'fitnessclub')];
+        }
+
+        if ('' === $submitted) {
+            FitnessClub()->options->set('theme.extension', '');
+
+            return [
+                'type'    => 'success',
+                'message' => __('The app now uses the apps that ship with the plugin.', 'fitnessclub'),
+            ];
+        }
+
+        $available = ThemeExtension::available();
+
+        if (!isset($available[$submitted])) {
+            return [
+                'type'    => 'error',
+                'message' => __(
+                    'That theme does not offer the FitnessClub extension. Check that its style.css '
+                    . 'has "Fitness Plugin Extension Enabled: true".',
+                    'fitnessclub'
+                ),
+            ];
+        }
+
+        $theme = $available[$submitted];
+
+        if ([] === $theme['provides']) {
+            return [
+                'type'    => 'error',
+                'message' => sprintf(
+                    /* translators: 1: theme name, 2: the reason it provides nothing. */
+                    __('"%1$s" cannot be used: %2$s', 'fitnessclub'),
+                    $theme['name'],
+                    (string) $theme['error']
+                ),
+            ];
+        }
+
+        FitnessClub()->options->set('theme.extension', $submitted);
+
+        // Naming the roles it does *not* cover is the useful half: "it works but
+        // trainers still see the stock app" is otherwise discovered by a trainer.
+        $missing = array_values(array_diff(ThemeExtension::ROLES, $theme['provides']));
+
+        return [
+            'type'    => 'success',
+            'message' => [] === $missing
+                ? sprintf(
+                    /* translators: %s: theme name. */
+                    __('"%s" now provides the member, trainer and admin apps.', 'fitnessclub'),
+                    $theme['name']
+                )
+                : sprintf(
+                    /* translators: 1: theme name, 2: roles it provides, 3: roles still using the plugin's apps. */
+                    __('"%1$s" now provides the %2$s app. The %3$s app still comes from the plugin.', 'fitnessclub'),
+                    $theme['name'],
+                    implode(', ', $theme['provides']),
+                    implode(', ', $missing)
+                ),
         ];
     }
 
@@ -295,6 +382,10 @@ class SettingsController extends Controller
             'appUrl'       => AppRouter::url(),
             'homeUrl'      => trailingslashit(home_url()),
             'accounts'     => AccountBootstrap::generatedAccounts(),
+            'themes'       => ThemeExtension::available(),
+            'themeChoice'  => ThemeExtension::selected(),
+            'themeHeader'  => ThemeExtension::HEADER,
+            'themeSubdir'  => ThemeExtension::SUBDIR,
             'notice'       => is_array($notice) ? $notice : null,
             'nonceAction'  => self::NONCE_ACTION,
             'roleLabels'   => [

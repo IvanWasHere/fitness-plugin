@@ -1,9 +1,107 @@
 # 07 — Theme System
 
-`plan.md` §5 specifies JSON theme files. The prototypes make this unusually cheap
-to implement: **both are already driven entirely by CSS custom properties on
-`:root`**. Theming is therefore "generate a `:root` block from validated JSON",
-not a refactor.
+> ## ⟳ Corrected 2026-07-29 — a theme is a front-end, not a palette
+>
+> Everything below the "Deferred" heading describes a **colour system**, and that
+> is not what a theme is here. Corrected by the owner before any of it was built
+> and recorded as
+> [D11](00-architecture.md#d11--a-theme-is-a-front-end-not-a-palette-supersedes-d7-extends-d10-2026-07-29):
+>
+> **A theme is a WordPress theme that ships React apps.** Select one and its
+> `user`/`trainer`/`admin` bundles are served instead of the plugin's, per role,
+> with the plugin's own app as the fallback for any role it does not ship.
+>
+> The palette system — tokens, JSON validation, contrast checks, the light theme,
+> the theme editor — is **deferred indefinitely**. Not built, not scheduled. When
+> a theme is selected everything comes from that theme's app; when one is not, the
+> plugin's apps keep their existing styling. The design is kept below as a record
+> of what was considered, not as a plan.
+
+## What a theme is
+
+A directory in `wp-content/themes/` that opts in with a `style.css` header and
+carries a Vite build under `fitnessclub/`:
+
+```css
+/*
+Theme Name: fitnessTheme
+Version: 1.0
+Fitness Plugin Extension Enabled: true
+*/
+```
+
+```
+wp-content/themes/fitnessTheme/
+├── style.css               # the header above
+├── index.php               # WordPress requires it
+└── fitnessclub/
+    ├── .vite/manifest.json # the theme's own Vite build output
+    └── assets/user-a3f9.js, user-a3f9.css, trainer-b12c.js, …
+```
+
+**No bespoke manifest file.** The plugin reads *the theme's* Vite manifest the
+same way `Support\ViteAssets` already reads its own. Whichever of
+`user`/`trainer`/`admin` it has an entry for, the theme provides; the rest fall
+back to the plugin's apps. Nothing is hand-written, and Vite's hashed filenames
+are handled for free.
+
+## Discovery and selection
+
+`wp_get_themes()` enumerates every theme; the ones whose `style.css` carries
+`Fitness Plugin Extension Enabled: true` are offered in a **dropdown on the
+wp-admin options page**, defaulting to the plugin's own apps.
+
+The header is parsed with `get_file_data()` rather than `WP_Theme::get()` —
+`WP_Theme` exposes custom headers only via the `extra_theme_headers` filter and
+caches parsed headers, so a filter registered after that cache is warm reads
+`false` on a theme that plainly declares it.
+
+The dropdown lives in wp-admin rather than the admin SPA for the reason the App
+URL setting does: a setting that decides which front-end is served cannot live
+inside the front-end it might break. A selection naming a theme that no longer
+resolves falls back to the plugin's apps rather than erroring.
+
+## Resolution
+
+```
+theme selected?  ── no ──►  plugin's app for this role
+       │
+      yes
+       ▼
+theme's manifest has this role?  ── no ──►  plugin's app for this role
+       │
+      yes
+       ▼
+theme's app
+```
+
+Per role, every request. A theme replacing only the member app leaves trainers and
+admins on ours, and they never know a theme is installed.
+
+## Validation
+
+Installation is filesystem-only — no upload endpoint, no zip handling — so a theme
+author is trusted at the level a plugin author is. What is checked is the
+*manifest*, against carelessness rather than malice: asset paths resolve with
+`realpath()` containment inside the theme directory and must end `.js`/`.css`. A
+malformed manifest would otherwise emit a `<script>` tag pointing anywhere.
+
+## The published contract
+
+A theme's apps compile against the `data-boot` payload (`BootPresenter::shell()`),
+`GET /auth/me`, and the versioned REST API under `fitnessclub/v1`. Those stop
+being internal details the moment code we did not write depends on them — which is
+this decision's real cost, and why 4.6's OpenAPI documentation is no longer
+optional.
+
+---
+
+# Deferred — the token/palette system
+
+**Not built and not scheduled** (D11, 2026-07-29). Kept as a record of the design.
+Everything from here down describes the colour system that a theme was *going* to
+be. If a palette editor is ever wanted for installs running the plugin's stock
+apps, this is the design to start from.
 
 ## Storage
 

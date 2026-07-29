@@ -1,0 +1,9 @@
+{
+  "src/user/main.tsx": {
+    "file": "assets/user-a3f9c1.js",
+    "name": "user",
+    "src": "src/user/main.tsx",
+    "isEntry": true,
+    "css": ["assets/user-a3f9c1.css"]
+  }
+}

@@ -49,11 +49,25 @@ final class ViteAssets
     /**
      * The HTML tags that load the given role's SPA.
      *
+     * A selected front-end theme (D11) is asked first and wins for the roles it
+     * provides; everything else falls through to the plugin's own build, so a
+     * theme replacing only the member app leaves trainers and admins untouched.
+     *
+     * **Dev mode short-circuits past themes on purpose.** `FITNESSCLUB_VITE_DEV`
+     * is a wp-config switch for developing *this plugin's* apps against its own
+     * HMR server; honouring a theme there would serve a built bundle to somebody
+     * who just turned hot reload on. A theme author builds their theme and tests
+     * it with the constant off.
+     *
      * @param string $entry One of user|trainer|admin.
      */
     public static function tags(string $entry): string
     {
-        return self::isDev() ? self::devTags($entry) : self::prodTags($entry);
+        if (self::isDev()) {
+            return self::devTags($entry);
+        }
+
+        return ThemeExtension::tags($entry) ?? self::prodTags($entry);
     }
 
     /**

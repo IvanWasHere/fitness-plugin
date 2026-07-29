@@ -354,6 +354,98 @@ menu entry remains only as a launcher/redirect to the admin URL and as a
 break-glass place for the routing option, so a misconfigured slug can't lock an
 admin out.
 
+### D11 — A theme is a front-end, not a palette (supersedes D7, extends D10), 2026-07-29
+
+**Corrected by the owner 2026-07-29, before Phase 4.1 was built.** Every theming
+document up to this point described a theme as a `theme.json` of colours —
+[07](07-theming.md)'s opening line was "theming is *generate a `:root` block from
+validated JSON*, not a refactor." That is not what a theme is here.
+
+**A theme is a WordPress theme that ships React apps.** It carries built
+`user` / `trainer` / `admin` bundles that talk to this plugin's REST API. Select
+one and its apps are served instead of the plugin's — per role, with the plugin's
+own app as the fallback for any role the theme does not ship. The plugin is the
+backend; the SPAs it ships are the *default* front-end, not the only one.
+
+**Shape.** A directory in `wp-content/themes/` that opts in with a `style.css`
+header, and a Vite build under `fitnessclub/`:
+
+```
+wp-content/themes/fitnessTheme/
+├── style.css          # Fitness Plugin Extension Enabled: true
+├── index.php          # WordPress requires it — see the caveats below
+└── fitnessclub/
+    ├── .vite/manifest.json     # the theme's own Vite build output
+    └── assets/user-a3f9.js, user-a3f9.css, trainer-b12c.js, …
+```
+
+**There is no bespoke manifest.** An earlier draft of this decision invented a
+`fitnessclub/theme.json` declaring which roles a theme provides; it was dropped as
+redundant. A theme is built with Vite, Vite already emits a manifest, and the
+plugin reads *the theme's* manifest exactly the way `Support\ViteAssets` already
+reads its own. Whichever of `user`/`trainer`/`admin` that manifest has an entry
+for, the theme provides. Nothing is hand-written, and the hashed filenames Vite
+produces are handled for free — which a hand-maintained list would get wrong on
+every rebuild.
+
+**Why `wp-content/themes/`,** given these are not WordPress themes in any
+meaningful sense and are never meant to be activated under Appearance → Themes:
+**it is not touched by a plugin update**, which `wp-content/plugins/fitnessclub/`
+obviously is. A customer's front-end living inside the plugin directory is deleted
+by the next update. Three consequences of borrowing WordPress's directory, worth
+stating rather than discovering:
+
+- WordPress needs `style.css` **and `index.php`**, or the directory is listed under
+  Appearance → Broken Themes. Ship both.
+- It therefore appears in the normal theme picker, where somebody can activate it
+  and get a blank site. Recommended for theme authors: an `index.php` that
+  redirects to the app URL, so an accidental activation is a detour rather than an
+  outage. The plugin never reads `index.php` and does not police this.
+- The opt-in header is read with `get_file_data()` against the theme's `style.css`
+  directly, **not** `WP_Theme::get()`. `WP_Theme` exposes custom headers only when
+  registered through the `extra_theme_headers` filter *and* caches parsed headers,
+  so a filter registered after that cache is warm reads `false` on a theme that
+  plainly declares it. Parsing the file has neither the ordering nor the cache
+  hazard.
+
+**Selection is a dropdown on the wp-admin options page** (`FitnessClub` in the
+sidebar), defaulting to the plugin's own apps. That screen rather than the admin
+SPA, on the same break-glass argument the App URL setting already won: a setting
+that decides which front-end is served cannot live inside the front-end it might
+break. `Http\Controllers\Admin\SettingsController` already carries the
+`manage_options` gate, the nonce and the POST-redirect-GET, so this is one more
+action on a screen that exists.
+
+**Installation is filesystem-only.** No upload endpoint, no zip handling. Themes
+arrive by deploy, by git, or through WordPress's own theme installer — the same
+channel and the same trust level as a plugin. That removes the archive-extraction
+risk class rather than mitigating it. What is still validated is the *manifest*:
+asset paths are resolved with `realpath()` containment inside the theme directory
+and must end `.js`/`.css`, because a malformed manifest would otherwise emit a
+`<script>` tag pointing anywhere.
+
+**Consequences:**
+
+- The **token/palette system is deferred indefinitely** — not built, not scheduled.
+  When a theme is selected, everything comes from that theme's React app; when one
+  is not, the plugin's apps use their existing hardcoded default styling.
+  [07](07-theming.md) keeps the design as a record and marks it deferred.
+- **No `/admin/themes` REST endpoints at all.** The whole surface is one option and
+  one dropdown. The rows [02](02-api-contract.md) reserved for theme CRUD are
+  removed.
+- 4.1 drops from 4 d to **~2 d** and loses its other five deliverables
+  ([08](08-roadmap.md#phase-4--polish-1216-d)).
+- The boot payload and REST API become a **published contract** that code we did
+  not write depends on. That is this decision's real cost: every future change to
+  `BootPresenter`'s shape is now a compatibility question. It also makes 4.6's
+  OpenAPI documentation non-optional.
+- A theme directory can vanish under a running site. A selection naming a theme
+  that no longer resolves falls back to the plugin's apps rather than erroring —
+  the front end must not go down because a directory went away.
+- D7 is superseded on *what* a theme is. Its reasoning is in fact the argument for
+  the new location: an in-plugin theme directory is destroyed by a plugin update.
+  What D7 got wrong was assuming the plugin would ever need to *write* one.
+
 ## wpBones-native conventions
 
 The plugin is built **on the `WPKirk-Boilerplate` scaffold** and follows the

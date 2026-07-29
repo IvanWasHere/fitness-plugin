@@ -74,7 +74,7 @@ admin can share a filtered view), and optimistic row updates.
 | **Plans** | `/admin/plans` | ✗ missing | platform tiers + trainer plans, feature-flag editor (**including `max_trainers`** — Q14), pricing matrix |
 | **Subscriptions** | `/admin/subscriptions` | ✗ missing | status, cancel, extend, change plan |
 | **Tickets** | `/admin/tickets` | ✗ missing | queue, assign, reply, internal notes (spec §13) |
-| **Themes** | `/admin/themes` | ✗ missing | list/preview/activate/upload/edit ([07](07-theming.md)) |
+| ~~**Themes**~~ | — | — | **Removed 2026-07-29.** A theme is a WordPress theme shipping React apps, selected from a dropdown in wp-admin — no SPA screen and no REST surface ([D11](00-architecture.md#d11--a-theme-is-a-front-end-not-a-palette-supersedes-d7-extends-d10-2026-07-29)) |
 | **Settings** | `/admin/settings` | ✗ missing | **App URL** (below), general, email, payments, features, API (spec §13.4) |
 | **Admins** | — | ✓ exists | **removed** — becomes a read-only view of WP users with `manage_options` |
 

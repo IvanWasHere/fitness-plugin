@@ -14,7 +14,7 @@ shippable product. Verified against the files, with line references.
 | 1.3 | PHP/WP floor | PHP 7.4, WP 5.6 (§16.3) | — | **Unreachable** — wpBones v2 needs PHP ≥8.1. Require PHP 8.1 / WP 6.2 |
 | 1.4 | Storage | MySQL custom tables | Dexie/IndexedDB | Prototypes are offline mocks. Their schema *is* useful — it reveals fields the spec omits |
 | 1.5 | Charts | "Line, bar, pie, radar, heatmap" (§9.3) | bar, line, radar, canvas ring — **no pie, no heatmap** | Build pie (macro split) and heatmap (consistency calendar); both are spec'd and neither exists |
-| 1.6 | Theme dir | §4.1 in-plugin `wn_themes/`; §5.2 loader reads `WP_CONTENT_DIR` | no theming at all | Self-contradictory. Resolved in [D7](00-architecture.md#d7--theme-storage) |
+| 1.6 | Theme dir | §4.1 in-plugin `wn_themes/`; §5.2 loader reads `WP_CONTENT_DIR` | no theming at all | Self-contradictory. Resolved in [D7](00-architecture.md#d7--theme-storage), then superseded by [D11](00-architecture.md#d11--a-theme-is-a-front-end-not-a-palette-supersedes-d7-extends-d10-2026-07-29) — a theme is a WordPress theme in `wp-content/themes/` shipping React apps, opted in by a `style.css` header. The palette system both documents assumed is deferred indefinitely |
 | 1.7 | Auth | JWT everywhere (§14) | none | Cookie+nonce embedded, JWT external only ([D4](00-architecture.md#d4--authentication-cookie-first-jwt-for-external-only)) |
 | 1.8 | Admin accounts | WP roles (§3.1) | separate `admins` table with roles Super Admin/Moderator/Viewer | Reject the table. WP users + `manage_options` |
 | 1.9 | Plan model | trainer-owned, 4 price tiers (§2.4) | flat platform tiers Free/Pro/Team | Both, via `fc_plans.owner_type` |

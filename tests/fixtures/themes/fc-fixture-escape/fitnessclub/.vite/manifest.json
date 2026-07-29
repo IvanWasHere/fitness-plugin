@@ -1,0 +1,12 @@
+{
+  "src/user/main.tsx": {
+    "file": "../outside.js",
+    "name": "user",
+    "isEntry": true
+  },
+  "src/trainer/main.tsx": {
+    "file": "assets/trainer.txt",
+    "name": "trainer",
+    "isEntry": true
+  }
+}
