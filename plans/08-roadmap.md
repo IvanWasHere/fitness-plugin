@@ -1503,7 +1503,7 @@ it needs a scheduled job and a policy on how long is too long) and the
 | 4.3 | Performance: query profiling against the volume seed, index tuning, object-cache integration, asset budgets | 2 |
 | 4.4 | i18n: `.pot` generation, JS translation loading, RTL check | 1 |
 | 4.5 | Accessibility audit against WCAG AA, keyboard paths, screen-reader pass | 2 |
-| 4.6 | Docs: OpenAPI from route schemas, README, admin guide, trainer guide, theme dev guide | 2 |
+| 4.6 | Docs: OpenAPI from route schemas, README, admin guide, trainer guide, theme dev guide — ✅ **complete 2026-07-30, see below** | 2 |
 | 4.7 | Export/import: CSV per admin resource, GDPR exporter/eraser hooks | 2 |
 
 ### W4.1 Front-end themes — re-scoped 2026-07-29
@@ -1655,6 +1655,84 @@ trainer roster, admin overview) have not been eyeballed — that needs a sign-in
 and the plugin-side feature it would exercise is already covered. `theme.extension`
 is currently set to `fitnessTheme` on the dev install, so **all three** apps now
 come from the theme; the dropdown's first option puts it back.
+
+### W4.6 Documentation — ✅ **complete 2026-07-30**
+
+Taken before 4.2 rather than in roadmap order, and the reordering was the point:
+D11 had just turned the boot payload and the REST API into a **published
+contract** with a theme already compiling against it, and JWT would have added a
+second authentication path to every endpoint — documenting afterwards would have
+meant documenting two.
+
+**Build notes.**
+
+- **Generated from the live route registry, not from `routes.php`.**
+  `Support\OpenApi` reads `rest_get_server()->get_routes()` — the registry
+  WordPress dispatches from — so every type, enum, bound, default and required
+  flag comes from the schema the request validator actually enforces. Parsing the
+  route file would have been a *second* interpretation of it, free to disagree
+  with the one that matters; a static list would have been a third. The document
+  cannot describe a parameter the API does not have.
+- **Prose is hand-written, and three things stop it rotting.** What an endpoint is
+  *for* exists nowhere in the registry, so it lives in `Support\ApiDocs`. A
+  hand-maintained list beside a generated one goes stale silently — unless
+  `undocumented()` reports routes with no entry, `orphanedDocs()` reports entries
+  whose route is gone, the CLI **refuses to write** while any undocumented route
+  exists, and a test asserts both sets are empty *and* that the committed file
+  matches the code. Adding a route now fails the suite until it is described.
+- **The gate found a real gap on its first run**, which is the argument for having
+  it. `DELETE /trainer/clients/{userId}/workouts/{id}` is registered with its path
+  on a separate line from `Route::delete(`, so the single-line regex used to
+  inventory endpoints for `readme.txt` had silently missed it — and the script
+  that "confirmed" 117 = 117 had compared two outputs of the **same flawed
+  regex**, which is no verification at all. The registry says **118**. Both the
+  readme and the endpoint count in this plan were wrong, and are now fixed.
+  Verification that shares a blind spot with the thing it verifies is worse than
+  none, because it produces confidence.
+- **A description that restates the URL earns nothing.** "Gets the workouts" above
+  `GET /workouts` is noise. So `description` is used only where a caller would
+  otherwise get something wrong: 204-not-empty-object on `/sessions/active`, set
+  logging idempotent on `(exercise, set_index)`, the message quota being
+  per-thread, a co-trainer's note answering 404 rather than 403 because its
+  existence is itself the private thing. Endpoints without such a rule carry a
+  summary alone, deliberately.
+- **Auth is derived from the permission callback**, not from a second
+  hand-maintained map of who-may-call-what, which could disagree with the code
+  that enforces it. Twenty-two distinct callbacks map to a security requirement
+  and a sentence.
+- **Internal callables are stripped, and a test asserts it.** WordPress arg
+  schemas carry `sanitize_callback` and `validate_callback`; publishing them would
+  put internal function names in a public document and tell a client nothing it
+  can act on.
+- **Response schemas are modelled only where the shape is contract-critical** —
+  the boot payload and the error envelope. Everywhere else a response is a generic
+  object and the document says so. Guessing 118 response shapes would have
+  produced a great deal of confident fiction, and an inaccurate schema is worse
+  than an absent one.
+- `--check` exists for CI: regenerate and compare, because a spec is trustworthy
+  only if something notices when it stops matching. It compares
+  `paths`/`components`/`tags` and deliberately **not** `info.version` or
+  `servers[0].url`, which move with the plugin version and the generating host and
+  would otherwise fail on a colleague's machine for no reason anyone could act on.
+
+**Also written:** `README.md` (developer-facing — architecture, layout, gates,
+conventions, and a "where the bodies are buried" list of traps this project has
+already paid for once), `docs/admin-guide.md`, `docs/trainer-guide.md`, and
+`docs/theme-development.md`. The last is the canonical theme guide, because
+`fitnessTheme/README.md` is a worked example that can be deleted along with the
+theme. All three guides name what is **not** built as plainly as what is — a guide
+listing only what works reads as a promise.
+
+*Exit criterion met.* `wp fitnessclub openapi` writes **91 paths / 118
+operations** with every route documented; `--check` passes; structural validation
+finds no duplicate `operationId`s, no dangling `$ref`s, no undeclared tags and no
+path placeholder missing its parameter declaration. Gate: **phpcs 0 errors,
+phpunit 317 tests / 3005 assertions** (was 301/1742).
+
+**Deferred:** rendered HTML API docs — the JSON is the artefact and any renderer
+consumes it — and **contract version negotiation**, which was cut along with
+`theme.json` in W4.1 and has nowhere left to live. `docs/theme-development.md`
+states that gap rather than implying a guarantee.
 
 ---
 

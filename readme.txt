@@ -16,7 +16,7 @@ FitnessClub turns a WordPress site into a coaching platform. Members track worko
 
 It is **two things bolted together on purpose**:
 
-* 🧠 A **WordPress backend** — 29 custom tables, ~117 REST endpoints, roles, capabilities and ownership guards.
+* 🧠 A **WordPress backend** — 29 custom tables, 118 REST endpoints, roles, capabilities and ownership guards.
 * 💻 A **front-end of three React apps** — member, trainer and admin — that talk to that API and nothing else.
 
 That separation is what lets you replace the entire front-end with your own (see *Front-end themes* below) without touching a line of PHP.
@@ -258,6 +258,7 @@ Base: `/wp-json/fitnessclub/v1/`
 * `GET /trainer/clients/{userId}/sessions`
 * `GET /trainer/clients/{userId}/nutrition`
 * `POST /trainer/clients/{userId}/workouts`
+* `DELETE /trainer/clients/{userId}/workouts/{id}`
 * `POST /trainer/clients/{userId}/food-plans`
 * `GET /trainer/clients/{userId}/notes`
 * `POST /trainer/clients/{userId}/notes`

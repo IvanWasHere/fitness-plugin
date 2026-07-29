@@ -3,6 +3,7 @@
 namespace FitnessClub\Providers;
 
 use FitnessClub\Cli\AccountCommand;
+use FitnessClub\Cli\OpenApiCommand;
 use FitnessClub\Cli\SeedCommand;
 use FitnessClub\WPBones\Support\ServiceProvider;
 
@@ -31,5 +32,10 @@ class CliServiceProvider extends ServiceProvider
         // The recovery path. Because the plugin owns its credentials, a site
         // that loses its only administrator password has no other way in.
         \WP_CLI::add_command('fitnessclub account', AccountCommand::class);
+
+        // Generated from the live route registry (W4.6). The REST API became a
+        // published contract when D11 made third-party front-ends possible, and
+        // a hand-written spec for 118 endpoints is wrong within a week.
+        \WP_CLI::add_command('fitnessclub openapi', OpenApiCommand::class);
     }
 }
